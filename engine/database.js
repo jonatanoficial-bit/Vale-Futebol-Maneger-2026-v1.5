@@ -4,60 +4,59 @@
    =======================================================*/
 
 // -------------------------------------------------------
-// TIMES – Série A e Série B (estrutura)
-// -------------------------------------------------------
-// Obs: por enquanto é uma base. Depois vamos plugar
-// TODOS os elencos reais aqui dentro.
+// TIMES – Série A e Série B
 // -------------------------------------------------------
 
 const teams = [
   // Série A
-  { id: "FLA", name: "Flamengo",        shortName: "Flamengo",   division: "A" },
-  { id: "PAL", name: "Palmeiras",       shortName: "Palmeiras",  division: "A" },
-  { id: "BOT", name: "Botafogo",        shortName: "Botafogo",   division: "A" },
-  { id: "INT", name: "Internacional",   shortName: "Inter",      division: "A" },
-  { id: "AMG", name: "Atlético-MG",     shortName: "Atl-MG",     division: "A" },
-  { id: "COR", name: "Corinthians",     shortName: "Corinthians",division: "A" },
-  { id: "SAO", name: "São Paulo",       shortName: "São Paulo",  division: "A" },
-  { id: "FLU", name: "Fluminense",      shortName: "Fluminense", division: "A" },
-  { id: "GRE", name: "Grêmio",          shortName: "Grêmio",     division: "A" },
-  { id: "SAN", name: "Santos",          shortName: "Santos",     division: "A" },
-  { id: "CRU", name: "Cruzeiro",        shortName: "Cruzeiro",   division: "A" },
-  { id: "VAS", name: "Vasco",           shortName: "Vasco",      division: "A" },
-  { id: "BAH", name: "Bahia",           shortName: "Bahia",      division: "A" },
-  { id: "FOR", name: "Fortaleza",       shortName: "Fortaleza",  division: "A" },
-  { id: "RBB", name: "RB Bragantino",   shortName: "Bragantino", division: "A" },
-  { id: "CEA", name: "Ceará",           shortName: "Ceará",      division: "A" },
-  { id: "SPT", name: "Sport",           shortName: "Sport",      division: "A" },
-  { id: "JUV", name: "Juventude",       shortName: "Juventude",  division: "A" },
-  { id: "VIT", name: "Vitória",         shortName: "Vitória",    division: "A" },
-  { id: "MIR", name: "Mirassol",        shortName: "Mirassol",   division: "A" },
+  { id: "FLA", name: "Flamengo",        shortName: "Flamengo",    division: "A" },
+  { id: "PAL", name: "Palmeiras",       shortName: "Palmeiras",   division: "A" },
+  { id: "BOT", name: "Botafogo",        shortName: "Botafogo",    division: "A" },
+  { id: "INT", name: "Internacional",   shortName: "Inter",       division: "A" },
+  { id: "AMG", name: "Atlético-MG",     shortName: "Atl-MG",      division: "A" },
+  { id: "COR", name: "Corinthians",     shortName: "Corinthians", division: "A" },
+  { id: "SAO", name: "São Paulo",       shortName: "São Paulo",   division: "A" },
+  { id: "FLU", name: "Fluminense",      shortName: "Fluminense",  division: "A" },
+  { id: "GRE", name: "Grêmio",          shortName: "Grêmio",      division: "A" },
+  { id: "SAN", name: "Santos",          shortName: "Santos",      division: "A" },
+  { id: "CRU", name: "Cruzeiro",        shortName: "Cruzeiro",    division: "A" },
+  { id: "VAS", name: "Vasco",           shortName: "Vasco",       division: "A" },
+  { id: "BAH", name: "Bahia",           shortName: "Bahia",       division: "A" },
+  { id: "FOR", name: "Fortaleza",       shortName: "Fortaleza",   division: "A" },
+  { id: "RBB", name: "RB Bragantino",   shortName: "Bragantino",  division: "A" },
+  { id: "CEA", name: "Ceará",           shortName: "Ceará",       division: "A" },
+  { id: "SPT", name: "Sport",           shortName: "Sport",       division: "A" },
+  { id: "JUV", name: "Juventude",       shortName: "Juventude",   division: "A" },
+  { id: "VIT", name: "Vitória",         shortName: "Vitória",     division: "A" },
+  { id: "MIR", name: "Mirassol",        shortName: "Mirassol",    division: "A" },
 
-  // Série B (estrutura pronta para usar depois)
-  { id: "CFC", name: "Coritiba",        shortName: "Coritiba",   division: "B" },
-  { id: "CAP", name: "Athletico-PR",    shortName: "Athletico-PR", division: "B" },
-  { id: "CHA", name: "Chapecoense",     shortName: "Chapecoense",division: "B" },
-  { id: "REM", name: "Remo",            shortName: "Remo",       division: "B" },
-  { id: "CRI", name: "Criciúma",        shortName: "Criciúma",   division: "B" },
-  { id: "GOI", name: "Goiás",           shortName: "Goiás",      division: "B" },
-  { id: "NOV", name: "Novorizontino",   shortName: "Novorizontino", division: "B" },
-  { id: "CRB", name: "CRB",             shortName: "CRB",        division: "B" },
-  { id: "AVA", name: "Avaí",            shortName: "Avaí",       division: "B" },
-  { id: "CUI", name: "Cuiabá",          shortName: "Cuiabá",     division: "B" },
-  { id: "ACG", name: "Atlético-GO",     shortName: "Atlético-GO",division: "B" },
-  { id: "OPE", name: "Operário",        shortName: "Operário",   division: "B" },
-  { id: "VNO", name: "Vila Nova",       shortName: "Vila Nova",  division: "B" },
-  { id: "AME", name: "América-MG",      shortName: "América-MG",division: "B" },
-  { id: "ATC", name: "Athletic",        shortName: "Athletic",   division: "B" },
-  { id: "BFS", name: "Botafogo-SP",     shortName: "Botafogo-SP",division: "B" },
-  { id: "FER", name: "Ferroviária",     shortName: "Ferroviária",division: "B" },
-  { id: "AMZ", name: "Amazonas",        shortName: "Amazonas",   division: "B" },
-  { id: "VRD", name: "Volta Redonda",   shortName: "Volta Redonda", division: "B" },
-  { id: "PAY", name: "Paysandu",        shortName: "Paysandu",   division: "B" }
+  // Série B
+  { id: "CFC", name: "Coritiba",        shortName: "Coritiba",    division: "B" },
+  { id: "CAP", name: "Athletico-PR",    shortName: "Athletico-PR",division: "B" },
+  { id: "CHA", name: "Chapecoense",     shortName: "Chapecoense", division: "B" },
+  { id: "REM", name: "Remo",            shortName: "Remo",        division: "B" },
+  { id: "GOI", name: "Goiás",           shortName: "Goiás",       division: "B" },
+  { id: "NOV", name: "Novorizontino",   shortName: "Novorizontino",division: "B" },
+  { id: "CRB", name: "CRB",             shortName: "CRB",         division: "B" },
+  { id: "AVA", name: "Avaí",            shortName: "Avaí",        division: "B" },
+  { id: "CUI", name: "Cuiabá",          shortName: "Cuiabá",      division: "B" },
+  { id: "ACG", name: "Atlético-GO",     shortName: "Atlético-GO", division: "B" },
+  { id: "OPE", name: "Operário",        shortName: "Operário",    division: "B" },
+  { id: "VNO", name: "Vila Nova",       shortName: "Vila Nova",   division: "B" },
+  { id: "AME", name: "América-MG",      shortName: "América-MG",  division: "B" },
+  { id: "ATC", name: "Athletic",        shortName: "Athletic",    division: "B" },
+  { id: "BFS", name: "Botafogo-SP",     shortName: "Botafogo-SP", division: "B" },
+  { id: "FER", name: "Ferroviária",     shortName: "Ferroviária", division: "B" },
+  { id: "AMZ", name: "Amazonas",        shortName: "Amazonas",    division: "B" },
+  { id: "VRD", name: "Volta Redonda",   shortName: "Volta Redonda",division: "B" },
+  { id: "PAY", name: "Paysandu",        shortName: "Paysandu",    division: "B" },
+  { id: "TOM", name: "Tombense",        shortName: "Tombense",    division: "B" }
 ];
 
+// -------------------------------------------------------
 // Função auxiliar para criar jogadores
-// Função auxiliar para criar jogadores
+// -------------------------------------------------------
+
 function makePlayer(
   id,
   teamId,
@@ -82,16 +81,15 @@ function makePlayer(
   };
 }
 
-// ⬇️ AQUI: declara o array de jogadores
+// -------------------------------------------------------
+// JOGADORES – aqui vamos colar todos os makePlayer(...)
+// -------------------------------------------------------
+
 const players = [
-  // por enquanto vazio ou já com os makePlayer(...)
-  // exemplo:
+  // Aqui você cola TODOS os blocos que eu estou te mandando
+  // Exemplo:
   // makePlayer("FLA_ROSSI","FLA","Agustín Rossi","GOL",83,22),
   // makePlayer("FLA_MATHEUS_CUNHA","FLA","Matheus Cunha","GOL",76,5),
-];
-
-  // Aqui depois podemos colar TODOS os jogadores reais
-  // da sua base antiga, seguindo esse mesmo padrão.
 ];
 
 // -------------------------------------------------------
@@ -165,7 +163,7 @@ function gerarElencoPadrao(team) {
   });
 }
 
-// Função usada pelo save.js para carregar elenco do time
+// Função usada pelo jogo para carregar elenco do time
 function carregarElencoDoTime(teamId) {
   const team = getTeamById(teamId);
   if (!team) return [];
@@ -177,7 +175,7 @@ function carregarElencoDoTime(teamId) {
   return gerarElencoPadrao(team);
 }
 
-// Expor em um objeto global (opcional/useful)
+// Expor em um objeto global
 window.Database = {
   teams,
   players,
