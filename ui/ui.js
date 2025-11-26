@@ -75,10 +75,13 @@ window.UI = {
     mostrarTela("tela-lobby");
   },
 
-  abrirProximoJogo() {
-    // Próximas fases: aqui vamos chamar a engine de partida
-    alert("Sistema de partida será ativado na próxima etapa (simulação + narração).");
-  },
+ abrirProximoJogo() {
+    if (!window.Match) {
+        alert("Módulo de partida não carregado.");
+        return;
+    }
+    Match.iniciarProximoJogo();
+},
 
   abrirClassificacao() {
     this.renderClassificacao();
@@ -96,10 +99,12 @@ window.UI = {
   },
 
   abrirTaticas() {
-    // Futuro: tela visual de táticas
-    alert("Tela tática com campo e escalação será ativada na próxima fase.");
-    // mostrarTela("tela-taticas");
-  },
+    if (!window.Tactics) {
+        alert("Módulo de táticas não carregado.");
+        return;
+    }
+    Tactics.abrirTelaTaticas();
+},
 
   // ------------------------------------------
   // LISTA DE TIMES (ESCOLHA)
