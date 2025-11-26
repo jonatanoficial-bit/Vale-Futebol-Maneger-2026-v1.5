@@ -56,18 +56,39 @@ const teams = [
   { id: "PAY", name: "Paysandu",        shortName: "Paysandu",   division: "B" }
 ];
 
-// -------------------------------------------------------
-// JOGADORES – por enquanto vazio (ou com alguns exemplos)
-// depois vamos plugar TODOS os elencos reais.
-// -------------------------------------------------------
+// Função auxiliar para criar jogadores
+// Função auxiliar para criar jogadores
+function makePlayer(
+  id,
+  teamId,
+  name,
+  position,
+  overall,
+  value,
+  age = 27,
+  morale = 75,
+  face = null
+) {
+  return {
+    id,
+    teamId,
+    name,
+    position,   // "GOL", "ZAG", "LD", "LE", "VOL", "MEI", "ATA"
+    overall,    // 0–99
+    age,
+    morale,
+    value,      // em "milhões"
+    face        // ex: "assets/faces/FLA_PEDRO.png"
+  };
+}
 
+// ⬇️ AQUI: declara o array de jogadores
 const players = [
-  // Exemplo Flamengo
-  { id: "FLA_PEDRO", teamId: "FLA", name: "Pedro", position: "ATA", overall: 84, age: 27, morale: 80, value: 32, face: "assets/faces/FLA_PEDRO.png" },
-  { id: "FLA_GABIGOL", teamId: "FLA", name: "Gabigol", position: "ATA", overall: 83, age: 28, morale: 78, value: 30, face: "assets/faces/FLA_GABIGOL.png" },
-  { id: "FLA_ARRASCAETA", teamId: "FLA", name: "Arrascaeta", position: "MEI", overall: 86, age: 30, morale: 82, value: 35, face: "assets/faces/FLA_ARRASCAETA.png" },
-  { id: "FLA_GERSON", teamId: "FLA", name: "Gerson", position: "MEI", overall: 84, age: 27, morale: 80, value: 28, face: "assets/faces/FLA_GERSON.png" },
-  { id: "FLA_EV_CEBOLINHA", teamId: "FLA", name: "Everton Cebolinha", position: "ATA", overall: 82, age: 29, morale: 78, value: 24, face: "assets/faces/FLA_EV_CEBOLINHA.png" }
+  // por enquanto vazio ou já com os makePlayer(...)
+  // exemplo:
+  // makePlayer("FLA_ROSSI","FLA","Agustín Rossi","GOL",83,22),
+  // makePlayer("FLA_MATHEUS_CUNHA","FLA","Matheus Cunha","GOL",76,5),
+];
 
   // Aqui depois podemos colar TODOS os jogadores reais
   // da sua base antiga, seguindo esse mesmo padrão.
