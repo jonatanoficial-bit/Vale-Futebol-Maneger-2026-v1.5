@@ -263,6 +263,80 @@ button {
     border-radius: 20px;
     padding: 20px;
 }
+#tela-taticas {
+    background-color: #000;
+}
+
+.topo-taticas {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.topo-taticas h1 {
+    font-size: 24px;
+}
+
+.taticas-controles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+}
+
+.grupo-controle {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
+}
+
+.grupo-controle select {
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid #333;
+    background-color: #1A1A1A;
+    color: #F2F2F2;
+}
+
+.btn-voltar-top {
+    background-color: #333;
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+/* painel tático responsivo */
+.painel-tatico {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.campo-tatico {
+    flex: 1 1 320px;
+    max-width: 620px;
+    height: 520px;
+    background: linear-gradient(#0d4700, #006400);
+    border: 4px solid #C7A029;
+    border-radius: 20px;
+    position: relative;
+}
+
+.banco-reservas {
+    flex: 1 1 260px;
+    max-width: 380px;
+    height: 520px;
+    background-color: #1A1A1A;
+    border-radius: 20px;
+    padding: 16px;
+    overflow-y: auto;
+}
 
 /* =======================
    PARTIDA
