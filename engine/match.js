@@ -38,12 +38,14 @@ window.Match = {
   },
 
   prepararTela() {
-    const homeSpan = document.getElementById("partida-home");
-    const awaySpan = document.getElementById("partida-away");
-    const golsHome = document.getElementById("gols-home");
-    const golsAway = document.getElementById("gols-away");
+    const homeSpan   = document.getElementById("partida-home");
+    const awaySpan   = document.getElementById("partida-away");
+    const golsHome   = document.getElementById("gols-home");
+    const golsAway   = document.getElementById("gols-away");
     const cronometro = document.getElementById("cronometro");
-    const log = document.getElementById("log-partida");
+    const log        = document.getElementById("log-partida");
+    const logoHome   = document.getElementById("logo-home");
+    const logoAway   = document.getElementById("logo-away");
 
     const homeTeam = Database.getTeamById(this.state.homeId);
     const awayTeam = Database.getTeamById(this.state.awayId);
@@ -51,12 +53,21 @@ window.Match = {
     if (homeSpan) homeSpan.textContent = homeTeam ? homeTeam.shortName : this.state.homeId;
     if (awaySpan) awaySpan.textContent = awayTeam ? awayTeam.shortName : this.state.awayId;
 
+    if (logoHome && homeTeam) {
+        logoHome.src = `assets/logos/${homeTeam.id}.png`;
+        logoHome.onerror = () => { logoHome.src = "assets/logos/default.png"; };
+    }
+    if (logoAway && awayTeam) {
+        logoAway.src = `assets/logos/${awayTeam.id}.png`;
+        logoAway.onerror = () => { logoAway.src = "assets/logos/default.png"; };
+    }
+
     if (golsHome) golsHome.textContent = "0";
     if (golsAway) golsAway.textContent = "0";
     if (cronometro) cronometro.textContent = "0'";
 
     if (log) log.innerHTML = "";
-  },
+},
 
   comecarLoop() {
     if (this.timer) {
