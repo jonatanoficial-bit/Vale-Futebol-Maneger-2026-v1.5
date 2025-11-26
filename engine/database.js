@@ -1063,7 +1063,8 @@ makePlayer("TOM_JEAN_LUCAS","TOM","Jean Lucas","MEI",74,2),
 makePlayer("TOM_DANIEL_AMORIM","TOM","Daniel Amorim","ATA",75,2.5),
 makePlayer("TOM_KEKE","TOM","Keké","ATA",74,2),
 makePlayer("TOM_EV_GALDINO","TOM","Everton Galdino","ATA",74,2),
-makePlayer("TOM_MARQUINHOS_ATA","TOM","Marquinhos","ATA",73,1.8);
+makePlayer("TOM_MARQUINHOS_ATA","TOM","Marquinhos","ATA",73,1.8)
+];
 
   // Aqui você cola TODOS os blocos que eu estou te mandando
   // Exemplo:
