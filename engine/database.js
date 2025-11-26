@@ -561,6 +561,482 @@ makePlayer("MIR_NEQUEBA","MIR","Negueba","ATA",75,2.5),
 makePlayer("MIR_RAF_SILVA","MIR","Rafael Silva","ATA",74,2.2),
 makePlayer("MIR_GABRIEL","MIR","Gabriel","ATA",73,1.8),
 makePlayer("MIR_VINICIUS","MIR","Vinícius","ATA",73,1.8),
+// =====================
+// CORITIBA – SÉRIE B 2025 (CFC)
+// =====================
+makePlayer("CFC_MARCOS","CFC","Marcos","GOL",74,2),
+makePlayer("CFC_THIAGO_DOMBROSki","CFC","Thiago Dombroski","ZAG",74,2.2),
+makePlayer("CFC_KUSCEVIC","CFC","Kuscevic","ZAG",76,3),
+makePlayer("CFC_HENRIQUE","CFC","Henrique","ZAG",74,1.5),
+makePlayer("CFC_NATANAEL","CFC","Natanael","LE",74,2),
+makePlayer("CFC_MATHEUS_ALEXANDRE","CFC","Matheus Alexandre","LD",74,2),
+
+makePlayer("CFC_WILLIAN_FARIAS","CFC","Willian Farias","VOL",75,2.5),
+makePlayer("CFC_ANDREY","CFC","Andrey","VOL",77,3.5),
+makePlayer("CFC_BRUNO_GOMES","CFC","Bruno Gomes","VOL",76,3),
+
+makePlayer("CFC_BENITEZ","CFC","Benítez","MEI",77,3.5),
+makePlayer("CFC_BOSCHILIA","CFC","Boschilia","MEI",76,3),
+makePlayer("CFC_JEAN_PIERRE","CFC","Jean Pierre","MEI",75,2.5),
+
+makePlayer("CFC_ALEF_MANGA","CFC","Alef Manga","ATA",77,4),
+makePlayer("CFC_ROBSON","CFC","Robson","ATA",76,3),
+makePlayer("CFC_KAIO_CESAR","CFC","Kaio César","ATA",75,2.8),
+makePlayer("CFC_IGOR_PAIXAO","CFC","Igor Paixão","ATA",78,4.5),
+makePlayer("CFC_GABRIEL","CFC","Gabriel","ATA",73,1.8),
+
+// =====================
+// ATHLETICO-PR – SÉRIE B 2025 (CAP)
+// =====================
+makePlayer("CAP_BENTO","CAP","Bento","GOL",80,8),
+makePlayer("CAP_LEO_LINK","CAP","Léo Linck","GOL",73,1.5),
+
+makePlayer("CAP_THIAGO_HELENO","CAP","Thiago Heleno","ZAG",76,2),
+makePlayer("CAP_KAIQUE_ROCHA","CAP","Kaique Rocha","ZAG",75,2.5),
+makePlayer("CAP_ESQUIVEL","CAP","Esquivel","LE",76,3),
+makePlayer("CAP_MADSON","CAP","Madson","LD",76,3),
+
+makePlayer("CAP_FERNANDINHO","CAP","Fernandinho","VOL",80,3),
+makePlayer("CAP_ERICK","CAP","Erick","VOL",77,4),
+makePlayer("CAP_CHRISTIAN","CAP","Christian","VOL",77,4),
+
+makePlayer("CAP_BRUNO_ZAPELLI","CAP","Bruno Zapelli","MEI",78,5),
+makePlayer("CAP_ALEX_SANTANA","CAP","Alex Santana","MEI",76,3.5),
+makePlayer("CAP_LEO_CITTADINI","CAP","Léo Cittadini","MEI",76,3),
+
+makePlayer("CAP_CANOBBIO","CAP","Canobbio","ATA",79,5.5),
+makePlayer("CAP_VITOR_ROQUE","CAP","Vitor Roque","ATA",82,20),
+makePlayer("CAP_PABLO","CAP","Pablo","ATA",76,3.5),
+makePlayer("CAP_VITINHO","CAP","Vitinho","ATA",76,3.5),
+makePlayer("CAP_JULIMAR","CAP","Julimar","ATA",74,2),
+
+// =====================
+// CHAPECOENSE – SÉRIE B 2025 (CHA)
+// =====================
+makePlayer("CHA_JOAO_PAULO","CHA","João Paulo","GOL",73,1.8),
+makePlayer("CHA_MATHEUS_CAVALHEIRO","CHA","Matheus Cavalheiro","GOL",72,1.2),
+
+makePlayer("CHA_RODRIGO_FREITAS","CHA","Rodrigo Freitas","ZAG",74,2),
+makePlayer("CHA_CLEYTON","CHA","Cleylton","ZAG",73,1.8),
+makePlayer("CHA_LUCAS_RIBEIRO","CHA","Lucas Ribeiro","ZAG",73,1.8),
+
+makePlayer("CHA_BUSANELLO","CHA","Busanello","LE",75,2.5),
+makePlayer("CHA_RONEI","CHA","Ronei","LD",74,2),
+
+makePlayer("CHA_DARLAN","CHA","Darlan","VOL",74,2),
+makePlayer("CHA_GUILHERME","CHA","Guilherme","VOL",74,2),
+
+makePlayer("CHA_TIAGO_REAL","CHA","Tiago Real","MEI",75,2.2),
+makePlayer("CHA_GEOVANE","CHA","Geovane","MEI",74,2),
+makePlayer("CHA_VINI_PAULISTA","CHA","Vini Paulista","MEI",73,1.8),
+
+makePlayer("CHA_PEROTTI","CHA","Perotti","ATA",76,3),
+makePlayer("CHA_ALISSON_FARIAS","CHA","Alisson Farias","ATA",75,2.5),
+makePlayer("CHA_KAIO_NUNES","CHA","Kaio Nunes","ATA",74,2),
+makePlayer("CHA_PABLO_OLIVEIRA","CHA","Pablo Oliveira","ATA",73,1.8),
+
+// =====================
+// REMO – SÉRIE B 2025 (REM)
+// =====================
+makePlayer("REM_VINICIUS","REM","Vinícius","GOL",74,2),
+makePlayer("REM_ZÉ_CARLOS","REM","Zé Carlos","GOL",72,1.2),
+
+makePlayer("REM_RAF_JANSEN","REM","Rafael Jansen","ZAG",74,2),
+makePlayer("REM_DANIEL_FELIPE","REM","Daniel Felipe","ZAG",73,1.8),
+makePlayer("REM_IGOR_FERNANDES","REM","Igor Fernandes","LE",73,1.8),
+makePlayer("REM_KEVIN","REM","Kevin","LD",74,2),
+
+makePlayer("REM_LUCAS_SIQUEIRA","REM","Lucas Siqueira","VOL",75,2.5),
+makePlayer("REM_ANDERSON_UCHOA","REM","Anderson Uchôa","VOL",74,2.2),
+
+makePlayer("REM_GEDOZ","REM","Felipe Gedoz","MEI",75,2.5),
+makePlayer("REM_ERICK_FLORES","REM","Erick Flores","MEI",74,2),
+makePlayer("REM_JEAN_SILVA","REM","Jean Silva","MEI",73,1.8),
+
+makePlayer("REM_MURIQUI","REM","Muriqui","ATA",76,3),
+makePlayer("REM_NETO_PESSOA","REM","Neto Pessoa","ATA",74,2.2),
+makePlayer("REM_RONALD","REM","Ronald","ATA",74,2),
+makePlayer("REM_PEDRO_VITOR","REM","Pedro Vitor","ATA",73,1.8),
+makePlayer("REM_DIEGO_GUERRA","REM","Diego Guerra","ATA",73,1.8),
+
+// =====================
+// GOIÁS – SÉRIE B 2025 (GOI)
+// =====================
+makePlayer("GOI_TADEU","GOI","Tadeu","GOL",79,5),
+makePlayer("GOI_MARCOS","GOI","Marcos","GOL",72,1.5),
+
+makePlayer("GOI_MAGUINHO","GOI","Maguinho","LD",75,2.5),
+makePlayer("GOI_APODI","GOI","Apodi","LD",76,3),
+makePlayer("GOI_SIDIMAR","GOI","Sidimar","ZAG",74,2.2),
+makePlayer("GOI_YAN_SOUTO","GOI","Yan Souto","ZAG",74,2),
+makePlayer("GOI_SANDER","GOI","Sander","LE",76,3),
+makePlayer("GOI_DANILO_BARCELOS","GOI","Danilo Barcelos","LE",74,2),
+
+makePlayer("GOI_MATHEUS_SALES","GOI","Matheus Sales","VOL",74,2.2),
+makePlayer("GOI_CAIO_VINICIUS","GOI","Caio Vinícius","VOL",75,2.5),
+
+makePlayer("GOI_FELLipe_BASTOS","GOI","Fellipe Bastos","MEI",75,2),
+makePlayer("GOI_LUAN_DIAS","GOI","Luan Dias","MEI",76,2.8),
+makePlayer("GOI_EV_BRENO","GOI","Everton Brito","MEI",74,2),
+
+makePlayer("GOI_DIEGO_GONCALVES","GOI","Diego Gonçalves","ATA",75,2.5),
+makePlayer("GOI_NICOLAS","GOI","Nicolás","ATA",76,3),
+makePlayer("GOI_MARCAO","GOI","Marcão","ATA",74,2),
+makePlayer("GOI_PEDRO_RAUL","GOI","Pedro Raul","ATA",78,4.5),
+
+// =====================
+// NOVORIZONTINO – SÉRIE B 2025 (NOV)
+// =====================
+makePlayer("NOV_GIOVANNI","NOV","Giovanni","GOL",73,1.8),
+makePlayer("NOV_GEORGE","NOV","George","GOL",72,1.2),
+
+makePlayer("NOV_BRUNO_AGUIAR","NOV","Bruno Aguiar","ZAG",74,2),
+makePlayer("NOV_RODOLFO_FILEMON","NOV","Rodolfo Filemon","ZAG",74,2),
+makePlayer("NOV_LEO_BAIANO","NOV","Léo Baiano","ZAG",73,1.8),
+
+makePlayer("NOV_REVERSON","NOV","Reverson","LE",73,1.8),
+makePlayer("NOV_FELIPE_RODRIGUES","NOV","Felipe Rodrigues","LD",74,2),
+
+makePlayer("NOV_GUSTAVO_BOCHECHA","NOV","Gustavo Bochecha","MEI",75,2.5),
+makePlayer("NOV_RICARDINHO","NOV","Ricardinho","MEI",74,2),
+makePlayer("NOV_ANDERSON_MEI","NOV","Anderson","MEI",73,1.8),
+
+makePlayer("NOV_DOUGLAS_BAGGIO","NOV","Douglas Baggio","ATA",75,2.5),
+makePlayer("NOV_AILON","NOV","Aylon","ATA",74,2),
+makePlayer("NOV_QUERINO","NOV","Quirino","ATA",74,2),
+makePlayer("NOV_HELIO_BORGES","NOV","Hélio Borges","ATA",74,2),
+makePlayer("NOV_CLEO_SILVA","NOV","Cléo Silva","ATA",73,1.8),
+
+// =====================
+// CRB – SÉRIE B 2025 (CRB)
+// =====================
+makePlayer("CRB_DIogo_SILVA","CRB","Diogo Silva","GOL",73,1.8),
+makePlayer("CRB_VICTOR_CAICARA","CRB","Victor Caicara","GOL",72,1.2),
+
+makePlayer("CRB_GUM","CRB","Gum","ZAG",74,1.5),
+makePlayer("CRB_FABIO_ALEMÃO","CRB","Fábio Alemão","ZAG",73,1.8),
+makePlayer("CRB_SALES","CRB","Sales","ZAG",73,1.8),
+
+makePlayer("CRB_GUILHERME_ROMAO","CRB","Guilherme Romão","LE",74,2),
+makePlayer("CRB_RAUL_PRATA","CRB","Raul Prata","LD",74,2),
+
+makePlayer("CRB_MARCOS_BAIA","CRB","Marcos Baía","VOL",74,2),
+makePlayer("CRB_WESLEY","CRB","Wesley","VOL",74,2),
+makePlayer("CRB_YAGO","CRB","Yago","VOL",73,1.8),
+
+makePlayer("CRB_DIEGO_TORRES","CRB","Diego Torres","MEI",75,2.5),
+makePlayer("CRB_RAFAEL_LONGUINE","CRB","Rafael Longuine","MEI",74,2),
+makePlayer("CRB_JHON_CAFE","CRB","Jhon Cley","MEI",73,1.8),
+
+makePlayer("CRB_ANSELMO_RAMON","CRB","Anselmo Ramon","ATA",76,2.8),
+makePlayer("CRB_HYURI","CRB","Hyuri","ATA",74,2),
+makePlayer("CRB_EMERSON_NEG","CRB","Emerson Negueba","ATA",74,2),
+makePlayer("CRB_BRUNINHO_ATA","CRB","Bruninho","ATA",73,1.8),
+
+// =====================
+// AVAÍ – SÉRIE B 2025 (AVA)
+// =====================
+makePlayer("AVA_GLEDSON","AVA","Gledson","GOL",73,1.8),
+makePlayer("AVA_GLÉSSON","AVA","Glégson","GOL",72,1.2),
+
+makePlayer("AVA_BETAO","AVA","Betão","ZAG",73,1.2),
+makePlayer("AVA_ALEMAO","AVA","Alemão","ZAG",74,2),
+makePlayer("AVA_RAF_PEREIRA","AVA","Rafael Pereira","ZAG",73,1.8),
+
+makePlayer("AVA_EDILSON","AVA","Edílson","LD",74,2),
+makePlayer("AVA_RANIELE","AVA","Raniele","LE",74,2),
+
+makePlayer("AVA_BRUNO_SILVA","AVA","Bruno Silva","VOL",75,2.5),
+makePlayer("AVA_JEAN_CLEBER","AVA","Jean Cléber","VOL",74,2),
+makePlayer("AVA_MARCOS_SERRATO","AVA","Marcos Serrato","VOL",73,1.8),
+
+makePlayer("AVA_RENATO","AVA","Renato","MEI",75,2.5),
+makePlayer("AVA_LOURENCO","AVA","Lourenço","MEI",74,2),
+makePlayer("AVA_PEDRO_CASTRO","AVA","Pedro Castro","MEI",74,2),
+
+makePlayer("AVA_BISSOLI","AVA","Bissoli","ATA",76,2.8),
+makePlayer("AVA_WILLIAM_POTTKER","AVA","William Pottker","ATA",76,3),
+makePlayer("AVA_GETULIO","AVA","Getúlio","ATA",74,2.2),
+makePlayer("AVA_ROMULO","AVA","Rômulo","ATA",74,2),
+
+// =====================
+// CUIABÁ – SÉRIE B 2025 (CUI)
+// =====================
+makePlayer("CUI_WALTER","CUI","Walter","GOL",75,2.5),
+makePlayer("CUI_JOAO_CARLOS","CUI","João Carlos","GOL",73,1.8),
+
+makePlayer("CUI_PAULAO","CUI","Paulão","ZAG",75,2.5),
+makePlayer("CUI_MARLLON","CUI","Marllon","ZAG",75,2.5),
+makePlayer("CUI_ALAN_EMPERUR","CUI","Alan Empereur","ZAG",76,3),
+
+makePlayer("CUI_UENDEL","CUI","Uendel","LE",75,2.5),
+makePlayer("CUI_JOAO_LUCAS","CUI","João Lucas","LD",75,2.5),
+
+makePlayer("CUI_LUCAS_MINEIRO","CUI","Lucas Mineiro","VOL",76,3),
+makePlayer("CUI_AUREMIR","CUI","Auremir","VOL",74,2),
+makePlayer("CUI_CAMILO_VOL","CUI","Camilo","VOL",75,2.5),
+
+makePlayer("CUI_RAF_GAVA","CUI","Rafael Gava","MEI",75,2.5),
+makePlayer("CUI_PEPE","CUI","Pepê","MEI",76,3),
+
+makePlayer("CUI_DEYVERSON","CUI","Deyverson","ATA",77,3),
+makePlayer("CUI_CLAYSON","CUI","Clayson","ATA",76,2.8),
+makePlayer("CUI_JONATHAN_CAFU","CUI","Jonathan Cafú","ATA",75,2.5),
+makePlayer("CUI_ANDRE_LUIS","CUI","André Luís","ATA",74,2),
+
+// =====================
+// ATLÉTICO-GO – SÉRIE B 2025 (ACG)
+// =====================
+makePlayer("ACG_RONALDO","ACG","Ronaldo","GOL",74,2),
+makePlayer("ACG_LUAN_POLLI","ACG","Luan Polli","GOL",73,1.8),
+
+makePlayer("ACG_EDSON","ACG","Edson","ZAG",74,2),
+makePlayer("ACG_WANDERSON_ZAG","ACG","Wanderson","ZAG",74,2),
+makePlayer("ACG_MARLON_FREITAS_ZAG","ACG","Marlon Freitas","ZAG",75,2.5),
+
+makePlayer("ACG_DUDU","ACG","Dudu","LD",75,2.5),
+makePlayer("ACG_JEFFERSON","ACG","Jefferson","LE",74,2),
+
+makePlayer("ACG_BARALHAS","ACG","Baralhas","VOL",76,3),
+makePlayer("ACG_MATHEUS_SALES","ACG","Matheus Sales","VOL",74,2.2),
+
+makePlayer("ACG_SHAYLON","ACG","Shaylon","MEI",76,3),
+makePlayer("ACG_RICKSON","ACG","Rickson","MEI",74,2),
+makePlayer("ACG_ARTHUR_GOMES","ACG","Arthur Gomes","MEI",75,2.5),
+
+makePlayer("ACG_LUIZ_FERNANDO","ACG","Luiz Fernando","ATA",76,3),
+makePlayer("ACG_WELLINGTON_RATO","ACG","Wellington Rato","ATA",76,3),
+makePlayer("ACG_AIRTON","ACG","Airton","ATA",74,2),
+makePlayer("ACG_GABRIEL_BARROS","ACG","Gabriel Barros","ATA",73,1.8),
+
+// =====================
+// OPERÁRIO – SÉRIE B 2025 (OPE)
+// =====================
+makePlayer("OPE_RICARDO_VARELA","OPE","Ricardo Varela","GOL",73,1.8),
+makePlayer("OPE_VANDERLEI","OPE","Vanderlei","GOL",72,1.2),
+
+makePlayer("OPE_RICARDO_SILVA","OPE","Ricardo Silva","ZAG",74,2),
+makePlayer("OPE_PHILIPE_SAMPAIO","OPE","Philipe Sampaio","ZAG",73,1.8),
+makePlayer("OPE_RAFEL_CHAVES","OPE","Rafael Chaves","ZAG",73,1.8),
+
+makePlayer("OPE_JEAN_CARLOS_LE","OPE","Jean Carlos","LE",73,1.8),
+makePlayer("OPE_ARTHUR","OPE","Arthur","LD",73,1.8),
+
+makePlayer("OPE_ANDRE_CUNHA","OPE","André Cunha","VOL",74,2),
+makePlayer("OPE_HENRIQUE_VOL","OPE","Henrique","VOL",74,2),
+makePlayer("OPE_MARCELO_SANTOS","OPE","Marcelo Santos","VOL",73,1.8),
+
+makePlayer("OPE_RAFAEL_OIVEIRA","OPE","Rafael Oliveira","MEI",74,2),
+makePlayer("OPE_THIAGO_POTIGUAR","OPE","Thiago Potiguar","MEI",73,1.8),
+
+makePlayer("OPE_SCHMIDT","OPE","Schmidt","ATA",74,2),
+makePlayer("OPE_RICARDINHO_ATA","OPE","Ricardinho","ATA",73,1.8),
+makePlayer("OPE_FELIPE_AUGUSTO","OPE","Felipe Augusto","ATA",73,1.8),
+makePlayer("OPE_WILLIAN","OPE","Willian","ATA",73,1.8),
+
+// =====================
+// VILA NOVA – SÉRIE B 2025 (VNO)
+// =====================
+makePlayer("VNO_DINIERE","VNO","Dinière","GOL",73,1.8),
+makePlayer("VNO_GEORGE_GOL","VNO","George","GOL",72,1.2),
+
+makePlayer("VNO_RAFEL_DONATO","VNO","Rafael Donato","ZAG",74,2),
+makePlayer("VNO_ALAN_GRAFIte","VNO","Alan Grafite","ZAG",73,1.8),
+makePlayer("VNO_ANDERSON_ZAG","VNO","Anderson","ZAG",73,1.8),
+
+makePlayer("VNO_WILLIAN_FORMIGA","VNO","Willian Formiga","LE",74,2),
+makePlayer("VNO_RAFINHA_LD","VNO","Rafinha","LD",73,1.8),
+
+makePlayer("VNO_ARTHUR_REZENDE","VNO","Arthur Rezende","MEI",75,2.5),
+makePlayer("VNO_RAFEL_LUCAS","VNO","Rafael Lucas","MEI",74,2),
+makePlayer("VNO_LESIROM","VNO","Lescano","VOL",74,2),
+
+makePlayer("VNO_NETO_PERSONA","VNO","Neto Pessoa","ATA",74,2),
+makePlayer("VNO_PABLO_DYego","VNO","Pablo Dyego","ATA",73,1.8),
+makePlayer("VNO_DANILO_GOMES","VNO","Danilo Gomes","ATA",73,1.8),
+makePlayer("VNO_CLEITINHO","VNO","Cleitinho","ATA",73,1.8),
+
+// =====================
+// AMÉRICA-MG – SÉRIE B 2025 (AME)
+// =====================
+makePlayer("AME_CAVICHIOLI","AME","Cavichioli","GOL",75,2.5),
+makePlayer("AME_MATHEUS_CAVICHIOLI","AME","Matheus Cavichioli","GOL",73,1.8),
+
+makePlayer("AME_DANILO_AVELAR","AME","Danilo Avelar","ZAG",75,2.2),
+makePlayer("AME_RICARDO_SILVA","AME","Ricardo Silva","ZAG",74,2),
+makePlayer("AME_MARLON","AME","Marlon","LE",76,3),
+
+makePlayer("AME_MATEUS_HENRIQUE","AME","Mateus Henrique","LD",73,1.8),
+
+makePlayer("AME_ALÊ","AME","Alê","MEI",76,2.5),
+makePlayer("AME_JUNINHO","AME","Juninho","VOL",76,3),
+makePlayer("AME_MASTRIANI_VOL","AME","Mastriani","VOL",75,2.5),
+
+makePlayer("AME_BENITEZ","AME","Benítez","MEI",77,3.5),
+makePlayer("AME_GUSTAVINHO","AME","Gustavinho","MEI",75,2.5),
+makePlayer("AME_PEDRINHO","AME","Pedrinho","MEI",75,2.5),
+
+makePlayer("AME_ALOISIO","AME","Aloísio \"Boi Bandido\"","ATA",77,2.8),
+makePlayer("AME_EVERALDO","AME","Everaldo","ATA",76,2.5),
+makePlayer("AME_WELLINGTON_PAULISTA","AME","Wellington Paulista","ATA",75,2),
+makePlayer("AME_INDIo","AME","Índio","ATA",74,2),
+
+// =====================
+// ATHLETIC – SÉRIE B 2025 (ATC)
+// =====================
+makePlayer("ATC_JOAO_FELIPE","ATC","João Felipe","GOL",73,1.8),
+makePlayer("ATC_GABRIEL_GOL","ATC","Gabriel","GOL",72,1.2),
+
+makePlayer("ATC_WESLEY_ZAG","ATC","Wesley","ZAG",73,1.8),
+makePlayer("ATC_DOUGLAS_ZAG","ATC","Douglas","ZAG",73,1.8),
+makePlayer("ATC_MATHEUS_ZAG","ATC","Matheus","ZAG",73,1.8),
+
+makePlayer("ATC_GUILHERME_LE","ATC","Guilherme","LE",73,1.8),
+makePlayer("ATC_RAFAEL_LD","ATC","Rafael","LD",73,1.8),
+
+makePlayer("ATC_BIDU","ATC","Bidu","MEI",74,2),
+makePlayer("ATC_GABRIEL_VIEIRA","ATC","Gabriel Vieira","MEI",74,2),
+makePlayer("ATC_TOMAS","ATC","Tomás","VOL",73,1.8),
+
+makePlayer("ATC_CARLOS_ALBERTO","ATC","Carlos Alberto","ATA",74,2),
+makePlayer("ATC_LUCAS_COELHO","ATC","Lucas Coelho","ATA",73,1.8),
+makePlayer("ATC_GUILHERME_ATA","ATC","Guilherme","ATA",73,1.8),
+makePlayer("ATC_EMERSON","ATC","Emerson","ATA",73,1.8),
+
+// =====================
+// BOTAFOGO-SP – SÉRIE B 2025 (BFS)
+// =====================
+makePlayer("BFS_JOAO_CARLOS","BFS","João Carlos","GOL",74,2),
+makePlayer("BFS_EMERSON_GOL","BFS","Emerson","GOL",72,1.2),
+
+makePlayer("BFS_ROBSON","BFS","Robson","ZAG",74,2),
+makePlayer("BFS_MATHEUS_COSTA","BFS","Matheus Costa","ZAG",74,2),
+makePlayer("BFS_PATRICK_BREY","BFS","Patrick Brey","LE",74,2),
+makePlayer("BFS_LUCAS_MENDES","BFS","Lucas Mendes","LD",74,2),
+
+makePlayer("BFS_FILLIPPE_SOUTTO","BFS","Fillipe Soutto","VOL",74,2),
+makePlayer("BFS_EDSON","BFS","Edson","VOL",74,2),
+
+makePlayer("BFS_GUILHERME_MADRUGA","BFS","Guilherme Madruga","MEI",75,2.5),
+makePlayer("BFS_RAFAEL_TAVARES","BFS","Rafael Tavares","MEI",74,2),
+makePlayer("BFS_OSMAN","BFS","Osman","MEI",74,2),
+
+makePlayer("BFS_GUSTAVO_HENRIQUE","BFS","Gustavo Henrique","ATA",75,2.5),
+makePlayer("BFS_ROBINHO","BFS","Robinho","ATA",74,2),
+makePlayer("BFS_LUCAS_DELGADO","BFS","Lucas Delgado","ATA",74,2),
+makePlayer("BFS_Douglas_BAGGIO","BFS","Douglas Baggio","ATA",74,2),
+
+// =====================
+// FERROVIÁRIA – SÉRIE B 2025 (FER)
+// =====================
+makePlayer("FER_SAULO","FER","Saulo","GOL",73,1.8),
+makePlayer("FER_PABLO_GOL","FER","Pablo","GOL",72,1.2),
+
+makePlayer("FER_ANDERSON_ZAG","FER","Anderson","ZAG",73,1.8),
+makePlayer("FER_RAFEL_MARTINS","FER","Rafael Martins","ZAG",73,1.8),
+makePlayer("FER_DIEGO_IVO","FER","Diego Ivo","ZAG",73,1.8),
+
+makePlayer("FER_ARRUDA","FER","Arruda","LE",73,1.8),
+makePlayer("FER_CLAUDINHO_LD","FER","Claudinho","LD",73,1.8),
+
+makePlayer("FER_MATHEUS_OLIVEIRA","FER","Matheus Oliveira","MEI",74,2),
+makePlayer("FER_CLAYTON","FER","Clayton","MEI",74,2),
+makePlayer("FER_COUTINHO","FER","Coutinho","VOL",73,1.8),
+
+makePlayer("FER_BRUNO_SANTOS","FER","Bruno Santos","ATA",74,2),
+makePlayer("FER_RAFAEL_MARQUES","FER","Rafael Marques","ATA",73,1.8),
+makePlayer("FER_MARQUINHOS","FER","Marquinhos","ATA",73,1.8),
+makePlayer("FER_TONY","FER","Tony","ATA",73,1.8),
+
+// =====================
+// AMAZONAS – SÉRIE B 2025 (AMZ)
+// =====================
+makePlayer("AMZ_JOAO_Paulo","AMZ","João Paulo","GOL",73,1.8),
+makePlayer("AMZ_Matheus","AMZ","Matheus","GOL",72,1.2),
+
+makePlayer("AMZ_DIEGO_LORENZI","AMZ","Diego Lorenzi","ZAG",73,1.8),
+makePlayer("AMZ_LUIS_ROBERTO","AMZ","Luis Roberto","ZAG",73,1.8),
+makePlayer("AMZ_WESLEY_ZAG","AMZ","Wesley","ZAG",73,1.8),
+
+makePlayer("AMZ_JOAO_LUCAS","AMZ","João Lucas","LE",73,1.8),
+makePlayer("AMZ_MIKAEL","AMZ","Mikael","LD",73,1.8),
+
+makePlayer("AMZ_IGOR_MACHADO","AMZ","Igor Machado","VOL",74,2),
+makePlayer("AMZ_MARCELO_PEREIRA","AMZ","Marcelo Pereira","VOL",73,1.8),
+makePlayer("AMZ_RAPHAEL","AMZ","Raphael","MEI",74,2),
+makePlayer("AMZ_MATHEUS_OLIVEIRA_MEI","AMZ","Matheus Oliveira","MEI",74,2),
+
+makePlayer("AMZ_WANDERSON","AMZ","Wanderson","ATA",74,2),
+makePlayer("AMZ_RONIEL","AMZ","Roniel","ATA",74,2),
+makePlayer("AMZ_DAVID_BRAGA","AMZ","David Braga","ATA",73,1.8),
+makePlayer("AMZ_JOAO_VICTOR","AMZ","João Victor","ATA",73,1.8),
+
+// =====================
+// VOLTA REDONDA – SÉRIE B 2025 (VRD)
+// =====================
+makePlayer("VRD_ANDRE","VRD","André","GOL",73,1.8),
+makePlayer("VRD_JEFF","VRD","Jefferson","GOL",72,1.2),
+
+makePlayer("VRD_WALLACE","VRD","Wallace","ZAG",73,1.8),
+makePlayer("VRD_BRUNO_BARRA","VRD","Bruno Barra","ZAG",73,1.8),
+makePlayer("VRD_MARCELO","VRD","Marcelo","ZAG",73,1.8),
+
+makePlayer("VRD_JULINHO","VRD","Julinho","LE",73,1.8),
+makePlayer("VRD_JOAO_CARLOS_LD","VRD","João Carlos","LD",73,1.8),
+
+makePlayer("VRD_PEDRO_ANTONIO","VRD","Pedro Antônio","VOL",73,1.8),
+makePlayer("VRD_BRUNO_CESAR","VRD","Bruno César","MEI",74,2),
+makePlayer("VRD_LUCAS_SILVA","VRD","Lucas Silva","MEI",74,2),
+
+makePlayer("VRD_CRISTIANO","VRD","Cristiano","ATA",74,2),
+makePlayer("VRD_JHULIAN","VRD","Jhullian","ATA",73,1.8),
+makePlayer("VRD_JOAO_MARcos","VRD","João Marcos","ATA",73,1.8),
+makePlayer("VRD_PEDRO","VRD","Pedro","ATA",73,1.8),
+
+// =====================
+// PAYSANDU – SÉRIE B 2025 (PAY)
+// =====================
+makePlayer("PAY_MATHEUS_NOGUEIRA","PAY","Matheus Nogueira","GOL",73,1.8),
+makePlayer("PAY_THIAGO_COELHO","PAY","Thiago Coelho","GOL",72,1.2),
+
+makePlayer("PAY_GENILSON","PAY","Genilson","ZAG",73,1.8),
+makePlayer("PAY_BRUNO_LEO","PAY","Bruno Leonardo","ZAG",73,1.8),
+makePlayer("PAY_DIONATHAN","PAY","Dionathan","ZAG",73,1.8),
+
+makePlayer("PAY_IGOR_MARQUES","PAY","Igor Marques","LE",73,1.8),
+makePlayer("PAY_LUCAS_MAZETTI","PAY","Lucas Mazetti","LD",73,1.8),
+
+makePlayer("PAY_MARCOS_ANTONIO","PAY","Marcos Antônio","VOL",73,1.8),
+makePlayer("PAY_GEOVANE_MEI","PAY","Geovane","MEI",74,2),
+makePlayer("PAY_RICARDINHO_MEI","PAY","Ricardinho","MEI",74,2),
+
+makePlayer("PAY_MARCUS_VINICIUS","PAY","Marcus Vinícius","ATA",74,2),
+makePlayer("PAY_MARCELO_TOSCANO","PAY","Marcelo Toscano","ATA",73,1.8),
+makePlayer("PAY_THIAGO_SANTOS","PAY","Thiago Santos","ATA",73,1.8),
+makePlayer("PAY_JOHN_CAFE","PAY","John Cley","ATA",73,1.8),
+
+// =====================
+// TOMBENSE – SÉRIE B 2025 (TOM)
+// =====================
+makePlayer("TOM_LUCAS_FRANCA","TOM","Lucas França","GOL",73,1.8),
+makePlayer("TOM_FELIPE_GARCIA","TOM","Felipe Garcia","GOL",72,1.2),
+
+makePlayer("TOM_ROGER_CARVALHO","TOM","Roger Carvalho","ZAG",73,1.8),
+makePlayer("TOM_MANOEL","TOM","Manoel","ZAG",73,1.8),
+makePlayer("TOM_WESLEY_MARANHAO","TOM","Wesley","ZAG",73,1.8),
+
+makePlayer("TOM_GUILHERME_SANTOS","TOM","Guilherme Santos","LE",73,1.8),
+makePlayer("TOM_EDILSON_LD","TOM","Edílson","LD",73,1.8),
+
+makePlayer("TOM_ZE_RICARDO","TOM","Zé Ricardo","VOL",74,2),
+makePlayer("TOM_IGOR_HENRIQUE","TOM","Igor Henrique","VOL",74,2),
+makePlayer("TOM_RODRIGO","TOM","Rodrigo","MEI",74,2),
+makePlayer("TOM_JEAN_LUCAS","TOM","Jean Lucas","MEI",74,2),
+
+makePlayer("TOM_DANIEL_AMORIM","TOM","Daniel Amorim","ATA",75,2.5),
+makePlayer("TOM_KEKE","TOM","Keké","ATA",74,2),
+makePlayer("TOM_EV_GALDINO","TOM","Everton Galdino","ATA",74,2),
+makePlayer("TOM_MARQUINHOS_ATA","TOM","Marquinhos","ATA",73,1.8);
 
   // Aqui você cola TODOS os blocos que eu estou te mandando
   // Exemplo:
