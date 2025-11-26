@@ -115,20 +115,35 @@
     </div>
 
     <!-- TELA 6 – PARTIDA -->
-    <div id="tela-partida" class="tela">
-        <div class="placar">
-            <span id="partida-home"></span> <b id="gols-home">0</b>
-            <b style="margin:0 20px">x</b>
-            <b id="gols-away">0</b> <span id="partida-away"></span>
-        </div>
-
-        <div id="cronometro" class="cronometro">00'</div>
-
-        <div id="log-partida" class="log-partida"></div>
-
-        <button class="btn-blue" onclick="Match.substituicoes()">INTERVALO / ALTERAÇÕES</button>
-        <button class="btn-voltar" onclick="UI.voltarLobby()">SAIR</button>
+   <section id="tela-partida" class="tela">
+  <div class="partida-header">
+    <div class="time-bloco">
+      <img id="logo-home" class="partida-logo" src="assets/logos/default.png" alt="Home">
+      <span id="partida-home">Time Casa</span>
     </div>
+
+    <div class="placar">
+      <span id="gols-home">0</span>
+      <span>x</span>
+      <span id="gols-away">0</span>
+    </div>
+
+    <div class="time-bloco">
+      <span id="partida-away">Time Fora</span>
+      <img id="logo-away" class="partida-logo" src="assets/logos/default.png" alt="Away">
+    </div>
+  </div>
+
+  <div class="cronometro" id="cronometro">0'</div>
+
+  <div id="log-partida" class="log-partida"></div>
+
+  <div class="botoes-partida">
+    <button class="btn-secundario" onclick="Match.substituicoes()">Substituições</button>
+    <button class="btn-voltar" onclick="UI.voltarLobby()">Encerrar / Voltar</button>
+  </div>
+</section>
+
 
     <!-- TELA 7 – CLASSIFICAÇÃO -->
     <div id="tela-classificacao" class="tela">
