@@ -71,24 +71,42 @@
     </div>
 
     <!-- TELA 5 – TÁTICAS -->
-    <div id="tela-taticas" class="tela">
-        <h1 class="titulo">TÁTICAS & ESCALAÇÃO</h1>
+  <section id="tela-taticas" class="tela">
+  <div class="topo-taticas">
+    <h1>TÁTICAS E ESCALAÇÃO</h1>
 
-        <div class="painel-tatico">
-            <div id="campo-tatico" class="campo-tatico"></div>
-            <div id="banco-reservas" class="banco-reservas"></div>
-        </div>
+    <div class="taticas-controles">
+      <div class="grupo-controle">
+        <label for="select-formacao">Formação</label>
+        <select id="select-formacao">
+          <!-- opções são preenchidas pelo Tactics.js -->
+        </select>
+      </div>
 
-        <div class="painel-opcoes">
-            <label>Formação:</label>
-            <select id="select-formacao"></select>
+      <div class="grupo-controle">
+        <label for="select-estilo">Estilo de jogo</label>
+        <select id="select-estilo">
+          <option value="ofensivo">Ofensivo</option>
+          <option value="equilibrado">Equilibrado</option>
+          <option value="defensivo">Defensivo</option>
+        </select>
+      </div>
 
-            <label>Estilo:</label>
-            <select id="select-estilo">
-                <option value="defensivo">Defensivo</option>
-                <option value="equilibrado">Equilibrado</option>
-                <option value="ofensivo">Ofensivo</option>
-            </select>
+      <button class="btn-gold" onclick="Tactics.salvarTatica()">
+        Salvar Escalação
+      </button>
+
+      <button class="btn-voltar-top" onclick="UI.voltarLobby()">
+        Voltar ao Lobby
+      </button>
+    </div>
+  </div>
+
+  <div class="painel-tatico">
+    <div id="campo-tatico" class="campo-tatico"></div>
+    <div id="banco-reservas" class="banco-reservas"></div>
+  </div>
+</section>
 
             <button class="btn-gold" onclick="Tactics.salvarTatica()">Salvar Escalação</button>
         </div>
