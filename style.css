@@ -234,25 +234,41 @@ button {
 
 .campo-tatico {
     width: 60%;
+    max-width: 680px;
     height: 600px;
-    background: linear-gradient(#0d4700, #006400);
+    background: linear-gradient(#007020, #005515);
     border: 4px solid #C7A029;
     border-radius: 20px;
     position: relative;
+    margin-right: 20px;
 }
 
 .posicao-jogador {
     position: absolute;
     width: 110px;
     text-align: center;
-    cursor: grab;
+    cursor: pointer;
+    transform: translate(-50%, -50%); /* centraliza no ponto x,y */
+}
+
+.posicao-jogador .card-jogador-campo {
+    background-color: #111;
+    border-radius: 12px;
+    padding: 6px 4px 8px;
+    border: 2px solid #C7A029;
 }
 
 .posicao-jogador img {
-    width: 80px;
-    height: 80px;
+    width: 72px;
+    height: 72px;
     border-radius: 12px;
-    border: 2px solid #C7A029;
+    object-fit: cover;
+    margin-bottom: 4px;
+}
+
+.nome-jogador-campo {
+    font-size: 11px;
+    line-height: 1.2;
 }
 
 .banco-reservas {
@@ -263,6 +279,13 @@ button {
     border-radius: 20px;
     padding: 20px;
 }
+
+/* destaque de seleção (slot ou reserva) */
+.posicao-jogador.selecionado,
+.card-reserva.selecionado {
+    box-shadow: 0 0 0 3px #C7A029;
+}
+
 #tela-taticas {
     background-color: #000;
 }
