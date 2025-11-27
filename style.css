@@ -421,3 +421,112 @@ th {
     color: #C7A029;
     text-align: left;
 }
+/* ==== CLASSIFICAÇÃO COM ESCUDO ==== */
+.time-coluna {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.time-coluna .logo-tabela {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+/* ==== MERCADO DE TRANSFERÊNCIAS ==== */
+#tela-mercado {
+  padding: 30px;
+}
+
+.filtros-mercado {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.filtros-mercado label {
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+  gap: 4px;
+}
+
+.lista-mercado {
+  max-height: 500px;
+  overflow-y: auto;
+  border-radius: 16px;
+  background: #111;
+  padding: 12px 0;
+}
+
+.card-mercado {
+  display: grid;
+  grid-template-columns: 48px 1.5fr 1fr 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #222;
+}
+
+.card-mercado:last-child {
+  border-bottom: none;
+}
+
+.card-mercado img {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #C7A029;
+}
+
+.card-mercado .ovr {
+  font-weight: 700;
+}
+
+.card-mercado .valor {
+  color: #C7A029;
+}
+
+/* ==== RESULTADOS DA RODADA ==== */
+#tela-resultados-rodada {
+  padding: 30px;
+}
+
+.lista-resultados-rodada {
+  max-width: 600px;
+  margin: 0 auto 20px;
+  background: #111;
+  border-radius: 16px;
+  padding: 16px 20px;
+}
+
+.linha-resultado {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid #222;
+  font-size: 14px;
+}
+
+.linha-resultado:last-child {
+  border-bottom: none;
+}
+
+.botoes-rodada {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+}
+
+/* Pequeno ajuste na tática pra ficar mais "firme" visualmente */
+.posicao-jogador img {
+  object-fit: cover;
+  transition: transform 0.15s ease-out;
+}
+
+.posicao-jogador:hover img {
+  transform: translateY(-3px);
+}
