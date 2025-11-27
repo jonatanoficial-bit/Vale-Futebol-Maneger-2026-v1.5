@@ -85,13 +85,28 @@ window.Match = {
       this.atualizarCronometro();
       this.eventosDaPartida();
 
-      if (this.state.minute >= 90) {
-        this.state.finished = true;
-        this.registrarEvento("Fim de jogo!");
-        clearInterval(this.timer);
-      }
-    }, 180); // 0.18s por minuto ~ 16 segundos de jogo
-  },
+  if (this.state.minute >= 90) {
+  this.state.finished = true;
+  this.registrarEvento("Fim de jogo!");
+  clearInterval(this.timer);
+
+  // Integração com League + UI de resultados
+  if (window.League) {
+    const rodada = League.processarRodadaComJogoDoUsuario(
+      this.state.homeId,
+      this.state.awayId,
+      this.state.goalsHome,
+      this.state.goalsAway
+    );
+
+    if (window.UI && typeof UI.mostrarResultadosRodada === "function") {
+      UI.mostrarResultadosRodada(rodada);
+    }
+  } else if (window.UI && typeof UI.voltarLobby === "function") {
+    alert("Fim de jogo!");
+    UI.voltarLobby();
+  }
+}
 
   atualizarCronometro() {
     const cronometro = document.getElementById("cronometro");
