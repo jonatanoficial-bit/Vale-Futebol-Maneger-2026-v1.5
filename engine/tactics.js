@@ -102,11 +102,19 @@ window.Tactics = {
       return;
     }
 
-    // Elenco do time (objetos de jogador)
-    if (!Game.elenco || !Game.elenco.length) {
-      Game.elenco = Database.carregarElencoDoTime(Game.teamId);
+    // AGORA: sempre pega elenco direto do DATABASE,
+    // independente do que estiver salvo em Game.elenco
+    if (!window.Database || !Database.players) {
+      alert("Database de jogadores não carregado.");
+      return;
     }
-    this.elenco = Game.elenco.slice();
+    this.elenco = Database.players.filter(p => p.teamId === Game.teamId);
+
+    // se por algum motivo não achar, evita tela vazia
+    if (!this.elenco.length) {
+      alert("Não foi encontrado elenco para esse time no database.");
+      return;
+    }
 
     // Ordena elenco por posição e OVR
     this.elenco.sort((a, b) => {
@@ -152,7 +160,7 @@ window.Tactics = {
 
     this.slots = baseSlots.map(s => ({ ...s, playerId: null }));
 
-    // Reaplica escalação salva, se existir
+    // Reaplica escalação salva, se existir (usa só os IDs)
     if (Game.titulares && Object.keys(Game.titulares).length) {
       this.slots.forEach(slot => {
         const pid = Game.titulares[slot.id];
@@ -160,7 +168,6 @@ window.Tactics = {
       });
     }
 
-    // Se ainda não há titulares, preenche automático
     const algumTitular = this.slots.some(s => !!s.playerId);
     if (!algumTitular) {
       this.preencherAutomatico();
@@ -241,7 +248,6 @@ window.Tactics = {
         this.clicarSlot(slot.id);
       });
 
-      // destaque se este slot está selecionado pra troca
       if (this.selectedSlotId === slot.id) {
         container.classList.add("selecionado");
       }
@@ -255,7 +261,7 @@ window.Tactics = {
       if (!player) return;
 
       const card = document.createElement("div");
-      card.className = "card-mercado card-reserva"; // reaproveita estilo bonito
+      card.className = "card-mercado card-reserva";
       card.dataset.playerId = pid;
 
       const img = document.createElement("img");
@@ -270,7 +276,6 @@ window.Tactics = {
       card.appendChild(img);
       card.appendChild(infoWrapper);
 
-      // destaque quando selecionado
       if (this.selectedBenchId === pid) {
         card.classList.add("selecionado");
       }
@@ -283,12 +288,8 @@ window.Tactics = {
     });
   },
 
-  /* ---------------------------------------------------
-     Clique no banco: escolhe quem vai entrar
-     ---------------------------------------------------*/
   clicarBanco(playerId) {
     if (this.selectedBenchId === playerId) {
-      // desmarcar
       this.selectedBenchId = null;
     } else {
       this.selectedBenchId = playerId;
@@ -297,20 +298,15 @@ window.Tactics = {
     this.montarCampo();
   },
 
-  /* ---------------------------------------------------
-     Clique no campo: se tiver reserva selecionada, troca
-     ---------------------------------------------------*/
   clicarSlot(slotId) {
     const slot = this.slots.find(s => s.id === slotId);
     if (!slot) return;
 
     if (this.selectedBenchId) {
-      // faz a substituição titular ↔ reserva
       this._fazerSubstituicao(slotId, this.selectedBenchId);
       return;
     }
 
-    // Se quiser você pode habilitar seleção de slot também
     if (this.selectedSlotId === slotId) {
       this.selectedSlotId = null;
     } else {
@@ -326,7 +322,6 @@ window.Tactics = {
     const antigoTitular = slot.playerId || null;
     slot.playerId = reservaId;
 
-    // Atualiza banco
     this.benchIds = this.benchIds.filter(id => id !== reservaId);
     if (antigoTitular) {
       this.benchIds.push(antigoTitular);
@@ -339,7 +334,7 @@ window.Tactics = {
   },
 
   /* ---------------------------------------------------
-     Salvar tática (titulares + reservas)
+     Salvar tática
      ---------------------------------------------------*/
   salvarTatica() {
     const selForm = document.getElementById("select-formacao");
@@ -359,14 +354,13 @@ window.Tactics = {
 
     salvarJogo();
 
-    // Se estiver em meio a uma partida (ex: intervalo), volta pro jogo
     if (window.Match && Match.state && !Match.state.finished) {
       alert("Escalação salva. Voltando para o jogo!");
       if (typeof mostrarTela === "function") {
         mostrarTela("tela-partida");
       }
       if (!Match.timer && typeof Match.comecarLoop === "function") {
-        Match.comecarLoop(); // retorna para o segundo tempo
+        Match.comecarLoop();
       }
     } else {
       alert("Escalação e tática salvas com sucesso!");
