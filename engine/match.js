@@ -11,7 +11,7 @@ window.Match = {
   // Inicia o próximo jogo da carreira
   // ---------------------------------------------------
   iniciarProximoJogo() {
-    if (!window.Database || !Database.teams || !Database.getTeamById) {
+    if (!window.Database || !Database.teams) {
       alert("Banco de dados não carregado.");
       return;
     }
@@ -26,7 +26,7 @@ window.Match = {
       return;
     }
 
-    // Escolhe adversário da mesma divisão
+    // Adversário aleatório da mesma divisão
     const candidatos = Database.teams.filter(
       t => t.division === myTeam.division && t.id !== myTeam.id
     );
@@ -36,31 +36,26 @@ window.Match = {
     }
     const away = candidatos[Math.floor(Math.random() * candidatos.length)];
 
-    // Estado inicial do jogo
     this.state = {
       homeId: myTeam.id,
       awayId: away.id,
       minute: 0,
       goalsHome: 0,
       goalsAway: 0,
-      finished: false
+      finished: false,
+      halftimeDone: false
     };
 
-    // Atualiza UI da partida
     this._setupTelaPartida(myTeam, away);
 
-    // Limpa log e cronômetro
     const log = document.getElementById("log-partida");
     if (log) log.innerHTML = "";
     const cron = document.getElementById("cronometro");
     if (cron) cron.textContent = "0'";
 
-    // Começa loop
     this.comecarLoop();
   },
 
-  // ---------------------------------------------------
-  // Configura textos/imagens da tela de partida
   // ---------------------------------------------------
   _setupTelaPartida(home, away) {
     const elHome = document.getElementById("partida-home");
@@ -85,21 +80,18 @@ window.Match = {
     if (golsHome) golsHome.textContent = "0";
     if (golsAway) golsAway.textContent = "0";
 
-    if (window.mostrarTela) {
+    if (typeof mostrarTela === "function") {
       mostrarTela("tela-partida");
     }
   },
 
   // ---------------------------------------------------
-  // Loop da partida (simulação minuto a minuto)
+  // Loop da partida
   // ---------------------------------------------------
   comecarLoop() {
-    if (!this.state) return;
+    if (!this.state || this.state.finished) return;
 
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = null;
-    }
+    if (this.timer) clearInterval(this.timer);
 
     this.timer = setInterval(() => {
       if (!this.state || this.state.finished) {
@@ -108,35 +100,65 @@ window.Match = {
         return;
       }
 
-      this.state.minute += 5; // pula de 5 em 5 minutos
+      this.state.minute += 5;
 
-      // Atualiza cronômetro
       const cron = document.getElementById("cronometro");
       if (cron) cron.textContent = `${Math.min(this.state.minute, 90)}'`;
 
-      // Simula eventos nesse intervalo
+      // Intervalo aos 45'
+      if (!this.state.halftimeDone && this.state.minute >= 45) {
+        this.state.halftimeDone = true;
+        this._intervalo();
+        return; // pausa o loop aqui
+      }
+
       this._simularMomento();
 
-      // Atualiza placar
       const golsHome = document.getElementById("gols-home");
       const golsAway = document.getElementById("gols-away");
       if (golsHome) golsHome.textContent = this.state.goalsHome.toString();
       if (golsAway) golsAway.textContent = this.state.goalsAway.toString();
 
-      // Fim de jogo
       if (this.state.minute >= 90) {
         this._finalizarPartida();
       }
-    }, 600); // 0,6s = 5' pra deixar a partida dinâmica
+    }, 600);
+  },
+
+  pausarLoop() {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
   },
 
   // ---------------------------------------------------
-  // Força média do time (baseada nos jogadores)
+  // Intervalo – pergunta sobre substituições
+  // ---------------------------------------------------
+  _intervalo() {
+    this.pausarLoop();
+    this.registrarEvento("Intervalo de jogo!");
+
+    setTimeout(() => {
+      const quer = confirm("Intervalo! Deseja fazer substituições?");
+      if (quer && window.UI && typeof UI.abrirTaticas === "function") {
+        // Abre tela de táticas; ao salvar, Tactics volta pro jogo
+        UI.abrirTaticas();
+      } else {
+        // Não quer mexer no time, segue o jogo
+        this.comecarLoop();
+      }
+    }, 50);
+  },
+
+  // ---------------------------------------------------
+  // Força do time (média de OVR)
   // ---------------------------------------------------
   forcaDoTime(teamId) {
-    if (!Database || !Database.players) return 70;
+    const elenco = (window.Database && Database.players)
+      ? Database.players.filter(p => p.teamId === teamId)
+      : [];
 
-    const elenco = Database.players.filter(p => p.teamId === teamId);
     if (!elenco.length) return 70;
 
     const media = elenco.reduce((s, p) => s + (p.overall || 70), 0) / elenco.length;
@@ -151,7 +173,7 @@ window.Match = {
   },
 
   // ---------------------------------------------------
-  // Simula chances de gol em um “momento” do jogo
+  // Simulação de eventos
   // ---------------------------------------------------
   _simularMomento() {
     if (!this.state) return;
@@ -159,9 +181,9 @@ window.Match = {
     const fHome = this.forcaDoTime(this.state.homeId);
     const fAway = this.forcaDoTime(this.state.awayId);
 
-    // Probabilidade baseada na diferença de força
-    const diff = fHome - fAway; // positivo = casa mais forte
-    const baseProb = 0.10;      // 10% de chance de acontecer algo
+    const diff = fHome - fAway;
+
+    const baseProb = 0.10;
     let probHome = baseProb + diff * 0.0015;
     let probAway = baseProb - diff * 0.0015;
 
@@ -175,14 +197,14 @@ window.Match = {
     } else if (sorte < probHome + probAway) {
       this._registrarGol(false);
     } else if (sorte < probHome + probAway + 0.05) {
-      this.registrarEvento("Lance perigoso, mas a defesa afastou!");
+      this.registrarEvento("Lance perigoso, mas a defesa afastou.");
     }
   },
 
-  _registrarGol(eGolDoHome) {
+  _registrarGol(eDoHome) {
     if (!this.state) return;
 
-    if (eGolDoHome) {
+    if (eDoHome) {
       this.state.goalsHome++;
       this.registrarEvento("GOOOOL do time da casa!");
     } else {
@@ -192,17 +214,13 @@ window.Match = {
   },
 
   // ---------------------------------------------------
-  // Finaliza a partida e integra com League/UI
+  // Fim de jogo
   // ---------------------------------------------------
   _finalizarPartida() {
     if (!this.state) return;
 
     this.state.finished = true;
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = null;
-    }
-
+    this.pausarLoop();
     this.registrarEvento("Fim de jogo!");
 
     const homeId = this.state.homeId;
@@ -210,7 +228,6 @@ window.Match = {
     const golsHome = this.state.goalsHome;
     const golsAway = this.state.goalsAway;
 
-    // Se existir módulo de liga, processa rodada
     let rodada = null;
     if (window.League && typeof League.processarRodadaComJogoDoUsuario === "function") {
       rodada = League.processarRodadaComJogoDoUsuario(
@@ -221,7 +238,6 @@ window.Match = {
       );
     }
 
-    // Mostrar resultados da rodada ou voltar pro lobby
     if (window.UI && typeof UI.mostrarResultadosRodada === "function" && rodada) {
       UI.mostrarResultadosRodada(rodada);
     } else if (window.UI && typeof UI.voltarLobby === "function") {
@@ -231,7 +247,7 @@ window.Match = {
   },
 
   // ---------------------------------------------------
-  // Log de eventos na tela
+  // Log visual
   // ---------------------------------------------------
   registrarEvento(texto) {
     const log = document.getElementById("log-partida");
@@ -244,14 +260,14 @@ window.Match = {
   },
 
   // ---------------------------------------------------
-  // Substituições (placeholder)
+  // Substituições (placeholder de botão)
   // ---------------------------------------------------
   substituicoes() {
     if (!this.state) return;
     if (this.state.minute < 45) {
-      alert("Substituições oficiais serão liberadas no intervalo (após 45').");
+      alert("Faça substituições pelo botão TÁTICAS antes do jogo ou no intervalo.");
       return;
     }
-    alert("Sistema de substituições detalhado será implementado em breve.");
+    alert("No intervalo você pode abrir a tela de tática e salvar a nova escalação.");
   }
 };
