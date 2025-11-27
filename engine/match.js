@@ -7,9 +7,16 @@ window.Match = {
   state: null,
   timer: null,
 
+  // ---------------------------------------------------
+  // Inicia o próximo jogo da carreira
+  // ---------------------------------------------------
   iniciarProximoJogo() {
-    if (!Database || !Database.teams) {
+    if (!window.Database || !Database.teams || !Database.getTeamById) {
       alert("Banco de dados não carregado.");
+      return;
+    }
+    if (!window.Game || !Game.teamId) {
+      alert("Carreira não iniciada.");
       return;
     }
 
@@ -19,10 +26,17 @@ window.Match = {
       return;
     }
 
-    // escolhe adversário da mesma divisão
-    const candidatos = Database.teams.filter(t => t.division === myTeam.division && t.id !== myTeam.id);
+    // Escolhe adversário da mesma divisão
+    const candidatos = Database.teams.filter(
+      t => t.division === myTeam.division && t.id !== myTeam.id
+    );
+    if (!candidatos.length) {
+      alert("Não há adversários disponíveis na divisão.");
+      return;
+    }
     const away = candidatos[Math.floor(Math.random() * candidatos.length)];
 
+    // Estado inicial do jogo
     this.state = {
       homeId: myTeam.id,
       awayId: away.id,
@@ -32,104 +46,100 @@ window.Match = {
       finished: false
     };
 
-    this.prepararTela();
-    mostrarTela("tela-partida");
+    // Atualiza UI da partida
+    this._setupTelaPartida(myTeam, away);
+
+    // Limpa log e cronômetro
+    const log = document.getElementById("log-partida");
+    if (log) log.innerHTML = "";
+    const cron = document.getElementById("cronometro");
+    if (cron) cron.textContent = "0'";
+
+    // Começa loop
     this.comecarLoop();
   },
 
-  prepararTela() {
-    const homeSpan   = document.getElementById("partida-home");
-    const awaySpan   = document.getElementById("partida-away");
-    const golsHome   = document.getElementById("gols-home");
-    const golsAway   = document.getElementById("gols-away");
-    const cronometro = document.getElementById("cronometro");
-    const log        = document.getElementById("log-partida");
-    const logoHome   = document.getElementById("logo-home");
-    const logoAway   = document.getElementById("logo-away");
+  // ---------------------------------------------------
+  // Configura textos/imagens da tela de partida
+  // ---------------------------------------------------
+  _setupTelaPartida(home, away) {
+    const elHome = document.getElementById("partida-home");
+    const elAway = document.getElementById("partida-away");
+    const logoHome = document.getElementById("logo-home");
+    const logoAway = document.getElementById("logo-away");
+    const golsHome = document.getElementById("gols-home");
+    const golsAway = document.getElementById("gols-away");
 
-    const homeTeam = Database.getTeamById(this.state.homeId);
-    const awayTeam = Database.getTeamById(this.state.awayId);
+    if (elHome) elHome.textContent = home.name;
+    if (elAway) elAway.textContent = away.name;
 
-    if (homeSpan) homeSpan.textContent = homeTeam ? homeTeam.shortName : this.state.homeId;
-    if (awaySpan) awaySpan.textContent = awayTeam ? awayTeam.shortName : this.state.awayId;
-
-    if (logoHome && homeTeam) {
-        logoHome.src = `assets/logos/${homeTeam.id}.png`;
-        logoHome.onerror = () => { logoHome.src = "assets/logos/default.png"; };
+    if (logoHome) {
+      logoHome.src = `assets/logos/${home.id}.png`;
+      logoHome.onerror = () => { logoHome.src = "assets/logos/default.png"; };
     }
-    if (logoAway && awayTeam) {
-        logoAway.src = `assets/logos/${awayTeam.id}.png`;
-        logoAway.onerror = () => { logoAway.src = "assets/logos/default.png"; };
+    if (logoAway) {
+      logoAway.src = `assets/logos/${away.id}.png`;
+      logoAway.onerror = () => { logoAway.src = "assets/logos/default.png"; };
     }
 
     if (golsHome) golsHome.textContent = "0";
     if (golsAway) golsAway.textContent = "0";
-    if (cronometro) cronometro.textContent = "0'";
 
-    if (log) log.innerHTML = "";
-},
+    if (window.mostrarTela) {
+      mostrarTela("tela-partida");
+    }
+  },
 
+  // ---------------------------------------------------
+  // Loop da partida (simulação minuto a minuto)
+  // ---------------------------------------------------
   comecarLoop() {
+    if (!this.state) return;
+
     if (this.timer) {
       clearInterval(this.timer);
+      this.timer = null;
     }
 
     this.timer = setInterval(() => {
       if (!this.state || this.state.finished) {
         clearInterval(this.timer);
+        this.timer = null;
         return;
       }
 
-      this.state.minute++;
+      this.state.minute += 5; // pula de 5 em 5 minutos
 
-      this.atualizarCronometro();
-      this.eventosDaPartida();
+      // Atualiza cronômetro
+      const cron = document.getElementById("cronometro");
+      if (cron) cron.textContent = `${Math.min(this.state.minute, 90)}'`;
 
-  if (this.state.minute >= 90) {
-  this.state.finished = true;
-  this.registrarEvento("Fim de jogo!");
-  clearInterval(this.timer);
+      // Simula eventos nesse intervalo
+      this._simularMomento();
 
-  // Integração com League + UI de resultados
-  if (window.League) {
-    const rodada = League.processarRodadaComJogoDoUsuario(
-      this.state.homeId,
-      this.state.awayId,
-      this.state.goalsHome,
-      this.state.goalsAway
-    );
+      // Atualiza placar
+      const golsHome = document.getElementById("gols-home");
+      const golsAway = document.getElementById("gols-away");
+      if (golsHome) golsHome.textContent = this.state.goalsHome.toString();
+      if (golsAway) golsAway.textContent = this.state.goalsAway.toString();
 
-    if (window.UI && typeof UI.mostrarResultadosRodada === "function") {
-      UI.mostrarResultadosRodada(rodada);
-    }
-  } else if (window.UI && typeof UI.voltarLobby === "function") {
-    alert("Fim de jogo!");
-    UI.voltarLobby();
-  }
-}
-
-  atualizarCronometro() {
-    const cronometro = document.getElementById("cronometro");
-    if (!cronometro) return;
-    cronometro.textContent = `${this.state.minute}'`;
+      // Fim de jogo
+      if (this.state.minute >= 90) {
+        this._finalizarPartida();
+      }
+    }, 600); // 0,6s = 5' pra deixar a partida dinâmica
   },
 
+  // ---------------------------------------------------
+  // Força média do time (baseada nos jogadores)
+  // ---------------------------------------------------
   forcaDoTime(teamId) {
-    const elenco = carregarElencoDoTime(teamId);
-    let titulares = [];
+    if (!Database || !Database.players) return 70;
 
-    if (Game.titulares && Object.keys(Game.titulares).length && teamId === Game.teamId) {
-      const titularIds = Object.values(Game.titulares);
-      titulares = elenco.filter(p => titularIds.includes(p.id));
-    } else {
-      // top 11 por overall
-      titulares = elenco
-        .slice()
-        .sort((a, b) => (b.overall || 70) - (a.overall || 70))
-        .slice(0, 11);
-    }
+    const elenco = Database.players.filter(p => p.teamId === teamId);
+    if (!elenco.length) return 70;
 
-    const baseMedia = titulares.reduce((s, p) => s + (p.overall || 70), 0) / (titulares.length || 11);
+    const media = elenco.reduce((s, p) => s + (p.overall || 70), 0) / elenco.length;
 
     let bonus = 0;
     if (teamId === Game.teamId) {
@@ -137,61 +147,92 @@ window.Match = {
       if (Game.estilo === "defensivo") bonus -= 1;
     }
 
-    return baseMedia + bonus;
+    return Math.round(media + bonus);
   },
 
-  eventosDaPartida() {
-    const log = document.getElementById("log-partida");
-    if (!log) return;
+  // ---------------------------------------------------
+  // Simula chances de gol em um “momento” do jogo
+  // ---------------------------------------------------
+  _simularMomento() {
+    if (!this.state) return;
 
     const fHome = this.forcaDoTime(this.state.homeId);
     const fAway = this.forcaDoTime(this.state.awayId);
 
-    // chance básica de acontecer algo no minuto
-    const chanceEvento = 0.35;
-    if (Math.random() > chanceEvento) return;
+    // Probabilidade baseada na diferença de força
+    const diff = fHome - fAway; // positivo = casa mais forte
+    const baseProb = 0.10;      // 10% de chance de acontecer algo
+    let probHome = baseProb + diff * 0.0015;
+    let probAway = baseProb - diff * 0.0015;
 
-    const totalForca = fHome + fAway;
-    const probHome = fHome / totalForca;
+    probHome = Math.max(0.02, Math.min(0.25, probHome));
+    probAway = Math.max(0.02, Math.min(0.25, probAway));
 
-    const atacanteHome = Math.random() < probHome;
-    const atacanteId = atacanteHome ? this.state.homeId : this.state.awayId;
+    const sorte = Math.random();
 
-    const elenco = carregarElencoDoTime(atacanteId);
-    const atacante = elenco.length
-      ? elenco[Math.floor(Math.random() * elenco.length)]
-      : { name: "Jogador desconhecido" };
-
-    // tipo de evento
-    const r = Math.random();
-    let msg = "";
-
-    if (r < 0.10) {
-      msg = `⚽ ${this.state.minute}' – GOL de ${atacante.name}!`;
-      if (atacanteHome) {
-        this.state.goalsHome++;
-        const gh = document.getElementById("gols-home");
-        if (gh) gh.textContent = this.state.goalsHome;
-      } else {
-        this.state.goalsAway++;
-        const ga = document.getElementById("gols-away");
-        if (ga) ga.textContent = this.state.goalsAway;
-      }
-    } else if (r < 0.18) {
-      msg = `🟨 ${this.state.minute}' – Cartão amarelo para ${atacante.name}.`;
-    } else if (r < 0.20) {
-      msg = `🟥 ${this.state.minute}' – Cartão vermelho para ${atacante.name}!`;
-    } else if (r < 0.28) {
-      msg = `🥅 ${this.state.minute}' – Grande defesa após finalização de ${atacante.name}.`;
-    } else if (r < 0.35) {
-      msg = `🎯 ${this.state.minute}' – Finalização perigosa de ${atacante.name} para fora.`;
-    } else {
-      msg = `📌 ${this.state.minute}' – Boa troca de passes do time.`;
+    if (sorte < probHome) {
+      this._registrarGol(true);
+    } else if (sorte < probHome + probAway) {
+      this._registrarGol(false);
+    } else if (sorte < probHome + probAway + 0.05) {
+      this.registrarEvento("Lance perigoso, mas a defesa afastou!");
     }
-
-    this.registrarEvento(msg);
   },
 
+  _registrarGol(eGolDoHome) {
+    if (!this.state) return;
+
+    if (eGolDoHome) {
+      this.state.goalsHome++;
+      this.registrarEvento("GOOOOL do time da casa!");
+    } else {
+      this.state.goalsAway++;
+      this.registrarEvento("GOOOOL do time visitante!");
+    }
+  },
+
+  // ---------------------------------------------------
+  // Finaliza a partida e integra com League/UI
+  // ---------------------------------------------------
+  _finalizarPartida() {
+    if (!this.state) return;
+
+    this.state.finished = true;
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+
+    this.registrarEvento("Fim de jogo!");
+
+    const homeId = this.state.homeId;
+    const awayId = this.state.awayId;
+    const golsHome = this.state.goalsHome;
+    const golsAway = this.state.goalsAway;
+
+    // Se existir módulo de liga, processa rodada
+    let rodada = null;
+    if (window.League && typeof League.processarRodadaComJogoDoUsuario === "function") {
+      rodada = League.processarRodadaComJogoDoUsuario(
+        homeId,
+        awayId,
+        golsHome,
+        golsAway
+      );
+    }
+
+    // Mostrar resultados da rodada ou voltar pro lobby
+    if (window.UI && typeof UI.mostrarResultadosRodada === "function" && rodada) {
+      UI.mostrarResultadosRodada(rodada);
+    } else if (window.UI && typeof UI.voltarLobby === "function") {
+      alert(`Fim de jogo!\nPlacar: ${golsHome} x ${golsAway}`);
+      UI.voltarLobby();
+    }
+  },
+
+  // ---------------------------------------------------
+  // Log de eventos na tela
+  // ---------------------------------------------------
   registrarEvento(texto) {
     const log = document.getElementById("log-partida");
     if (!log) return;
@@ -202,13 +243,15 @@ window.Match = {
     log.scrollTop = log.scrollHeight;
   },
 
+  // ---------------------------------------------------
+  // Substituições (placeholder)
+  // ---------------------------------------------------
   substituicoes() {
     if (!this.state) return;
     if (this.state.minute < 45) {
       alert("Substituições oficiais serão liberadas no intervalo (após 45').");
       return;
     }
-    // Próxima fase: tela própria de substituições
-    alert("Sistema de substituições detalhado será implementado na próxima etapa.");
+    alert("Sistema de substituições detalhado será implementado em breve.");
   }
 };
