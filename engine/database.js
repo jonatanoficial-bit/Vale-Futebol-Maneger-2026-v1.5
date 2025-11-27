@@ -1066,15 +1066,6 @@ makePlayer("TOM_EV_GALDINO","TOM","Everton Galdino","ATA",74,2),
 makePlayer("TOM_MARQUINHOS_ATA","TOM","Marquinhos","ATA",73,1.8),
 ];
 
-  // Aqui você cola TODOS os blocos que eu estou te mandando
-  // Exemplo:
-  // makePlayer("FLA_ROSSI","FLA","Agustín Rossi","GOL",83,22),
-  // makePlayer("FLA_MATHEUS_CUNHA","FLA","Matheus Cunha","GOL",76,5),
-];
-
-// ⚠️ IMPORTANTE: NÃO pode existir OUTRO `];` depois disso
-// fechando "players". Só esse acima.
-
 // -------------------------------------------------------
 // COMPETIÇÕES
 // -------------------------------------------------------
