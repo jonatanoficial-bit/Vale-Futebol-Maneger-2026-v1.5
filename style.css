@@ -245,11 +245,12 @@ button {
 
 .campo-tatico {
     position: relative;
+    flex: 0 0 55%;               /* Alinhado com o painel de reservas */
     width: 100%;
     max-width: 600px;
-    aspect-ratio: 3 / 4;          /* Mantém o retângulo verde proporcional */
-    margin: 0 auto;
-    background: #0b5f21;          /* verde do campo */
+    aspect-ratio: 3 / 4;
+    margin: 0;
+    background: #0b5f21;
     border-radius: 20px;
     border: 4px solid #f1b800;
     box-sizing: border-box;
@@ -261,9 +262,12 @@ button {
     transform: translate(-50%, -50%);
     width: 90px;
     height: 90px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-/* Card do jogador dentro do slot */
+/* Card do jogador */
 .slot-card {
     width: 100%;
     height: 100%;
@@ -275,7 +279,7 @@ button {
     align-items: center;
     justify-content: flex-end;
     padding: 4px;
-    overflow: hidden;             /* impede a foto de sair pra fora */
+    overflow: hidden;
     box-sizing: border-box;
 }
 
@@ -283,16 +287,18 @@ button {
 .slot-card img {
     width: 70%;
     height: 60%;
-    object-fit: cover;            /* corta um pouquinho, mas não distorce */
+    object-fit: cover;
     border-radius: 50%;
     margin-bottom: 4px;
+    flex-shrink: 0;
 }
 
-/* Nome e info do jogador dentro do card */
+/* Nome + posição + overall */
 .slot-card div {
     text-align: center;
     color: #fff;
     text-shadow: 0 0 2px #000;
+    line-height: 1.1;
 }
 
 .slot-card div:nth-child(2) {     /* nome */
@@ -300,7 +306,7 @@ button {
     font-weight: 700;
 }
 
-.slot-card div:nth-child(3) {     /* posição + ovr */
+.slot-card div:nth-child(3) {     /* posição + OVR */
     font-size: 10px;
     opacity: 0.85;
 }
