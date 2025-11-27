@@ -310,6 +310,62 @@ button {
     font-size: 10px;
     opacity: 0.85;
 }
+/* ===========================
+   TÁTICAS – LAYOUT DO PAINEL
+   =========================== */
+
+.painel-tatico {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 30px;
+    margin-top: 20px;
+    padding: 0 20px;
+    box-sizing: border-box;
+}
+
+/* Banco de reservas à direita */
+.banco-reservas {
+    flex: 0 0 280px;
+    max-height: 480px;
+    background: #222;
+    border-radius: 16px;
+    padding: 10px 8px;
+    overflow-y: auto;
+    box-sizing: border-box;
+    border: 2px solid #f1b800;
+}
+/* ===========================
+   TÁTICAS – RESERVAS
+   =========================== */
+
+.reserva-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.12);
+    cursor: pointer;
+}
+
+.reserva-card img {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.reserva-card div:first-of-type {
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+}
+
+.reserva-card div:last-of-type {
+    font-size: 11px;
+    color: #ccc;
+}
 
 /* =======================
    PARTIDA
