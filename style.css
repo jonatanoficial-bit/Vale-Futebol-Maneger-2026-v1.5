@@ -559,3 +559,225 @@ th {
 .posicao-jogador:hover img {
   transform: translateY(-3px);
 }
+/* ===========================================================
+   RESPONSIVIDADE – CELULAR / TABLET
+   =========================================================== */
+
+/* Telas até 900px de largura (celulares em pé e tablets) */
+@media (max-width: 900px) {
+
+  body {
+    overflow-x: hidden;
+  }
+
+  .tela {
+    padding: 16px;
+  }
+
+  /* TÍTULOS um pouco menores */
+  h1.titulo,
+  #tela-classificacao h1,
+  #tela-mercado h1 {
+    font-size: 26px;
+    line-height: 1.1;
+  }
+
+  /* CAPA – botões um pouco mais altos e largos */
+  #btn-iniciar,
+  #btn-continuar {
+    width: 80%;
+    max-width: 320px;
+    font-size: 16px;
+    padding: 12px 0;
+  }
+
+  /* LOBBY */
+  #tela-lobby {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+  }
+
+  .lobby-card {
+    width: 100%;
+    max-width: 360px;
+    padding: 24px;
+  }
+
+  .lobby-logo {
+    width: 110px;
+    height: 110px;
+  }
+
+  .btn-blue,
+  .btn-gold,
+  .btn-green {
+    width: 100%;
+    max-width: 280px;
+  }
+
+  /* ESCOLHA DE TIME – diminuir um pouco a grid */
+  .lista-times {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 16px;
+    padding: 10px;
+  }
+
+  .time-logo {
+    width: 80px;
+    height: 80px;
+  }
+
+  .time-nome {
+    font-size: 13px;
+  }
+
+  /* TÁTICAS – layout em COLUNA no mobile */
+  .painel-tatico {
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 0;
+  }
+
+  .campo-tatico {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 420px;
+    margin: 0 auto;
+  }
+
+  .banco-reservas {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 420px;
+    max-height: 260px;
+  }
+
+  .slot-jogador {
+    width: 70px;
+    height: 70px;
+  }
+
+  .slot-card div:nth-child(2) {
+    font-size: 10px;
+  }
+
+  .slot-card div:nth-child(3) {
+    font-size: 9px;
+  }
+
+  /* PARTIDA – tudo mais compacto */
+  .partida-header {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .time-bloco {
+    font-size: 16px;
+  }
+
+  .placar {
+    font-size: 30px;
+  }
+
+  .log-partida {
+    height: 55vh;
+  }
+
+  /* CLASSIFICAÇÃO – permite scroll horizontal no celular */
+  .classificacao-container {
+    padding: 12px;
+    border-radius: 12px;
+    overflow-x: auto;
+  }
+
+  #tabela-classificacao {
+    min-width: 600px;   /* garante que a tabela não esprema demais */
+  }
+
+  /* MERCADO – layout em coluna, lista mais baixa para caber na tela */
+  #tela-mercado {
+    padding: 16px;
+  }
+
+  .filtros-mercado {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .lista-mercado {
+    max-height: 55vh;
+  }
+
+  .card-mercado {
+    grid-template-columns: 40px 1.5fr 0.6fr 0.7fr;
+    grid-template-rows: auto auto;
+    grid-auto-flow: row;
+    gap: 6px;
+  }
+
+  .card-mercado img {
+    width: 40px;
+    height: 40px;
+  }
+
+  .card-mercado .ovr {
+    font-size: 16px;
+  }
+
+  .card-mercado button {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  /* RESULTADOS DA RODADA */
+  #tela-resultados-rodada {
+    padding: 16px;
+  }
+
+  .lista-resultados-rodada {
+    padding: 10px 12px;
+  }
+
+  .linha-resultado {
+    font-size: 12px;
+  }
+
+  .botoes-rodada {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* ELENCO – 2 cards por linha no máximo */
+  .elenco-lista {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .card-jogador img {
+    width: 90px;
+    height: 90px;
+  }
+
+  .ovr {
+    font-size: 20px;
+  }
+}
+
+/* Ajuste extra para celulares bem pequenos (ex: 360px) */
+@media (max-width: 400px) {
+  .tela {
+    padding: 10px;
+  }
+
+  .lista-times {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .campo-tatico {
+    max-width: 360px;
+  }
+}
