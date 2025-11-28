@@ -158,16 +158,18 @@ button {
     background: rgba(255,255,255,0.1);
 }
 
-.time-logo {
+/* >>> ESTE é o seletor correto para a imagem do escudo <<< */
+.time-card-logo {
     width: 100px;
     height: 100px;
-    object-fit: contain; /* Mantém proporção SEM esticar */
+    object-fit: contain;      /* Mantém proporção sem esticar */
     display: block;
     margin: 0 auto 10px auto;
     filter: drop-shadow(0 0 4px black);
 }
 
-.time-nome {
+/* Nome do time embaixo do escudo */
+.time-card-nome {
     font-size: 16px;
     font-weight: 700;
     color: white;
