@@ -4,7 +4,29 @@
    =======================================================*/
 
 (function () {
-  // Namespace público
+
+  // Helpers para pegar players/teams do seu database.js (const players/teams)
+  function getPlayersArray() {
+    // Se algum dia você criar Database.players, ele terá prioridade
+    if (window.Database && Array.isArray(Database.players)) {
+      return Database.players;
+    }
+    try {
+      if (Array.isArray(players)) return players; // seu const players
+    } catch (e) {}
+    return [];
+  }
+
+  function getTeamsArray() {
+    if (window.Database && Array.isArray(Database.teams)) {
+      return Database.teams;
+    }
+    try {
+      if (Array.isArray(teams)) return teams; // seu const teams
+    } catch (e) {}
+    return [];
+  }
+
   const MarketUI = {
     initialized: false,
 
@@ -12,7 +34,7 @@
       if (this.initialized) return;
       this.initialized = true;
 
-      // === IDs NOVOS, IGUAIS AO HTML ===
+      // === IDs IGUAIS AO HTML ===
       this.$posicao   = document.getElementById("select-mercado-posicao");
       this.$minOvr    = document.getElementById("input-mercado-min-ovr");
       this.$maxValor  = document.getElementById("input-mercado-max-valor");
@@ -46,11 +68,11 @@
 
       let jogadores = [];
 
-      // Se existir um engine de mercado, usa ele primeiro
+      // Se existir um engine de mercado, usa ele
       if (window.Market && typeof Market.getJogadoresFiltrados === "function") {
         jogadores = Market.getJogadoresFiltrados(filtros);
       } else {
-        // Fallback direto do Database
+        // Fallback direto do database.js
         jogadores = this._filtrarDiretoDoDatabase(filtros);
       }
 
@@ -65,7 +87,7 @@
         return;
       }
 
-      // Se existir engine de mercado, delega
+      // Se existir engine de mercado, delega pra ela
       if (window.Market && typeof Market.comprarJogador === "function") {
         Market.comprarJogador(jogadorId);
         this.atualizarLista();
@@ -121,10 +143,7 @@
     },
 
     _filtrarDiretoDoDatabase({ posicao, minOvr, maxVal, premium }) {
-      const base = (window.Database && Array.isArray(Database.players))
-        ? Database.players
-        : [];
-
+      const base = getPlayersArray();
       if (!base.length) return [];
 
       const meuTimeId = (window.Game && Game.teamId) ? Game.teamId : null;
@@ -140,7 +159,7 @@
           if (ovr < minOvr) return false;
           if (val > maxVal) return false;
 
-          // Pacote premium = só craques (OVR 82+ por exemplo)
+          // Pacote premium = só craques (por ex. OVR 82+)
           if (premium && ovr < 82) return false;
 
           return true;
@@ -200,17 +219,13 @@
 
     _nomeTime(teamId) {
       if (!teamId) return "";
-      const fonte = (window.Database && Database.teams)
-        ? Database.teams
-        : (window.teams || []);
+      const fonte = getTeamsArray();
       const t = fonte.find(t => t.id === teamId);
       return t ? t.name : teamId;
     },
 
     _buscarJogadorPorId(id) {
-      const base = (window.Database && Database.players)
-        ? Database.players
-        : [];
+      const base = getPlayersArray();
       return base.find(p => p.id === id);
     }
   };
@@ -223,4 +238,5 @@
       MarketUI.init();
     }
   });
+
 })();
