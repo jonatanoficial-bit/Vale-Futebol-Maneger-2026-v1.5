@@ -3,23 +3,58 @@
    main.js – Inicialização do jogo e troca de telas
    =======================================================*/
 
-window.addEventListener("load", () => {
+window.addEventListener("DOMContentLoaded", () => {
     console.log(
         "%c Vale Futebol Manager 2026 iniciado!",
         "color:#C7A029; font-size:20px; font-weight:bold"
     );
 
-    // Se existir um UI antigo, continua chamando
+    // Se existir um UI mais completo, ele é inicializado
     if (window.UI && typeof UI.init === "function") {
         UI.init();
     }
 
-    // Garante que o botão INICIAR sempre monte a lista de times
+    // Botão INICIAR CARREIRA
     const btnIniciar = document.getElementById("btn-iniciar");
     if (btnIniciar) {
         btnIniciar.addEventListener("click", () => {
-            // pequena espera só pra garantir troca de tela
+            // Se existir um fluxo novo de carreira, usa ele
+            if (window.UI && typeof UI.novaCarreira === "function") {
+                UI.novaCarreira();
+                return;
+            }
+
+            // Fallback: usa o sistema básico de escolha de time
+            mostrarTela("tela-escolha-time");
             setTimeout(preencherListaTimesBasico, 50);
+        });
+    }
+
+    // Botão CONTINUAR CARREIRA
+    const btnContinuar = document.getElementById("btn-continuar");
+    if (btnContinuar) {
+        btnContinuar.addEventListener("click", () => {
+            // Se existir fluxo oficial de continuar carreira, usa ele
+            if (window.UI && typeof UI.continuarCarreira === "function") {
+                UI.continuarCarreira();
+                return;
+            }
+
+            // Fallback simples: tenta carregar pelo sistema de save, se existir
+            if (typeof loadGameState === "function") {
+                const ok = loadGameState();
+                if (!ok) {
+                    alert("Nenhum save encontrado. Inicie uma nova carreira.");
+                } else {
+                    // Atualiza lobby com dados carregados
+                    if (Game.teamId) {
+                        atualizarLobbyBasico();
+                        mostrarTela("tela-lobby");
+                    }
+                }
+            } else {
+                alert("Função de continuar carreira ainda não foi implementada.");
+            }
         });
     }
 });
@@ -95,7 +130,7 @@ function preencherListaTimesBasico() {
 function selecionarTimeBasico(teamId) {
     const coachName = prompt("Nome do treinador:", "Técnico");
 
-    // Usa a engine que já existe (game.js)
+    // Usa a engine que já existe (gameState/reset...) se disponível
     if (typeof resetGameStateForNewCareer === "function") {
         resetGameStateForNewCareer(teamId, coachName || "Técnico");
     }
