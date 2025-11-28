@@ -3,58 +3,35 @@
    main.js – Inicialização do jogo e troca de telas
    =======================================================*/
 
-window.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("load", () => {
     console.log(
         "%c Vale Futebol Manager 2026 iniciado!",
         "color:#C7A029; font-size:20px; font-weight:bold"
     );
 
-    // Se existir um UI mais completo, ele é inicializado
+    // Se existir um UI "antigo", continua chamando
     if (window.UI && typeof UI.init === "function") {
         UI.init();
     }
 
-    // Botão INICIAR CARREIRA
+    // Garante que o botão INICIAR sempre monte a lista de times
     const btnIniciar = document.getElementById("btn-iniciar");
     if (btnIniciar) {
         btnIniciar.addEventListener("click", () => {
-            // Se existir um fluxo novo de carreira, usa ele
-            if (window.UI && typeof UI.novaCarreira === "function") {
-                UI.novaCarreira();
-                return;
-            }
-
-            // Fallback: usa o sistema básico de escolha de time
-            mostrarTela("tela-escolha-time");
+            // pequena espera só pra garantir troca de tela
             setTimeout(preencherListaTimesBasico, 50);
         });
     }
 
-    // Botão CONTINUAR CARREIRA
+    // Botão CONTINUAR CARREIRA (se já houver save)
     const btnContinuar = document.getElementById("btn-continuar");
     if (btnContinuar) {
         btnContinuar.addEventListener("click", () => {
-            // Se existir fluxo oficial de continuar carreira, usa ele
-            if (window.UI && typeof UI.continuarCarreira === "function") {
-                UI.continuarCarreira();
-                return;
+            if (typeof loadGameStateFromStorage === "function") {
+                loadGameStateFromStorage(); // sua função da engine
             }
-
-            // Fallback simples: tenta carregar pelo sistema de save, se existir
-            if (typeof loadGameState === "function") {
-                const ok = loadGameState();
-                if (!ok) {
-                    alert("Nenhum save encontrado. Inicie uma nova carreira.");
-                } else {
-                    // Atualiza lobby com dados carregados
-                    if (Game.teamId) {
-                        atualizarLobbyBasico();
-                        mostrarTela("tela-lobby");
-                    }
-                }
-            } else {
-                alert("Função de continuar carreira ainda não foi implementada.");
-            }
+            atualizarLobbyBasico();
+            mostrarTela("tela-lobby");
         });
     }
 });
@@ -130,7 +107,7 @@ function preencherListaTimesBasico() {
 function selecionarTimeBasico(teamId) {
     const coachName = prompt("Nome do treinador:", "Técnico");
 
-    // Usa a engine que já existe (gameState/reset...) se disponível
+    // Usa a engine que já existe (game.js)
     if (typeof resetGameStateForNewCareer === "function") {
         resetGameStateForNewCareer(teamId, coachName || "Técnico");
     }
@@ -164,7 +141,22 @@ function atualizarLobbyBasico() {
     if (saldoEl) saldoEl.textContent = `Saldo: ${gameState.balance} mi`;
 
     if (logoEl) {
-        logoEl.src = `assets/logos/${team.id}.png`;
-        logoEl.alt = team.name;
+        // 1ª tentativa: usar propriedade 'logo' se existir
+        let logoFile = null;
+        if (team.logo) {
+            logoFile = team.logo;              // ex: "FLA.png"
+        } else if (team.id) {
+            logoFile = `${team.id}.png`;       // ex: "FLA.png"
+        }
+
+        if (logoFile) {
+            logoEl.src = `assets/logos/${logoFile}`;
+            logoEl.alt = team.name;
+            logoEl.onerror = function () {
+                // fallback se a imagem não existir
+                this.onerror = null;
+                this.src = "assets/logos/default.png";
+            };
+        }
     }
 }
