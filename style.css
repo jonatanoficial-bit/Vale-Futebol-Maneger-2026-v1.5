@@ -1,10 +1,11 @@
 /* ===========================================================
-   VALE FUTEBOL MANAGER 2026 — CSS OFICIAL
-   Tema: EA FC FUTURE (2B)
-   Por: ChatGPT
+   VALE FUTEBOL MANAGER 2026 — CSS OFICIAL v2B
+   Tema: EA FC FUTURE
    ===========================================================*/
 
-/* Fonte global */
+/* =======================
+   RESET / GLOBAL
+   ======================= */
 * {
     margin: 0;
     padding: 0;
@@ -16,11 +17,11 @@ body {
     background-color: #0A0A0A;
     color: #F2F2F2;
     overflow-x: hidden;
-    overflow-y: auto;   /* IMPORTANTE */
+    overflow-y: auto;
 }
 
 /* =======================
-   Telas do jogo
+   TELAS DO JOGO
    ======================= */
 .tela {
     display: none;
@@ -34,6 +35,12 @@ body {
 
 .ativa {
     display: block;
+}
+
+/* Título genérico (caso use <h1 class="titulo">) */
+h1.titulo {
+    font-size: 32px;
+    margin-bottom: 20px;
 }
 
 /* =======================
@@ -51,6 +58,7 @@ body {
     opacity: 0.8;
 }
 
+/* Botões na capa centralizados */
 #tela-capa .btn-principal,
 #tela-capa .btn-secundario {
     position: absolute;
@@ -79,12 +87,17 @@ button {
     transition: 0.2s;
 }
 
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .btn-principal {
     background-color: #C7A029;
     color: #000;
 }
 
-.btn-principal:hover {
+.btn-principal:hover:not(:disabled) {
     background-color: #e3bf47;
 }
 
@@ -93,7 +106,7 @@ button {
     color: #fff;
 }
 
-.btn-secundario:hover {
+.btn-secundario:hover:not(:disabled) {
     background-color: #38bdf8;
 }
 
@@ -126,7 +139,7 @@ button {
 }
 
 /* ================================
-   ESCOLHA DE TIME – AJUSTE COMPLETO
+   ESCOLHA DE TIME
    ================================ */
 
 #tela-escolha-time {
@@ -143,6 +156,7 @@ button {
     margin: 0 auto;
 }
 
+/* Card de cada time */
 .time-card {
     background: rgba(0,0,0,0.4);
     border: 2px solid #fff;
@@ -151,6 +165,9 @@ button {
     cursor: pointer;
     transition: 0.2s ease;
     backdrop-filter: blur(4px);
+    width: 100%;
+    max-width: 160px;
+    margin: 0 auto;
 }
 
 .time-card:hover {
@@ -158,30 +175,38 @@ button {
     background: rgba(255,255,255,0.1);
 }
 
-/* >>> ESTE é o seletor correto para a imagem do escudo <<< */
-.time-card-logo {
+/* ESCUDO – serve tanto para .time-card-logo quanto .time-logo */
+.time-card-logo,
+.time-logo {
     width: 100px;
     height: 100px;
-    object-fit: contain;      /* Mantém proporção sem esticar */
+    object-fit: contain;
     display: block;
     margin: 0 auto 10px auto;
     filter: drop-shadow(0 0 4px black);
 }
 
-/* Nome do time embaixo do escudo */
-.time-card-nome {
+/* Nome do time */
+.time-card-nome,
+.time-nome {
     font-size: 16px;
     font-weight: 700;
     color: white;
     text-shadow: 0 0 3px black;
+    display: block;
 }
 
 /* =======================
    LOBBY
    ======================= */
+
 #tela-lobby {
     background-image: url("assets/geral/lobby.png");
     background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .lobby-card {
@@ -189,6 +214,7 @@ button {
     padding: 40px;
     width: 380px;
     border-radius: 20px;
+    box-shadow: 0 0 28px rgba(0,0,0,0.8);
 }
 
 .lobby-logo {
@@ -196,11 +222,33 @@ button {
     height: 130px;
     object-fit: contain;
     margin-bottom: 15px;
+    display: block;
 }
 
+.lobby-info-time {
+    margin-bottom: 20px;
+}
+
+.lobby-info-time h2 {
+    font-size: 22px;
+    margin-bottom: 5px;
+}
+
+.lobby-info-time p {
+    font-size: 14px;
+    opacity: 0.8;
+}
+
+.lobby-botoes {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+}
 /* =======================
    ELENCO
    ======================= */
+
 .elenco-lista {
     display: grid;
     grid-template-columns: repeat(auto-fill, 220px);
@@ -245,9 +293,19 @@ button {
    TÁTICAS – CAMPO E JOGADORES
    =========================== */
 
+.painel-tatico {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 30px;
+    margin-top: 20px;
+    padding: 0 20px;
+    box-sizing: border-box;
+}
+
 .campo-tatico {
     position: relative;
-    flex: 0 0 55%;               /* Alinhado com o painel de reservas */
+    flex: 0 0 55%;
     width: 100%;
     max-width: 600px;
     aspect-ratio: 3 / 4;
@@ -312,19 +370,6 @@ button {
     font-size: 10px;
     opacity: 0.85;
 }
-/* ===========================
-   TÁTICAS – LAYOUT DO PAINEL
-   =========================== */
-
-.painel-tatico {
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    gap: 30px;
-    margin-top: 20px;
-    padding: 0 20px;
-    box-sizing: border-box;
-}
 
 /* Banco de reservas à direita */
 .banco-reservas {
@@ -337,10 +382,8 @@ button {
     box-sizing: border-box;
     border: 2px solid #f1b800;
 }
-/* ===========================
-   TÁTICAS – RESERVAS
-   =========================== */
 
+/* RESERVAS – linha da lista */
 .reserva-card {
     display: flex;
     align-items: center;
@@ -367,6 +410,16 @@ button {
 .reserva-card div:last-of-type {
     font-size: 11px;
     color: #ccc;
+}
+
+/* Pequeno ajuste para hover visual (opcional) */
+.posicao-jogador img {
+    object-fit: cover;
+    transition: transform 0.15s ease-out;
+}
+
+.posicao-jogador:hover img {
+    transform: translateY(-3px);
 }
 
 /* =======================
@@ -428,7 +481,97 @@ button {
 }
 
 /* =======================
-   CLASSIFICAÇÃO
+   MERCADO DE TRANSFERÊNCIAS
+   ======================= */
+#tela-mercado {
+    padding: 30px;
+}
+
+.filtros-mercado {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.filtros-mercado label {
+    display: flex;
+    flex-direction: column;
+    font-size: 14px;
+    gap: 4px;
+}
+
+.lista-mercado {
+    max-height: 500px;
+    overflow-y: auto;
+    border-radius: 16px;
+    background: #111;
+    padding: 12px 0;
+}
+
+.card-mercado {
+    display: grid;
+    grid-template-columns: 48px 1.5fr 1fr 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    border-bottom: 1px solid #222;
+}
+
+.card-mercado:last-child {
+    border-bottom: none;
+}
+
+.card-mercado img {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #C7A029;
+}
+
+.card-mercado .ovr {
+    font-weight: 700;
+}
+
+.card-mercado .valor {
+    color: #C7A029;
+}
+
+/* =======================
+   RESULTADOS DA RODADA
+   ======================= */
+#tela-resultados-rodada {
+    padding: 30px;
+}
+
+.lista-resultados-rodada {
+    max-width: 600px;
+    margin: 0 auto 20px;
+    background: #111;
+    border-radius: 16px;
+    padding: 16px 20px;
+}
+
+.linha-resultado {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid #222;
+    font-size: 14px;
+}
+
+.linha-resultado:last-child {
+    border-bottom: none;
+}
+
+.botoes-rodada {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+}
+/* =======================
+   CLASSIFICAÇÃO / TABELA
    ======================= */
 .classificacao-container {
     background-color: #1A1A1A;
@@ -452,390 +595,407 @@ th {
     color: #C7A029;
     text-align: left;
 }
-/* ==== CLASSIFICAÇÃO COM ESCUDO ==== */
+
+/* Tabela com escudo */
 .time-coluna {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .time-coluna .logo-tabela {
-  width: 24px;
-  height: 24px;
-  object-fit: contain;
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
 }
 
-/* ==== MERCADO DE TRANSFERÊNCIAS ==== */
-#tela-mercado {
-  padding: 30px;
+/* =======================
+   CALENDÁRIO DA TEMPORADA
+   ======================= */
+
+#tela-calendario {
+    padding: 30px;
 }
 
-.filtros-mercado {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  margin-bottom: 20px;
+.calendario-layout {
+    display: grid;
+    grid-template-columns: 2fr 1.2fr;
+    gap: 24px;
 }
 
-.filtros-mercado label {
-  display: flex;
-  flex-direction: column;
-  font-size: 14px;
-  gap: 4px;
+.calendario-container {
+    background: #111;
+    border-radius: 20px;
+    padding: 18px 20px;
 }
 
-.lista-mercado {
-  max-height: 500px;
-  overflow-y: auto;
-  border-radius: 16px;
-  background: #111;
-  padding: 12px 0;
+/* Cabeçalho do mês + navegação */
+.calendario-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
 }
 
-.card-mercado {
-  display: grid;
-  grid-template-columns: 48px 1.5fr 1fr 1fr auto;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 16px;
-  border-bottom: 1px solid #222;
+.calendario-header h2 {
+    font-size: 22px;
 }
 
-.card-mercado:last-child {
-  border-bottom: none;
+.calendario-nav {
+    display: flex;
+    gap: 10px;
 }
 
-.card-mercado img {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid #C7A029;
+.calendario-nav button {
+    padding: 6px 12px;
+    font-size: 14px;
 }
 
-.card-mercado .ovr {
-  font-weight: 700;
+/* Nomes dos dias da semana */
+.calendario-semana {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    text-align: center;
+    font-size: 12px;
+    opacity: 0.7;
+    margin-bottom: 8px;
 }
 
-.card-mercado .valor {
-  color: #C7A029;
+/* Grade de dias */
+.calendario-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
 }
 
-/* ==== RESULTADOS DA RODADA ==== */
-#tela-resultados-rodada {
-  padding: 30px;
+/* Dia base */
+.dia-calendario {
+    min-height: 54px;
+    border-radius: 8px;
+    border: 1px solid #222;
+    padding: 4px;
+    font-size: 12px;
+    position: relative;
+    cursor: default;
+    display: flex;
+    flex-direction: column;
 }
 
-.lista-resultados-rodada {
-  max-width: 600px;
-  margin: 0 auto 20px;
-  background: #111;
-  border-radius: 16px;
-  padding: 16px 20px;
+/* Número do dia */
+.dia-numero {
+    font-weight: 700;
+    margin-bottom: 3px;
 }
 
-.linha-resultado {
-  display: flex;
-  justify-content: space-between;
-  padding: 6px 0;
-  border-bottom: 1px solid #222;
-  font-size: 14px;
+/* Dia com jogo */
+.dia-com-jogo {
+    border-color: #0EA5E9;
+    background: rgba(14,165,233,0.1);
+    cursor: pointer;
 }
 
-.linha-resultado:last-child {
-  border-bottom: none;
+.dia-com-jogo .badge-jogo {
+    margin-top: auto;
+    align-self: flex-end;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: #0EA5E9;
+    color: #fff;
 }
 
-.botoes-rodada {
-  display: flex;
-  justify-content: center;
-  gap: 16px;
+/* Dia atual */
+.dia-hoje {
+    border-color: #C7A029;
+    box-shadow: 0 0 0 1px rgba(199,160,41,0.5);
 }
 
-/* Pequeno ajuste na tática pra ficar mais "firme" visualmente */
-.posicao-jogador img {
-  object-fit: cover;
-  transition: transform 0.15s ease-out;
+/* Dia passado (já jogou) */
+.dia-passado {
+    opacity: 0.65;
 }
 
-.posicao-jogador:hover img {
-  transform: translateY(-3px);
+/* Dia sem jogo */
+.dia-sem-jogo {
+    opacity: 0.45;
 }
-/* ===========================================================
-   RESPONSIVIDADE – CELULAR / TABLET
-   =========================================================== */
 
-/* Telas até 900px de largura (celulares em pé e tablets) */
+/* =======================
+   PAINEL DE JOGOS DO DIA
+   ======================= */
+.painel-jogos-dia {
+    background: #111;
+    border-radius: 20px;
+    padding: 16px 18px;
+    max-height: 520px;
+    overflow-y: auto;
+}
+
+.painel-jogos-dia h3 {
+    font-size: 18px;
+    margin-bottom: 6px;
+}
+
+.painel-jogos-dia p.sub {
+    font-size: 13px;
+    opacity: 0.7;
+    margin-bottom: 12px;
+}
+
+.linha-jogo-dia {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid #222;
+    font-size: 13px;
+}
+
+.linha-jogo-dia:last-child {
+    border-bottom: none;
+}
+
+.linha-jogo-dia .times {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.linha-jogo-dia .horario {
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+/* ==============================
+   RESPONSIVIDADE – MOBILE/TABLET
+   ============================== */
+
 @media (max-width: 900px) {
 
-  body {
-    overflow-x: hidden;
-  }
+    body {
+        overflow-x: hidden;
+    }
 
-  .tela {
-    padding: 16px;
-  }
+    .tela {
+        padding: 16px;
+    }
 
-  /* TÍTULOS um pouco menores */
-  h1.titulo,
-  #tela-classificacao h1,
-  #tela-mercado h1 {
-    font-size: 26px;
-    line-height: 1.1;
-  }
+    h1.titulo,
+    #tela-classificacao h1,
+    #tela-mercado h1,
+    #tela-calendario h1 {
+        font-size: 26px;
+        line-height: 1.1;
+    }
 
-  /* CAPA – botões um pouco mais altos e largos */
-  #btn-iniciar,
-  #btn-continuar {
-    width: 80%;
-    max-width: 320px;
-    font-size: 16px;
-    padding: 12px 0;
-  }
+    /* CAPA – botões um pouco mais altos e largos */
+    #btn-iniciar,
+    #btn-continuar {
+        width: 80%;
+        max-width: 320px;
+        font-size: 16px;
+        padding: 12px 0;
+    }
 
-  /* LOBBY */
-  #tela-lobby {
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-  }
+    /* LOBBY */
+    #tela-lobby {
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+    }
 
-  .lobby-card {
-    width: 100%;
-    max-width: 360px;
-    padding: 24px;
-  }
+    .lobby-card {
+        width: 100%;
+        max-width: 360px;
+        padding: 24px;
+    }
 
-  .lobby-logo {
-    width: 110px;
-    height: 110px;
-  }
+    .lobby-logo {
+        width: 110px;
+        height: 110px;
+    }
 
-  .btn-blue,
-  .btn-gold,
-  .btn-green {
-    width: 100%;
-    max-width: 280px;
-  }
+    .btn-blue,
+    .btn-gold,
+    .btn-green {
+        width: 100%;
+        max-width: 280px;
+    }
 
-  /* ESCOLHA DE TIME – diminuir um pouco a grid */
-  .lista-times {
-    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-    gap: 16px;
-    padding: 10px;
-  }
+    /* ESCOLHA DE TIME – diminuir um pouco a grid */
+    .lista-times {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 16px;
+        padding: 10px;
+    }
 
-  .time-logo {
-    width: 80px;
-    height: 80px;
-  }
+    .time-card-logo,
+    .time-logo {
+        width: 80px;
+        height: 80px;
+    }
 
-  .time-nome {
-    font-size: 13px;
-  }
+    .time-card-nome,
+    .time-nome {
+        font-size: 13px;
+    }
 
-  /* TÁTICAS – layout em COLUNA no mobile */
-  .painel-tatico {
-    flex-direction: column;
-    align-items: center;
-    gap: 16px;
-    padding: 0;
-  }
+    /* TÁTICAS – layout em coluna no mobile */
+    .painel-tatico {
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        padding: 0;
+    }
 
-  .campo-tatico {
-    flex: 0 0 auto;
-    width: 100%;
-    max-width: 420px;
-    margin: 0 auto;
-  }
+    .campo-tatico {
+        flex: 0 0 auto;
+        width: 100%;
+        max-width: 420px;
+        margin: 0 auto;
+    }
 
-  .banco-reservas {
-    flex: 0 0 auto;
-    width: 100%;
-    max-width: 420px;
-    max-height: 260px;
-  }
+    .banco-reservas {
+        flex: 0 0 auto;
+        width: 100%;
+        max-width: 420px;
+        max-height: 260px;
+    }
 
-  .slot-jogador {
-    width: 70px;
-    height: 70px;
-  }
+    .slot-jogador {
+        width: 70px;
+        height: 70px;
+    }
 
-  .slot-card div:nth-child(2) {
-    font-size: 10px;
-  }
+    .slot-card div:nth-child(2) {
+        font-size: 10px;
+    }
 
-  .slot-card div:nth-child(3) {
-    font-size: 9px;
-  }
+    .slot-card div:nth-child(3) {
+        font-size: 9px;
+    }
 
-  /* PARTIDA – tudo mais compacto */
-  .partida-header {
-    flex-direction: column;
-    gap: 6px;
-  }
+    /* PARTIDA – tudo mais compacto */
+    .partida-header {
+        flex-direction: column;
+        gap: 6px;
+    }
 
-  .time-bloco {
-    font-size: 16px;
-  }
+    .time-bloco {
+        font-size: 16px;
+    }
 
-  .placar {
-    font-size: 30px;
-  }
+    .placar {
+        font-size: 30px;
+    }
 
-  .log-partida {
-    height: 55vh;
-  }
+    .log-partida {
+        height: 55vh;
+    }
 
-  /* CLASSIFICAÇÃO – permite scroll horizontal no celular */
-  .classificacao-container {
-    padding: 12px;
-    border-radius: 12px;
-    overflow-x: auto;
-  }
+    /* CLASSIFICAÇÃO – scroll horizontal no celular */
+    .classificacao-container {
+        padding: 12px;
+        border-radius: 12px;
+        overflow-x: auto;
+    }
 
-  #tabela-classificacao {
-    min-width: 600px;   /* garante que a tabela não esprema demais */
-  }
+    #tabela-classificacao {
+        min-width: 600px;   /* garante que a tabela não esprema demais */
+    }
 
-  /* MERCADO – layout em coluna, lista mais baixa para caber na tela */
-  #tela-mercado {
-    padding: 16px;
-  }
+    /* MERCADO – layout em coluna, lista mais baixa */
+    #tela-mercado {
+        padding: 16px;
+    }
 
-  .filtros-mercado {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
+    .filtros-mercado {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
 
-  .lista-mercado {
-    max-height: 55vh;
-  }
+    .lista-mercado {
+        max-height: 55vh;
+    }
 
-  .card-mercado {
-    grid-template-columns: 40px 1.5fr 0.6fr 0.7fr;
-    grid-template-rows: auto auto;
-    grid-auto-flow: row;
-    gap: 6px;
-  }
+    .card-mercado {
+        grid-template-columns: 40px 1.5fr 0.6fr 0.7fr;
+        grid-template-rows: auto auto;
+        grid-auto-flow: row;
+        gap: 6px;
+    }
 
-  .card-mercado img {
-    width: 40px;
-    height: 40px;
-  }
+    .card-mercado img {
+        width: 40px;
+        height: 40px;
+    }
 
-  .card-mercado .ovr {
-    font-size: 16px;
-  }
+    .card-mercado .ovr {
+        font-size: 16px;
+    }
 
-  .card-mercado button {
-    padding: 6px 10px;
-    font-size: 12px;
-  }
+    .card-mercado button {
+        padding: 6px 10px;
+        font-size: 12px;
+    }
 
-  /* RESULTADOS DA RODADA */
-  #tela-resultados-rodada {
-    padding: 16px;
-  }
+    /* RESULTADOS DA RODADA */
+    #tela-resultados-rodada {
+        padding: 16px;
+    }
 
-  .lista-resultados-rodada {
-    padding: 10px 12px;
-  }
+    .lista-resultados-rodada {
+        padding: 10px 12px;
+    }
 
-  .linha-resultado {
-    font-size: 12px;
-  }
+    .linha-resultado {
+        font-size: 12px;
+    }
 
-  .botoes-rodada {
-    flex-direction: column;
-    gap: 10px;
-  }
+    .botoes-rodada {
+        flex-direction: column;
+        gap: 10px;
+    }
 
-  /* ELENCO – 2 cards por linha no máximo */
-  .elenco-lista {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    padding: 10px;
-    gap: 10px;
-  }
+    /* ELENCO – 2 cards por linha no máximo */
+    .elenco-lista {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        padding: 10px;
+        gap: 10px;
+    }
 
-  .card-jogador img {
-    width: 90px;
-    height: 90px;
-  }
+    .card-jogador img {
+        width: 90px;
+        height: 90px;
+    }
 
-  .ovr {
-    font-size: 20px;
-  }
+    .ovr {
+        font-size: 20px;
+    }
+
+    /* CALENDÁRIO – empilhar colunas */
+    .calendario-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .calendario-container,
+    .painel-jogos-dia {
+        max-height: none;
+    }
 }
 
 /* Ajuste extra para celulares bem pequenos (ex: 360px) */
 @media (max-width: 400px) {
-  .tela {
-    padding: 10px;
-  }
+    .tela {
+        padding: 10px;
+    }
 
-  .lista-times {
-    grid-template-columns: repeat(2, 1fr);
-  }
+    .lista-times {
+        grid-template-columns: repeat(2, 1fr);
+    }
 
-  .campo-tatico {
-    max-width: 360px;
-  }
-}
-/* ===== FIX DEFINITIVO – ESCOLHA DE TIME ===== */
-
-#tela-escolha-time {
-    padding: 20px;
-    text-align: center;
-}
-
-.lista-times {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-    gap: 25px;
-    padding: 20px;
-    max-width: 1000px;
-    margin: 0 auto;
-}
-
-/* Card de cada time */
-.time-card {
-    background: rgba(0,0,0,0.4) !important;
-    border: 2px solid #fff !important;
-    border-radius: 12px !important;
-    padding: 10px !important;
-    cursor: pointer;
-    transition: 0.2s ease;
-    backdrop-filter: blur(4px);
-    width: 100% !important;
-    max-width: 160px !important;
-    margin: 0 auto !important;
-}
-
-/* Efeito hover */
-.time-card:hover {
-    transform: scale(1.07);
-    background: rgba(255,255,255,0.1);
-}
-
-/* ESCUDO – funciona tanto pra .time-card-logo quanto pra .time-logo */
-.time-card-logo,
-.time-logo {
-    width: 100px !important;
-    height: 100px !important;
-    object-fit: contain !important;   /* não estica nem corta o escudo */
-    display: block !important;
-    margin: 0 auto 10px auto !important;
-    filter: drop-shadow(0 0 4px black);
-}
-
-/* Nome do time */
-.time-card-nome,
-.time-nome {
-    font-size: 16px !important;
-    font-weight: 700 !important;
-    color: white !important;
-    text-shadow: 0 0 3px black !important;
-    display: block;
+    .campo-tatico {
+        max-width: 360px;
+    }
 }
