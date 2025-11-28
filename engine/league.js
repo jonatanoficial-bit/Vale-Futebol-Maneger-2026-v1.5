@@ -1,108 +1,120 @@
 // ui/league-ui.js
-// ============================================
-// Interface principal do Vale Futebol Manager 2026
-// - Controla navegação entre telas
-// - Renderiza TABELA, ELENCO e TÁTICAS
-// ============================================
+// ======================================================
+// UI principal: Tabela, Elenco, Táticas e Navegação
+// Versão robusta com MUITOS fallbacks e logs de debug
+// ======================================================
 
 (function () {
-  // ---------- HELPERS BÁSICOS ----------
+  console.log("%c[UI] league-ui.js carregado", "color:#0EA5E9; font-weight:bold;");
+
+  // ---------------- HELPERS GERAIS ----------------
 
   function mostrarTela(id) {
-    const telas = document.querySelectorAll(".tela");
-    telas.forEach(t => t.classList.remove("ativa"));
+    document.querySelectorAll(".tela").forEach(t => t.classList.remove("ativa"));
     const alvo = document.getElementById(id);
     if (alvo) alvo.classList.add("ativa");
   }
 
-  function getTeamByIdSafe(teamId) {
-    try {
-      if (typeof getTeamById === "function") {
-        return getTeamById(teamId);
-      }
-    } catch (e) {}
-    if (window.Database && Array.isArray(Database.teams)) {
-      return Database.teams.find(t => t.id === teamId) || null;
-    }
+  function getCurrentTeamId() {
+    if (window.Game && Game.teamId) return Game.teamId;
+    if (window.gameState && gameState.currentTeamId) return gameState.currentTeamId;
     return null;
   }
 
-  function getCurrentDivision() {
-    if (window.gameState && gameState.currentDivision) {
-      return gameState.currentDivision; // "A" ou "B"
-    }
-    // fallback: se não existir, assume Série A
-    return "A";
+  function getDivisionForTeam(team) {
+    if (!team) return "A";
+    return team.division || team.serie || "A";
   }
 
-  // Pega elenco do time atual (tentando vários formatos possíveis)
-  function getSquadForCurrentTeam() {
-    const teamId = window.Game && Game.teamId ? Game.teamId : null;
-    if (!teamId) return [];
+  function getTeamByIdSafe(teamId) {
+    if (!teamId) return null;
 
-    // 1) playersByTeam: { FLA: [...], PAL: [...] }
-    if (window.Database && Database.playersByTeam && Database.playersByTeam[teamId]) {
-      return Database.playersByTeam[teamId];
+    try {
+      if (typeof getTeamById === "function") {
+        const t = getTeamById(teamId);
+        if (t) return t;
+      }
+    } catch (e) {
+      console.warn("[UI] erro em getTeamById:", e);
     }
 
-    // 2) lista única de players com teamId
-    if (window.Database && Array.isArray(Database.players)) {
-      return Database.players.filter(p => p.teamId === teamId);
+    if (window.Database && Array.isArray(Database.teams)) {
+      const t = Database.teams.find(tm => tm.id === teamId);
+      if (t) return t;
     }
 
-    // 3) fallback vazio
+    if (Array.isArray(window.teams)) {
+      const t = teams.find(tm => tm.id === teamId);
+      if (t) return t;
+    }
+
+    return null;
+  }
+
+  function getAllTeams() {
+    if (window.Database && Array.isArray(Database.teams)) return Database.teams;
+    if (Array.isArray(window.teams)) return teams;
     return [];
   }
 
-  // Pega classificação da divisão atual, tentando ler da engine
-  function getStandingsForCurrentDivision() {
-    const div = getCurrentDivision();
+  // ----------- STANDINGS / TABELA -----------
 
-    // 1) se a engine tiver um helper pronto
+  function getStandingsForDivision(div) {
+    // 1) Engine League nova
     if (window.League && typeof League.getStandingsForCurrentDivision === "function") {
       try {
-        const data = League.getStandingsForCurrentDivision();
-        if (Array.isArray(data)) return data;
+        const lista = League.getStandingsForCurrentDivision(div);
+        if (Array.isArray(lista) && lista.length) return lista;
       } catch (e) {
-        console.warn("Erro ao chamar League.getStandingsForCurrentDivision:", e);
+        console.warn("[UI] erro League.getStandingsForCurrentDivision:", e);
       }
     }
 
-    // 2) se gameState tiver standings
+    // 2) gameState.standings
     if (window.gameState && gameState.standings && gameState.standings[div]) {
-      return gameState.standings[div];
+      const lista = gameState.standings[div];
+      if (Array.isArray(lista) && lista.length) return lista;
     }
 
-    // 3) fallback: monta uma classificação zerada
-    if (window.Database && Array.isArray(Database.teams)) {
-      const lista = Database.teams.filter(t => (t.division || "A") === div);
-      return lista.map((t, idx) => ({
-        position: idx + 1,
-        teamId: t.id,
-        name: t.name,
-        pts: 0,
-        j: 0,
-        v: 0,
-        e: 0,
-        d: 0,
-        gp: 0,
-        gc: 0
-      }));
-    }
-
-    return [];
+    // 3) fallback: monta tabela zerada com base apenas nos times
+    const teams = getAllTeams().filter(t => (t.division || t.serie || "A") === div);
+    return teams.map((t, idx) => ({
+      position: idx + 1,
+      teamId: t.id,
+      name: t.name,
+      pts: 0,
+      j: 0,
+      v: 0,
+      e: 0,
+      d: 0,
+      gp: 0,
+      gc: 0
+    }));
   }
-
-  // ---------- RENDER: TABELA ----------
 
   function renderTabelaBrasileirao() {
     const tabelaEl = document.getElementById("tabela-classificacao");
-    if (!tabelaEl) return;
+    if (!tabelaEl) {
+      console.warn("[UI] #tabela-classificacao não encontrado.");
+      return;
+    }
 
-    const standings = getStandingsForCurrentDivision();
-    const div = getCurrentDivision();
+    const teamId = getCurrentTeamId();
+    const team = getTeamByIdSafe(teamId);
+    const div = getDivisionForTeam(team); // “A” ou “B”
+
+    console.log("[UI] renderTabelaBrasileirao() para divisão:", div, "time atual:", teamId);
+
+    const standings = getStandingsForDivision(div);
 
     tabelaEl.innerHTML = "";
+
+    if (!standings || !standings.length) {
+      tabelaEl.innerHTML = `
+        <tr><td>Não há dados de classificação para esta divisão.</td></tr>
+      `;
+      return;
+    }
 
     const headerRow = document.createElement("tr");
     headerRow.innerHTML = `
@@ -119,22 +131,19 @@
     tabelaEl.appendChild(headerRow);
 
     standings.forEach((row, index) => {
-      const team = getTeamByIdSafe(row.teamId);
-      const nome =
-        (team && team.name) ||
-        row.name ||
-        row.teamName ||
-        row.teamId ||
-        "Time";
+      const t = getTeamByIdSafe(row.teamId) ||
+                getTeamByIdSafe(row.id)     ||
+                { name: row.name || row.teamName || "Time" };
 
-      const logoSrc = team ? `assets/logos/${team.id}.png` : "";
+      const nome = t.name;
+      const logoSrc = t.id ? `assets/logos/${t.id}.png` : "";
       const pts = row.pts ?? row.points ?? 0;
-      const j = row.j ?? row.games ?? 0;
-      const v = row.v ?? row.wins ?? 0;
-      const e = row.e ?? row.draws ?? 0;
-      const d = row.d ?? row.losses ?? 0;
-      const gp = row.gp ?? row.goalsFor ?? 0;
-      const gc = row.gc ?? row.goalsAgainst ?? 0;
+      const j   = row.j   ?? row.games  ?? 0;
+      const v   = row.v   ?? row.wins   ?? 0;
+      const e   = row.e   ?? row.draws  ?? 0;
+      const d   = row.d   ?? row.losses ?? 0;
+      const gp  = row.gp  ?? row.goalsFor     ?? 0;
+      const gc  = row.gc  ?? row.goalsAgainst ?? 0;
 
       const tr = document.createElement("tr");
       tr.innerHTML = `
@@ -155,30 +164,73 @@
     });
   }
 
-  // ---------- RENDER: ELENCO ----------
+  // ----------- ELENCO / JOGADORES -----------
+
+  function getSquadForCurrentTeam() {
+    const teamId = getCurrentTeamId();
+    if (!teamId) {
+      console.warn("[UI] getSquadForCurrentTeam: sem teamId.");
+      return [];
+    }
+
+    // 1) Database.playersByTeam[teamId]
+    if (window.Database && Database.playersByTeam && Array.isArray(Database.playersByTeam[teamId])) {
+      return Database.playersByTeam[teamId];
+    }
+
+    // 2) Database.players filtrado por p.teamId
+    if (window.Database && Array.isArray(Database.players)) {
+      const lista = Database.players.filter(p => p.teamId === teamId);
+      if (lista.length) return lista;
+    }
+
+    // 3) gameState.squads[teamId]
+    if (window.gameState && gameState.squads && Array.isArray(gameState.squads[teamId])) {
+      return gameState.squads[teamId];
+    }
+
+    // 4) gameState.currentSquad
+    if (window.gameState && Array.isArray(gameState.currentSquad)) {
+      return gameState.currentSquad;
+    }
+
+    console.warn("[UI] Nenhum elenco encontrado para o time", teamId);
+    return [];
+  }
+
+  function getFacePathForPlayer(p) {
+    const faceId = p.faceId || p.id || p.code || "";
+    if (!faceId) return "assets/geral/sem_foto.png";
+    return `assets/face/${faceId}.png`;
+  }
 
   function renderElenco() {
     const container = document.getElementById("elenco-lista");
-    if (!container) return;
+    if (!container) {
+      console.warn("[UI] #elenco-lista não encontrado.");
+      return;
+    }
 
     const elenco = getSquadForCurrentTeam();
+    console.log("[UI] renderElenco() – jogadores encontrados:", elenco.length);
+
     container.innerHTML = "";
 
     if (!elenco.length) {
-      container.innerHTML = "<p>Nenhum jogador encontrado para este time.</p>";
+      container.innerHTML = `
+        <p style="padding:10px;">
+          Nenhum jogador encontrado para este time.  
+          (Se os dados estiverem em outro lugar no database.js, depois ajustamos o caminho.)
+        </p>
+      `;
       return;
     }
 
     elenco.forEach(p => {
       const nome = p.name || p.nome || "Jogador";
-      const pos =
-        p.position || p.posicao || p.pos || p.role || "POS";
-      const ovr =
-        p.ovr ?? p.rating ?? p.overall ?? 70;
-      const faceId = p.faceId || p.id || "";
-      const imgSrc = faceId
-        ? `assets/face/${faceId}.png`
-        : "assets/geral/sem_foto.png";
+      const pos  = p.position || p.posicao || p.pos || p.role || "POS";
+      const ovr  = p.ovr ?? p.rating ?? p.overall ?? 70;
+      const imgSrc = getFacePathForPlayer(p);
 
       const card = document.createElement("div");
       card.className = "card-jogador";
@@ -192,110 +244,103 @@
     });
   }
 
-  // ---------- RENDER: TÁTICAS (visual simples 4-3-3) ----------
+  // ----------- TÁTICAS / CAMPO -----------
 
   function renderTaticas() {
     const campo = document.getElementById("campo-tatico");
     const banco = document.getElementById("banco-reservas");
-    if (!campo || !banco) return;
+    if (!campo || !banco) {
+      console.warn("[UI] #campo-tatico ou #banco-reservas não encontrados.");
+      return;
+    }
 
     const elenco = getSquadForCurrentTeam();
+    console.log("[UI] renderTaticas() – jogadores:", elenco.length);
+
     campo.innerHTML = "";
     banco.innerHTML = "";
 
     if (!elenco.length) {
-      campo.innerHTML = "<p style='padding:10px;color:#fff'>Nenhum jogador carregado.</p>";
+      campo.innerHTML = `
+        <p style="padding:10px;color:#fff;">
+          Nenhum jogador carregado para este time.
+        </p>
+      `;
       return;
     }
 
-    // primeiros 11 como titulares
     const titulares = elenco.slice(0, 11);
-    const reservas = elenco.slice(11);
+    const reservas  = elenco.slice(11);
 
-    // posições (4-3-3 genérico) em porcentagem
     const slotsPos = [
-      { x: 50, y: 90 }, // GOL
-      { x: 20, y: 70 }, // ZAG 1
-      { x: 40, y: 70 }, // ZAG 2
-      { x: 60, y: 70 }, // ZAG 3 / LAT
-      { x: 80, y: 70 }, // ZAG 4 / LAT
-      { x: 25, y: 50 }, // MEI 1
-      { x: 50, y: 50 }, // MEI 2
-      { x: 75, y: 50 }, // MEI 3
-      { x: 25, y: 30 }, // ATA 1
-      { x: 50, y: 30 }, // ATA 2
-      { x: 75, y: 30 }  // ATA 3
+      { x: 50, y: 88 }, // GOL
+      { x: 20, y: 70 },
+      { x: 40, y: 70 },
+      { x: 60, y: 70 },
+      { x: 80, y: 70 },
+      { x: 25, y: 52 },
+      { x: 50, y: 52 },
+      { x: 75, y: 52 },
+      { x: 25, y: 32 },
+      { x: 50, y: 30 },
+      { x: 75, y: 32 }
     ];
 
     titulares.forEach((p, idx) => {
-      const pos = slotsPos[idx] || { x: 50, y: 50 };
+      const posCampo = slotsPos[idx] || { x: 50, y: 50 };
       const nome = p.name || p.nome || "Jogador";
-      const posicao =
-        p.position || p.posicao || p.pos || p.role || "POS";
-      const ovr =
-        p.ovr ?? p.rating ?? p.overall ?? 70;
-      const faceId = p.faceId || p.id || "";
-      const imgSrc = faceId
-        ? `assets/face/${faceId}.png`
-        : "assets/geral/sem_foto.png";
+      const pos  = p.position || p.posicao || p.pos || p.role || "POS";
+      const ovr  = p.ovr ?? p.rating ?? p.overall ?? 70;
+      const img  = getFacePathForPlayer(p);
 
       const slot = document.createElement("div");
       slot.className = "slot-jogador";
-      slot.style.left = pos.x + "%";
-      slot.style.top = pos.y + "%";
+      slot.style.left = posCampo.x + "%";
+      slot.style.top  = posCampo.y + "%";
 
       slot.innerHTML = `
         <div class="slot-card">
-          <img src="${imgSrc}" alt="${nome}" onerror="this.style.display='none'">
+          <img src="${img}" alt="${nome}" onerror="this.style.display='none'">
           <div>${nome}</div>
-          <div>${posicao} · OVR ${ovr}</div>
+          <div>${pos} · OVR ${ovr}</div>
         </div>
       `;
       campo.appendChild(slot);
     });
 
-    // reservas (lista na direita)
     reservas.forEach(p => {
       const nome = p.name || p.nome || "Jogador";
-      const posicao =
-        p.position || p.posicao || p.pos || p.role || "POS";
-      const ovr =
-        p.ovr ?? p.rating ?? p.overall ?? 70;
-      const faceId = p.faceId || p.id || "";
-      const imgSrc = faceId
-        ? `assets/face/${faceId}.png`
-        : "assets/geral/sem_foto.png";
+      const pos  = p.position || p.posicao || p.pos || p.role || "POS";
+      const ovr  = p.ovr ?? p.rating ?? p.overall ?? 70;
+      const img  = getFacePathForPlayer(p);
 
       const linha = document.createElement("div");
       linha.className = "reserva-card";
       linha.innerHTML = `
-        <img src="${imgSrc}" alt="${nome}" onerror="this.style.display='none'">
+        <img src="${img}" alt="${nome}" onerror="this.style.display='none'">
         <div>${nome}</div>
-        <div>${posicao} · OVR ${ovr}</div>
+        <div>${pos} · OVR ${ovr}</div>
       `;
       banco.appendChild(linha);
     });
   }
 
-  // ---------- OBJETO UI GLOBAL ----------
+  // ---------------- OBJETO UI GLOBAL ----------------
 
   const UI = {
     init() {
-      // não precisa fazer muita coisa aqui, o main.js cuida do resto
-      console.log("[UI] Interface carregada.");
+      console.log("%c[UI] init() chamado.", "color:#C7A029; font-weight:bold;");
     },
 
-    // Navegação
     voltarParaCapa() {
       mostrarTela("tela-capa");
     },
+
     voltarLobby() {
       mostrarTela("tela-lobby");
     },
 
-    // Lobby
     abrirProximoJogo() {
-      // se existir lógica de partida, chama
       if (window.Match && typeof Match.iniciarProximoJogo === "function") {
         Match.iniciarProximoJogo();
       }
@@ -303,26 +348,28 @@
     },
 
     abrirClassificacao() {
+      console.log("[UI] abrirClassificacao() disparado.");
       renderTabelaBrasileirao();
       mostrarTela("tela-classificacao");
     },
 
     abrirElenco() {
+      console.log("[UI] abrirElenco() disparado.");
       renderElenco();
       mostrarTela("tela-elenco");
     },
 
     abrirTaticas() {
+      console.log("[UI] abrirTaticas() disparado.");
       renderTaticas();
       mostrarTela("tela-taticas");
     },
 
     abrirMercado() {
-      // se você tiver uma engine de mercado, pode chamar aqui
+      console.log("[UI] abrirMercado() disparado.");
       mostrarTela("tela-mercado");
     }
   };
 
-  // expõe global
   window.UI = UI;
 })();
