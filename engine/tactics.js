@@ -2,6 +2,8 @@
    VALE FUTEBOL MANAGER 2026
    engine/tactics.js – Formações e escalação
    =======================================================*/
+// Jogador de reserva atualmente selecionado para entrar
+let reservaSelecionadaId = null;
 
 const TACTIC_FORMATIONS = {
   "4-3-3": [
