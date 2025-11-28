@@ -1,40 +1,122 @@
 /* =======================================================
    VALE FUTEBOL MANAGER 2026
-   engine/league.js – Controle de ligas (Série A e B)
+   engine/league.js – Controle de ligas (Série A e Série B,
+   classificação, resultados, promoção e rebaixamento)
    =======================================================*/
 
 window.League = {
-  // Estado da liga fica dentro do Game
+  /* ============================
+     HELPERS DE ACESSO AO DATABASE
+     ============================ */
+  _getTeamsArray() {
+    // Se existir um objeto Database com .teams, usa ele
+    if (window.Database && Array.isArray(Database.teams)) {
+      return Database.teams;
+    }
+    // Senão tenta usar um array global "teams"
+    try {
+      if (Array.isArray(window.teams)) return window.teams;
+    } catch (e) {}
+    return [];
+  },
+
+  _getPlayersArray() {
+    if (window.Database && Array.isArray(Database.players)) {
+      return Database.players;
+    }
+    try {
+      if (Array.isArray(window.players)) return window.players;
+    } catch (e) {}
+    return [];
+  },
+
+  _getTeamById(id) {
+    const arr = this._getTeamsArray();
+    return arr.find(t => t.id === id) || null;
+  },
+
+  _getTeamAverageOverall(teamId) {
+    const players = this._getPlayersArray().filter(p => p.teamId === teamId);
+    if (!players.length) return 70;
+    const total = players.reduce((sum, p) => sum + (p.overall || 70), 0);
+    return total / players.length;
+  },
+
+  _ordenarTabela(tab) {
+    const self = this;
+    tab.sort((a, b) => {
+      if (b.pts !== a.pts) return b.pts - a.pts;
+      const sgA = a.sg, sgB = b.sg;
+      if (sgB !== sgA) return sgB - sgA;
+      if (b.gp !== a.gp) return b.gp - a.gp;
+
+      const ta = self._getTeamById(a.teamId);
+      const tb = self._getTeamById(b.teamId);
+      return (ta && ta.name ? ta.name : a.teamId)
+        .localeCompare(tb && tb.name ? tb.name : b.teamId);
+    });
+  },
+
+  _getLeagueForDivision(div) {
+    if (!window.Game) window.Game = {};
+    if (!Game.leagues) Game.leagues = {};
+    return Game.leagues[div] || null;
+  },
+
+  _setLeagueForDivision(div, liga) {
+    if (!window.Game) window.Game = {};
+    if (!Game.leagues) Game.leagues = {};
+    Game.leagues[div] = liga;
+  },
+
+  _getCurrentLeague() {
+    if (!window.Game) window.Game = {};
+    if (!Game.currentDivision) {
+      const myTeam = this._getTeamById(Game.teamId);
+      Game.currentDivision = (myTeam && myTeam.division) ? myTeam.division : "A";
+    }
+    if (!Game.leagues || !Game.leagues[Game.currentDivision]) {
+      this.ensureState();
+    }
+    Game.league = Game.leagues[Game.currentDivision];
+    return Game.league;
+  },
+
+  /* ============================
+     INICIALIZAÇÃO / ESTADO
+     ============================ */
   ensureState() {
     if (!window.Game) window.Game = {};
     if (!Game.seasonYear) Game.seasonYear = 2025;
 
-    // Se já existir liga inicializada, só garante consistência
-    if (Game.league && Game.league.division && Game.league.tabela) {
+    const teamsArr = this._getTeamsArray();
+    if (!teamsArr.length) {
+      console.error("[LEAGUE] Nenhum time encontrado no database.");
       return;
     }
 
-    // Descobre divisão do time escolhido
-    if (!Database || !Database.teams) {
-      console.error("[LEAGUE] Database não carregado.");
-      return;
+    if (!Game.leagues) Game.leagues = {};
+
+    if (!Game.leagues.A) {
+      Game.leagues.A = this.criarLiga("A", Game.seasonYear);
+    }
+    if (!Game.leagues.B) {
+      Game.leagues.B = this.criarLiga("B", Game.seasonYear);
     }
 
-    const myTeam = Database.getTeamById(Game.teamId);
-    if (!myTeam) {
-      console.error("[LEAGUE] Time do jogador não encontrado.");
-      return;
+    if (!Game.teamId) {
+      // ainda não escolheu time, apenas garante que a estrutura existe
+      Game.currentDivision = "A";
+    } else {
+      const myTeam = this._getTeamById(Game.teamId);
+      Game.currentDivision = (myTeam && myTeam.division) ? myTeam.division : "A";
     }
 
-    const division = myTeam.division || "A";
-
-    // Cria liga para aquela divisão
-    Game.league = this.criarLiga(division, Game.seasonYear);
+    Game.league = Game.leagues[Game.currentDivision];
   },
 
-  // Cria uma nova liga para a divisão (A ou B)
   criarLiga(division, seasonYear) {
-    const participantes = Database.teams.filter(t => t.division === division);
+    const participantes = this._getTeamsArray().filter(t => t.division === division);
 
     const tabela = participantes.map(t => ({
       teamId: t.id,
@@ -55,17 +137,16 @@ window.League = {
       seasonYear,
       rodadaAtual: 1,
       totalRodadas: fixtures.length,
-      fixtures,      // [ [ {home, away, golsHome, golsAway, played}, ... ], ... ]
-      tabela,        // array com estatísticas
-      ultimosResultados: []  // preenchido após cada rodada
+      fixtures,            // [ [ {home, away, golsHome, golsAway, played}, ... ], ... ]
+      tabela,
+      ultimosResultados: [] // preenchido após cada rodada
     };
   },
 
-  // Gera turno e returno (método do círculo)
   gerarTabelaJogos(teamIds) {
     const ids = [...teamIds];
     if (ids.length % 2 !== 0) {
-      ids.push("BYE"); // caso ímpar (não deve ser, mas por segurança)
+      ids.push("BYE");
     }
     const n = ids.length;
     const rodadas = [];
@@ -115,11 +196,11 @@ window.League = {
   },
 
   /* =======================================================
-     Próximo jogo do jogador dentro do calendário
+     PRÓXIMO JOGO DO JOGADOR
      =======================================================*/
   getProximoJogoDoJogador() {
     this.ensureState();
-    const liga = Game.league;
+    const liga = this._getCurrentLeague();
     const myId = Game.teamId;
 
     for (let r = liga.rodadaAtual - 1; r < liga.fixtures.length; r++) {
@@ -136,10 +217,11 @@ window.League = {
   },
 
   /* =======================================================
-     Registrar resultado da partida do jogador
+     REGISTRAR RESULTADO DO JOGO DO JOGADOR
      =======================================================*/
   registrarResultado(roundIndex, matchIndex, golsHome, golsAway) {
-    const liga = Game.league;
+    this.ensureState();
+    const liga = this._getCurrentLeague();
     const rodada = liga.fixtures[roundIndex];
     const partida = rodada[matchIndex];
 
@@ -147,10 +229,10 @@ window.League = {
     partida.golsAway = golsAway;
     partida.played = true;
 
-    this.aplicarResultadoNaTabela(partida.home, partida.away, golsHome, golsAway);
+    this.aplicarResultadoNaTabela(liga, partida.home, partida.away, golsHome, golsAway);
 
-    // Simula automaticamente os outros jogos da rodada (da mesma divisão)
-    this.simularOutrasPartidasDaRodada(roundIndex, matchIndex);
+    // Simula automaticamente os outros jogos da rodada da MESMA divisão
+    this.simularOutrasPartidasDaRodada(liga, roundIndex, matchIndex);
 
     // Atualiza lista de resultados da rodada para a tela específica
     liga.ultimosResultados = rodada.map(m => ({
@@ -164,19 +246,19 @@ window.League = {
     if (rodada.every(m => m.played)) {
       liga.rodadaAtual = Math.min(liga.totalRodadas, roundIndex + 2);
 
-      // Checa fim de temporada
+      // Checa fim de temporada para ESSA divisão
       if (roundIndex + 1 === liga.totalRodadas) {
         this.encerrarTemporada();
       }
     }
 
-    if (typeof salvarJogo === "function") {
-      salvarJogo();
+    if (typeof window.salvarJogo === "function") {
+      window.salvarJogo();
     }
   },
 
-  aplicarResultadoNaTabela(homeId, awayId, gH, gA) {
-    const t = Game.league.tabela;
+  aplicarResultadoNaTabela(liga, homeId, awayId, gH, gA) {
+    const t = liga.tabela;
 
     const th = t.find(x => x.teamId === homeId);
     const ta = t.find(x => x.teamId === awayId);
@@ -200,22 +282,10 @@ window.League = {
       ta.pts += 1;
     }
 
-    // Ordena tabela
-    t.sort((a, b) => {
-      if (b.pts !== a.pts) return b.pts - a.pts;
-      const sgA = a.sg, sgB = b.sg;
-      if (sgB !== sgA) return sgB - sgA;
-      if (b.gp !== a.gp) return b.gp - a.gp;
-
-      const ta = Database.getTeamById(a.teamId);
-      const tb = Database.getTeamById(b.teamId);
-      return (ta.name || "").localeCompare(tb.name || "");
-    });
+    this._ordenarTabela(t);
   },
 
-  // Simula os outros jogos da rodada com resultados simples baseados em overall médio
-  simularOutrasPartidasDaRodada(roundIndex, matchIndexDoJogador) {
-    const liga = Game.league;
+  simularOutrasPartidasDaRodada(liga, roundIndex, matchIndexDoJogador) {
     const rodada = liga.fixtures[roundIndex];
 
     for (let i = 0; i < rodada.length; i++) {
@@ -223,10 +293,10 @@ window.League = {
       const m = rodada[i];
       if (m.played) continue;
 
-      const homeOverall = Database.getTeamAverageOverall(m.home);
-      const awayOverall = Database.getTeamAverageOverall(m.away);
+      const homeOverall = this._getTeamAverageOverall(m.home);
+      const awayOverall = this._getTeamAverageOverall(m.away);
 
-      const baseHome = homeOverall / 20; // 70 -> 3.5
+      const baseHome = homeOverall / 20;
       const baseAway = awayOverall / 20;
 
       const golsHome = Math.max(0, Math.round(baseHome + (Math.random() * 2 - 1)));
@@ -236,16 +306,17 @@ window.League = {
       m.golsAway = golsAway;
       m.played = true;
 
-      this.aplicarResultadoNaTabela(m.home, m.away, golsHome, golsAway);
+      this.aplicarResultadoNaTabela(liga, m.home, m.away, golsHome, golsAway);
     }
   },
 
   /* =======================================================
-     Dados para as telas
+     DADOS PARA AS TELAS (TABELA E RESULTADOS)
      =======================================================*/
   getTabelaAtual() {
     this.ensureState();
-    return Game.league.tabela.map((row, idx) => ({
+    const liga = this._getCurrentLeague();
+    return liga.tabela.map((row, idx) => ({
       pos: idx + 1,
       ...row
     }));
@@ -253,45 +324,130 @@ window.League = {
 
   getUltimosResultados() {
     this.ensureState();
-    return Game.league.ultimosResultados || [];
+    const liga = this._getCurrentLeague();
+    return liga.ultimosResultados || [];
   },
 
   getNomeTime(id) {
-    const t = Database.getTeamById(id);
+    const t = this._getTeamById(id);
     return t ? t.name : id;
   },
 
   getLogoTime(id) {
-    const t = Database.getTeamById(id);
+    const t = this._getTeamById(id);
     if (!t) return "assets/logos/default.png";
     return `assets/logos/${t.id}.png`;
   },
 
   /* =======================================================
-     Fim de temporada (versão simples)
+     ENCERRAR TEMPORADA + PROMOÇÃO / REBAIXAMENTO
      =======================================================*/
-  encerrarTemporada() {
-    const liga = Game.league;
-    const tabela = this.getTabelaAtual();
-    const campeao = tabela[0];
+  _simularRestanteLiga(liga) {
+    for (let r = 0; r < liga.fixtures.length; r++) {
+      const rodada = liga.fixtures[r];
+      for (let i = 0; i < rodada.length; i++) {
+        const m = rodada[i];
+        if (m.played) continue;
 
-    if (campeao) {
-      const time = Database.getTeamById(campeao.teamId);
-      const nomeTime = time ? time.name : campeao.teamId;
-      alert(`🏆 ${liga.division === "A" ? "Campeão Brasileiro Série A" : "Campeão Brasileiro Série B"} ${liga.seasonYear}\n\n${nomeTime} foi o campeão!`);
+        const homeOverall = this._getTeamAverageOverall(m.home);
+        const awayOverall = this._getTeamAverageOverall(m.away);
+
+        const baseHome = homeOverall / 20;
+        const baseAway = awayOverall / 20;
+
+        const golsHome = Math.max(0, Math.round(baseHome + (Math.random() * 2 - 1)));
+        const golsAway = Math.max(0, Math.round(baseAway + (Math.random() * 2 - 1)));
+
+        m.golsHome = golsHome;
+        m.golsAway = golsAway;
+        m.played = true;
+
+        this.aplicarResultadoNaTabela(liga, m.home, m.away, golsHome, golsAway);
+      }
+      liga.ultimosResultados = rodada.map(j => ({
+        home: j.home,
+        away: j.away,
+        golsHome: j.golsHome,
+        golsAway: j.golsAway
+      }));
+    }
+  },
+
+  encerrarTemporada() {
+    this.ensureState();
+
+    // Garante que as duas ligas (A e B) terminem suas rodadas
+    const ligaA = this._getLeagueForDivision("A");
+    const ligaB = this._getLeagueForDivision("B");
+
+    if (ligaA) this._simularRestanteLiga(ligaA);
+    if (ligaB) this._simularRestanteLiga(ligaB);
+
+    if (ligaA) this._ordenarTabela(ligaA.tabela);
+    if (ligaB) this._ordenarTabela(ligaB.tabela);
+
+    const campeaoA = ligaA && ligaA.tabela[0];
+    const campeaoB = ligaB && ligaB.tabela[0];
+
+    const nomeCampeaoA = campeaoA ? this.getNomeTime(campeaoA.teamId) : "—";
+    const nomeCampeaoB = campeaoB ? this.getNomeTime(campeaoB.teamId) : "—";
+
+    // Mensagens de campeão para o jogador
+    if (Game.teamId && Game.currentDivision === "A" && campeaoA && campeaoA.teamId === Game.teamId) {
+      alert(`🏆 CAMPEÃO BRASILEIRO SÉRIE A ${Game.seasonYear}!\n\nParabéns, ${nomeCampeaoA}!`);
+    }
+    if (Game.teamId && Game.currentDivision === "B" && campeaoB && campeaoB.teamId === Game.teamId) {
+      alert(`🏆 CAMPEÃO BRASILEIRO SÉRIE B ${Game.seasonYear}!\n\nParabéns, ${nomeCampeaoB}!`);
     }
 
-    // Próxima temporada (simples: reinicia tudo, ainda sem promover/rebaixar)
-    liga.seasonYear++;
-    Game.seasonYear = liga.seasonYear;
-    alert(`Nova temporada: ${Game.seasonYear}. Calendário reiniciado.`);
+    // Mensagem geral da temporada
+    alert(
+      `Temporada ${Game.seasonYear} encerrada.\n` +
+      `Campeão Série A: ${nomeCampeaoA}\n` +
+      `Campeão Série B: ${nomeCampeaoB}`
+    );
 
-    // Recria a liga para mesma divisão; promoção/rebaixamento pode ser adicionado depois
-    const novaLiga = this.criarLiga(liga.division, liga.seasonYear);
-    Game.league = novaLiga;
+    // PROMOÇÃO E REBAIXAMENTO (4 sobem, 4 caem)
+    const teamsArr = this._getTeamsArray();
 
-    if (typeof salvarJogo === "function") {
-      salvarJogo();
+    if (ligaA && ligaB && ligaA.tabela.length >= 4 && ligaB.tabela.length >= 4) {
+      const rebaixadosA = ligaA.tabela.slice(-4);   // últimos 4
+      const promovidosB = ligaB.tabela.slice(0, 4); // primeiros 4
+
+      const setDiv = (teamId, div) => {
+        const t = teamsArr.find(tt => tt.id === teamId);
+        if (t) t.division = div;
+      };
+
+      rebaixadosA.forEach(row => setDiv(row.teamId, "B"));
+      promovidosB.forEach(row => setDiv(row.teamId, "A"));
+    }
+
+    // Avança ano
+    Game.seasonYear = (Game.seasonYear || 2025) + 1;
+
+    // Recria ligas com divisões atualizadas
+    const novaLigaA = this.criarLiga("A", Game.seasonYear);
+    const novaLigaB = this.criarLiga("B", Game.seasonYear);
+    this._setLeagueForDivision("A", novaLigaA);
+    this._setLeagueForDivision("B", novaLigaB);
+
+    // Atualiza divisão atual do jogador (ele pode ter subido ou caído)
+    if (Game.teamId) {
+      const myTeam = this._getTeamById(Game.teamId);
+      Game.currentDivision = (myTeam && myTeam.division) ? myTeam.division : "A";
+    } else {
+      Game.currentDivision = "A";
+    }
+    Game.league = this._getLeagueForDivision(Game.currentDivision);
+
+    alert(
+      `Nova temporada: ${Game.seasonYear}.\n` +
+      `Seu time disputará a ${Game.currentDivision === "A" ? "Série A" : "Série B"}.`
+    );
+
+    if (typeof window.salvarJogo === "function") {
+      window.salvarJogo();
     }
   }
 };
