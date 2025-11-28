@@ -1,108 +1,120 @@
-/* ============================================================
+/* =======================================================
    VALE FUTEBOL MANAGER 2026
-   calendar-ui.js — Interface do Calendário da Temporada
-   ============================================================ */
+   ui/calendar-ui.js – Renderização do calendário
+   =======================================================*/
 
-window.CalendarUI = {
+console.log("%c[CALENDAR-UI] calendar-ui.js carregado", "color:#60a5fa;");
 
-    /* ============================================================
-       TELA DO CALENDÁRIO COMPLETO
-       ============================================================ */
-    renderCalendario() {
-        console.log("%c[CALENDAR UI] Renderizando calendário...", "color:#C7A029;");
+/**
+ * Formata "YYYY-MM-DD" para "DD/MM/YYYY"
+ */
+function formatarDataBR(iso) {
+    if (!iso) return "";
+    const parts = iso.split("-");
+    if (parts.length !== 3) return iso;
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
 
-        const lista = document.getElementById("lista-calendario");
-        lista.innerHTML = "";
+/**
+ * Renderiza o calendário baseado no time atual do usuário
+ */
+function renderCalendario() {
+    if (!window.gameState) {
+        console.warn("[CALENDAR-UI] gameState não encontrado.");
+        return;
+    }
 
-        Calendar.season.forEach(match => {
-            const home = Database.teams.find(t => t.id === match.home);
-            const away = Database.teams.find(t => t.id === match.away);
+    const container = document.getElementById("calendario-lista");
+    if (!container) {
+        console.warn("[CALENDAR-UI] #calendario-lista não encontrado no HTML.");
+        return;
+    }
 
-            const item = document.createElement("div");
-            item.className = "linha-calendario";
+    const tituloEl = document.getElementById("titulo-calendario");
+    const infoEl   = document.getElementById("info-calendario");
 
-            const dataBR = new Date(match.date).toLocaleDateString("pt-BR");
+    const teamId = gameState.currentTeamId;
+    const team   = window.getTeamById ? getTeamById(teamId) : null;
+    const division = team?.division || "A";
 
-            item.innerHTML = `
-                <div class="cal-dia">${dataBR}</div>
-                <div class="cal-jogo">
-                    <img src="assets/logos/${home.id}.png" class="cal-logo">
-                    <span>${home.name}</span>
-                    <strong>vs</strong>
-                    <span>${away.name}</span>
-                    <img src="assets/logos/${away.id}.png" class="cal-logo">
-                </div>
-                <div class="cal-status">
-                    ${match.played ? `${match.scoreHome} x ${match.scoreAway}` : "A jogar"}
-                </div>
-            `;
+    // Garante que existe calendário para a divisão
+    let calendario = Calendar.getCalendarioPorDivisao(division);
+    if (!calendario || calendario.length === 0) {
+        // se por algum motivo não foi gerado, gera agora
+        const novo = Calendar.gerarCalendarioTemporada(division);
+        if (division === "A") gameState.calendarA = novo;
+        if (division === "B") gameState.calendarB = novo;
+        if (typeof salvarJogo === "function") salvarJogo();
+        calendario = Calendar.getCalendarioPorDivisao(division);
+    }
 
-            // clique = detalhes do jogo
-            item.addEventListener("click", () => {
-                this.renderDetalhe(match.id);
-                mostrarTela("tela-calendario-jogo");
-            });
+    container.innerHTML = "";
 
-            lista.appendChild(item);
-        });
-    },
+    if (tituloEl) {
+        const nomeTime = team?.name || "Seu Time";
+        tituloEl.textContent = `CALENDÁRIO ${gameState.seasonYear} – Série ${division} (${nomeTime})`;
+    }
 
-    /* ============================================================
-       DETALHE DO JOGO
-       ============================================================ */
-    renderDetalhe(matchId) {
-        const box = document.getElementById("detalhe-calendario");
-        const m = Calendar.season.find(x => x.id === matchId);
+    if (infoEl) {
+        infoEl.textContent = "Jogos em destaque são os do seu time. Formato ida e volta, rodadas semanais.";
+    }
 
-        if (!m) {
-            box.innerHTML = "<p>Jogo não encontrado.</p>";
-            return;
-        }
+    if (!calendario || calendario.length === 0) {
+        const aviso = document.createElement("p");
+        aviso.textContent = "Nenhum calendário disponível.";
+        container.appendChild(aviso);
+        return;
+    }
 
-        const home = Database.teams.find(t => t.id === m.home);
-        const away = Database.teams.find(t => t.id === m.away);
+    calendario.forEach(rodada => {
+        const boxRodada = document.createElement("div");
+        boxRodada.className = "calendario-rodada";
 
-        const dataBR = new Date(m.date).toLocaleDateString("pt-BR");
+        const tituloRodada = document.createElement("h2");
+        tituloRodada.className = "calendario-rodada-titulo";
 
-        box.innerHTML = `
-            <h2>${home.name} vs ${away.name}</h2>
-            <p>${dataBR}</p>
+        const dataBR = formatarDataBR(rodada.date);
+        tituloRodada.textContent = `Rodada ${rodada.round} – ${dataBR || "data a definir"}`;
+        boxRodada.appendChild(tituloRodada);
 
-            <div class="det-jogo-block">
-                <img src="assets/logos/${home.id}.png" class="det-logo">
-                <span class="det-placar">
-                    ${m.played ? m.scoreHome : "–"}  
-                    x  
-                    ${m.played ? m.scoreAway : "–"}
-                </span>
-                <img src="assets/logos/${away.id}.png" class="det-logo">
-            </div>
+        rodada.matches.forEach(match => {
+            const linha = document.createElement("div");
+            linha.className = "calendario-jogo";
 
-            <div class="det-info">
-                ${
-                    m.played
-                    ? "<p style='color:lime'>Partida já realizada.</p>"
-                    : "<p>Partida ainda não jogada.</p>"
-                }
-            </div>
+            const ehMeuTime = (match.homeId === teamId || match.awayId === teamId);
+            if (ehMeuTime) linha.classList.add("meu-jogo");
 
-            ${
-                (m.home === Game.teamId || m.away === Game.teamId) && !m.played
-                ? `<button class="btn-principal" onclick="CalendarUI.jogarPartida('${matchId}')">JOGAR ESTA PARTIDA</button>`
-                : ""
+            const timeHome = window.getTeamById ? getTeamById(match.homeId) : null;
+            const timeAway = window.getTeamById ? getTeamById(match.awayId) : null;
+
+            const nomeHome = timeHome?.shortName || match.homeId;
+            const nomeAway = timeAway?.shortName || match.awayId;
+
+            let placarTexto = "vs";
+            if (typeof match.golsHome === "number" && typeof match.golsAway === "number") {
+                placarTexto = `${match.golsHome} x ${match.golsAway}`;
             }
 
-            <button class="btn-voltar" onclick="mostrarTela('tela-calendario')">VOLTAR</button>
-        `;
-    },
+            const span = document.createElement("span");
+            span.textContent = `${nomeHome} ${placarTexto} ${nomeAway}`;
 
-    /* ============================================================
-       JOGAR PARTIDA DIRETO PELO CALENDÁRIO
-       ============================================================ */
-    jogarPartida(matchId) {
-        console.log("%c[CALENDAR UI] Jogando partida pelo calendário...", "color:orange;");
+            if (match.homeId === teamId) {
+                span.textContent += "  (Casa)";
+            } else if (match.awayId === teamId) {
+                span.textContent += "  (Fora)";
+            }
 
-        Match.iniciarPartidaDireta(matchId);
-        mostrarTela("tela-partida");
-    }
+            linha.appendChild(span);
+            boxRodada.appendChild(linha);
+        });
+
+        container.appendChild(boxRodada);
+    });
+}
+
+/* =======================================================
+   EXPORE GLOBAL
+   =======================================================*/
+window.CalendarUI = {
+    renderCalendario
 };
