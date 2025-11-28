@@ -783,3 +783,59 @@ th {
     max-width: 360px;
   }
 }
+/* ===== FIX DEFINITIVO – ESCOLHA DE TIME ===== */
+
+#tela-escolha-time {
+    padding: 20px;
+    text-align: center;
+}
+
+.lista-times {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 25px;
+    padding: 20px;
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+/* Card de cada time */
+.time-card {
+    background: rgba(0,0,0,0.4) !important;
+    border: 2px solid #fff !important;
+    border-radius: 12px !important;
+    padding: 10px !important;
+    cursor: pointer;
+    transition: 0.2s ease;
+    backdrop-filter: blur(4px);
+    width: 100% !important;
+    max-width: 160px !important;
+    margin: 0 auto !important;
+}
+
+/* Efeito hover */
+.time-card:hover {
+    transform: scale(1.07);
+    background: rgba(255,255,255,0.1);
+}
+
+/* ESCUDO – funciona tanto pra .time-card-logo quanto pra .time-logo */
+.time-card-logo,
+.time-logo {
+    width: 100px !important;
+    height: 100px !important;
+    object-fit: contain !important;   /* não estica nem corta o escudo */
+    display: block !important;
+    margin: 0 auto 10px auto !important;
+    filter: drop-shadow(0 0 4px black);
+}
+
+/* Nome do time */
+.time-card-nome,
+.time-nome {
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    color: white !important;
+    text-shadow: 0 0 3px black !important;
+    display: block;
+}
