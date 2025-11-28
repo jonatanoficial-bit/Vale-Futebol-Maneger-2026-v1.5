@@ -4,7 +4,20 @@
    =======================================================*/
 
 (function () {
+
+  // Helper para pegar o array de times do seu database.js
+  function getTeamsArray() {
+    if (window.Database && Array.isArray(Database.teams)) {
+      return Database.teams;
+    }
+    try {
+      if (Array.isArray(teams)) return teams; // seu const teams
+    } catch (e) {}
+    return [];
+  }
+
   const LeagueUI = {
+
     /** Renderiza a tabela completa dentro de #tabela-classificacao */
     renderTabela() {
       const tabelaEl = document.getElementById("tabela-classificacao");
@@ -41,8 +54,23 @@
       const tbody = tabelaEl.querySelector("tbody");
 
       standings.forEach((row, index) => {
-        const teamInfo = this._buscarTime(row.teamId);
-        const nomeTime = teamInfo ? teamInfo.name : (row.teamName || row.teamId);
+        const teamInfo = this._resolverTime(row);
+        const nomeTime =
+          (teamInfo && teamInfo.name) ||
+          row.teamName ||
+          row.team ||
+          row.name ||
+          row.id ||
+          row.teamId ||
+          "Time";
+
+        const logoKey =
+          (teamInfo && teamInfo.id) ||
+          row.teamId ||
+          row.team ||
+          row.id ||
+          nomeTime;
+
         const saldo = (row.goalsFor || 0) - (row.goalsAgainst || 0);
 
         const tr = document.createElement("tr");
@@ -52,7 +80,7 @@
             <div class="time-coluna">
               <img
                 class="logo-tabela"
-                src="${this._logoSrc(row.teamId)}"
+                src="${this._logoSrc(logoKey)}"
                 alt="${nomeTime}"
                 onerror="this.style.display='none'"
               >
@@ -102,24 +130,32 @@
       return [];
     },
 
-    _buscarTime(teamId) {
-      if (!teamId) return null;
+    /** Tenta achar o time pelo ID ou pelo NOME vindo do standings */
+    _resolverTime(row) {
+      const arr = getTeamsArray();
+      if (!arr.length) return null;
 
-      if (window.Database && Array.isArray(Database.teams)) {
-        return Database.teams.find(t => t.id === teamId) || null;
+      const candidatos = [];
+
+      if (row.teamId)   candidatos.push(val => val.id === row.teamId);
+      if (row.team)     candidatos.push(val => val.id === row.team || val.name === row.team);
+      if (row.id)       candidatos.push(val => val.id === row.id || val.name === row.id);
+      if (row.teamName) candidatos.push(val => val.name === row.teamName);
+      if (row.name)     candidatos.push(val => val.name === row.name);
+
+      for (const cond of candidatos) {
+        const achou = arr.find(cond);
+        if (achou) return achou;
       }
-
-      if (Array.isArray(window.teams)) {
-        return window.teams.find(t => t.id === teamId) || null;
-      }
-
       return null;
     },
 
-    _logoSrc(teamId) {
-      if (!teamId) return "assets/logos/default.png";
-      // Usa o mesmo padrão da pasta de logos: assets/logos/ID.png
-      return `assets/logos/${teamId}.png`;
+    _logoSrc(key) {
+      if (!key) return "assets/logos/default.png";
+
+      // Se key for o ID certinho (FLA, PAL, BOT...), é só usar direto
+      // Você deve ter os arquivos: assets/logos/FLA.png, PAL.png, BOT.png, etc.
+      return `assets/logos/${String(key).toUpperCase()}.png`;
     }
   };
 
@@ -130,4 +166,5 @@
       LeagueUI.renderTabela();
     }
   });
+
 })();
