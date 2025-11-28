@@ -42,6 +42,116 @@ h1.titulo {
     font-size: 32px;
     margin-bottom: 20px;
 }
+/* ============================================================
+   CALENDÁRIO – ESTILO EA FC / FOOTBALL MANAGER
+   ============================================================ */
+
+/* Container principal da tela */
+#tela-calendario {
+    padding: 30px;
+    background: linear-gradient(180deg, #0b0b0b 0%, #121212 100%);
+    color: #fff;
+}
+
+/* Título da tela */
+#titulo-calendario {
+    text-align: center;
+    font-size: 32px;
+    margin-bottom: 10px;
+    color: #C7A029;
+}
+
+/* Subtexto */
+#info-calendario {
+    text-align: center;
+    font-size: 15px;
+    opacity: 0.85;
+    margin-bottom: 30px;
+}
+
+/* Área com todas as rodadas */
+.calendario-lista {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+/* BLOCO DE RODADA */
+.calendario-rodada {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-left: 5px solid #C7A029;
+    padding: 16px 20px;
+    border-radius: 12px;
+    margin-bottom: 22px;
+    backdrop-filter: blur(4px);
+    transition: transform 0.15s ease;
+}
+
+.calendario-rodada:hover {
+    transform: translateX(4px);
+}
+
+/* Cabeçalho da rodada */
+.calendario-rodada-titulo {
+    font-size: 20px;
+    font-weight: 800;
+    margin-bottom: 12px;
+    color: #C7A029;
+    letter-spacing: 1px;
+}
+
+/* Cada linha de jogo */
+.calendario-jogo {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: rgba(0,0,0,0.35);
+    margin-bottom: 8px;
+    border: 1px solid rgba(255,255,255,0.06);
+    transition: 0.2s;
+}
+
+/* Hover estiloso */
+.calendario-jogo:hover {
+    background: rgba(255,255,255,0.10);
+    transform: translateY(-2px);
+}
+
+/* Texto dos confrontos */
+.calendario-jogo span {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+
+/* Destacar jogo do seu time */
+.calendario-jogo.meu-jogo {
+    background: rgba(0, 175, 255, 0.20);
+    border-left: 4px solid #0EA5E9;
+}
+
+/* Texto fica mais vibrante no jogo do usuário */
+.calendario-jogo.meu-jogo span {
+    color: #0EA5E9;
+    font-weight: 800;
+}
+
+/* Responsividade do calendário */
+@media (max-width: 600px) {
+
+    #titulo-calendario {
+        font-size: 24px;
+    }
+
+    .calendario-rodada {
+        padding: 14px;
+    }
+
+    .calendario-jogo span {
+        font-size: 13px;
+    }
+}
 
 /* =======================
    CAPA
