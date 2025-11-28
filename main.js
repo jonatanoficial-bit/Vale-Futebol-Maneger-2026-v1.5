@@ -3,160 +3,114 @@
    main.js – Inicialização do jogo e troca de telas
    =======================================================*/
 
-window.addEventListener("load", () => {
-    console.log(
-        "%c Vale Futebol Manager 2026 iniciado!",
-        "color:#C7A029; font-size:20px; font-weight:bold"
-    );
-
-    // Se existir um UI "antigo", continua chamando
-    if (window.UI && typeof UI.init === "function") {
-        UI.init();
-    }
-
-    // Garante que o botão INICIAR sempre monte a lista de times
-    const btnIniciar = document.getElementById("btn-iniciar");
-    if (btnIniciar) {
-        btnIniciar.addEventListener("click", () => {
-            // pequena espera só pra garantir troca de tela
-            setTimeout(preencherListaTimesBasico, 50);
-        });
-    }
-
-    // Botão CONTINUAR CARREIRA (se já houver save)
-    const btnContinuar = document.getElementById("btn-continuar");
-    if (btnContinuar) {
-        btnContinuar.addEventListener("click", () => {
-            if (typeof loadGameStateFromStorage === "function") {
-                loadGameStateFromStorage(); // sua função da engine
-            }
-            atualizarLobbyBasico();
-            mostrarTela("tela-lobby");
-        });
-    }
-});
-
-/* =======================================================
-   Troca de telas (sistema único – usado também pelo fallback)
-   =======================================================*/
+/**
+ * Função genérica para trocar de tela.
+ * Qualquer DIV com class="tela" entra/sai ao adicionar/remover .ativa
+ */
 function mostrarTela(id) {
     document.querySelectorAll(".tela").forEach(t => t.classList.remove("ativa"));
     const alvo = document.getElementById(id);
     if (alvo) alvo.classList.add("ativa");
 }
 
-/* =======================================================
-   Estado global simplificado (segue seu padrão antigo)
-   =======================================================*/
-window.Game = {
-    data: {},       // save completo (se quiser usar depois)
-    coachName: "",
-    teamId: "",
-    rodada: 1,
-    saldo: 50,
-    formacao: "4-3-3",
-    estilo: "equilibrado",
+window.addEventListener("load", () => {
+    console.log(
+        "%c Vale Futebol Manager 2026 iniciado!",
+        "color:#C7A029; font-size:20px; font-weight:bold"
+    );
 
-    elenco: [],     // jogadores carregados
-    titulares: {},  // 11 posições
-    reservas: []    // banco
-};
-
-/* =======================================================
-   FALLBACK: montar lista de times na tela "ESCOLHA SEU TIME"
-   =======================================================*/
-function preencherListaTimesBasico() {
-    const container = document.getElementById("lista-times");
-    if (!container) return;
-
-    // Se o UI antigo já preencheu, não mexe
-    if (container.children.length > 0) return;
-
-    // Fonte de dados: Database.teams (novo) ou teams (global antigo)
-    const fonte = (window.Database && Database.teams)
-        ? Database.teams
-        : (window.teams || []);
-
-    if (!fonte || !fonte.length) {
-        console.warn("Nenhum time encontrado em Database.teams ou teams.");
-        return;
+    // 1) Deixa o UI oficial iniciar se existir
+    if (window.UI && typeof UI.init === "function") {
+        UI.init();
+        console.log("[UI] init() chamado (ui.js).");
+    } else {
+        console.warn("[UI] ui.js não encontrado ou sem init().");
     }
 
-    container.innerHTML = "";
+    // 2) Garante funcionamento dos botões da CAPA
+    const btnIniciar = document.getElementById("btn-iniciar");
+    const btnContinuar = document.getElementById("btn-continuar");
 
-    fonte.forEach(team => {
-        const card = document.createElement("button");
-        card.className = "time-card";
-        card.innerHTML = `
-            <div class="time-card-inner">
-                <img src="assets/logos/${team.id}.png"
-                     alt="${team.name}"
-                     class="time-card-logo"
-                     onerror="this.style.display='none'">
-                <span class="time-card-nome">${team.name}</span>
-            </div>
-        `;
-        card.addEventListener("click", () => selecionarTimeBasico(team.id));
-        container.appendChild(card);
-    });
-}
+    if (btnIniciar) {
+        btnIniciar.addEventListener("click", () => {
+            console.log("[MAIN] INICIAR CARREIRA clicado.");
 
-/* =======================================================
-   Seleção de time – cria carreira e vai para o lobby
-   =======================================================*/
-function selecionarTimeBasico(teamId) {
-    const coachName = prompt("Nome do treinador:", "Técnico");
+            // Se o UI moderno tiver função específica, usa ela.
+            if (window.UI && typeof UI.abrirEscolhaTime === "function") {
+                UI.abrirEscolhaTime();
+                return;
+            }
 
-    // Usa a engine que já existe (game.js)
-    if (typeof resetGameStateForNewCareer === "function") {
-        resetGameStateForNewCareer(teamId, coachName || "Técnico");
+            // Se tiver função para preencher lista de times
+            if (window.UI && typeof UI.preencherListaTimes === "function") {
+                UI.preencherListaTimes();
+            }
+
+            // Fallback: apenas abre a tela de escolha de time
+            mostrarTela("tela-escolha-time");
+        });
     }
 
-    Game.teamId = teamId;
-    Game.coachName = coachName || "Técnico";
+    if (btnContinuar) {
+        btnContinuar.addEventListener("click", () => {
+            console.log("[MAIN] CONTINUAR CARREIRA clicado.");
 
-    atualizarLobbyBasico();
-    mostrarTela("tela-lobby");
-}
+            if (window.UI && typeof UI.continuarCarreira === "function") {
+                UI.continuarCarreira();
+                return;
+            }
 
-/* =======================================================
-   Atualiza visual do LOBBY (nome, temporada, saldo, escudo)
-   =======================================================*/
-function atualizarLobbyBasico() {
-    if (typeof getTeamById !== "function" || typeof gameState === "undefined") {
-        console.warn("Engine do jogo (getTeamById / gameState) não encontrada.");
-        return;
+            // Se não existir save / função específica,
+            // trata como "novo jogo" mesmo.
+            if (btnIniciar) {
+                btnIniciar.click();
+            } else {
+                mostrarTela("tela-escolha-time");
+            }
+        });
     }
 
-    const team = getTeamById(Game.teamId);
-    if (!team) return;
+    // 3) "Watchdog" do Lobby
+    //    Fica verificando a cada 500ms se o Lobby está ativo
+    //    e, se estiver, garante que logo / textos estejam preenchidos
+    setInterval(() => {
+        const telaLobby = document.getElementById("tela-lobby");
+        if (!telaLobby || !telaLobby.classList.contains("ativa")) return;
 
-    const nomeEl  = document.getElementById("lobby-nome-time");
-    const tempEl  = document.getElementById("lobby-temporada");
-    const saldoEl = document.getElementById("lobby-saldo");
-    const logoEl  = document.getElementById("lobby-logo");
+        const logoEl  = document.getElementById("lobby-logo");
+        const nomeEl  = document.getElementById("lobby-nome-time");
+        const tempEl  = document.getElementById("lobby-temporada");
+        const saldoEl = document.getElementById("lobby-saldo");
 
-    if (nomeEl)  nomeEl.textContent  = team.name;
-    if (tempEl)  tempEl.textContent  = `Temporada: ${gameState.seasonYear}`;
-    if (saldoEl) saldoEl.textContent = `Saldo: ${gameState.balance} mi`;
+        if (!logoEl) return;
 
-    if (logoEl) {
-        // 1ª tentativa: usar propriedade 'logo' se existir
-        let logoFile = null;
-        if (team.logo) {
-            logoFile = team.logo;              // ex: "FLA.png"
-        } else if (team.id) {
-            logoFile = `${team.id}.png`;       // ex: "FLA.png"
+        // Usa a engine oficial, se estiver carregada
+        if (typeof getTeamById === "function" && window.gameState) {
+            const teamId = gameState.currentTeamId || gameState.teamId;
+            if (!teamId) return;
+
+            const team = getTeamById(teamId);
+            if (!team) return;
+
+            // Atualiza logo (só se ainda não estiver certo)
+            const expectedSrc = `${location.origin}${location.pathname.replace(/index\.html?$/i, "")}assets/logos/${team.id}.png`;
+            if (!logoEl.src || logoEl.src.endsWith("/") || logoEl.src.includes("default") || logoEl.src === location.href) {
+                logoEl.src = `assets/logos/${team.id}.png`;
+                logoEl.alt = team.name;
+            }
+
+            // Nome do time
+            if (nomeEl && (!nomeEl.textContent || nomeEl.textContent === "")) {
+                nomeEl.textContent = team.name;
+            }
+
+            // Temporada e saldo
+            if (tempEl) {
+                tempEl.textContent = `Temporada: ${gameState.seasonYear || 2025}`;
+            }
+            if (saldoEl && typeof gameState.balance !== "undefined") {
+                saldoEl.textContent = `Saldo: ${gameState.balance} mi`;
+            }
         }
-
-        if (logoFile) {
-            logoEl.src = `assets/logos/${logoFile}`;
-            logoEl.alt = team.name;
-            logoEl.onerror = function () {
-                // fallback se a imagem não existir
-                this.onerror = null;
-                this.src = "assets/logos/default.png";
-            };
-        }
-    }
-}
+    }, 500);
+});
