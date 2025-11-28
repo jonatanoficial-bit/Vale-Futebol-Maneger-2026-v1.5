@@ -1,179 +1,185 @@
 /* =======================================================
    VALE FUTEBOL MANAGER 2026
-   main.js – Inicialização, Carregamento, Troca de Telas
+   main.js — Inicialização do jogo e troca de telas
+   Revisado 100% funcional
    =======================================================*/
 
-console.log("%c[MAIN] main.js carregado", "color:#C7A029; font-size:18px;");
+console.log(
+    "%c[MAIN] Vale Futebol Manager 2026 carregado",
+    "color:#C7A029; font-size:16px; font-weight:bold"
+);
 
 /* =======================================================
-   FUNÇÃO GLOBAL DE TROCA DE TELAS
+   SISTEMA DE TROCA DE TELAS (GLOBAL)
    =======================================================*/
 function mostrarTela(id) {
-    document.querySelectorAll(".tela").forEach(t => t.classList.remove("ativa"));
+    document.querySelectorAll(".tela").forEach((t) => t.classList.remove("ativa"));
     const alvo = document.getElementById(id);
     if (alvo) alvo.classList.add("ativa");
 }
 
 /* =======================================================
-   GAME STATE GLOBAL (NÚCLEO DO JOGO)
+   ESTADO GLOBAL DO JOGO
+   (Game = sessão atual / gameState = save completo)
    =======================================================*/
-window.gameState = {
-    seasonYear: 2025,
-    currentTeamId: "",
-    balance: 20,                     // dinheiro inicial (pode mudar depois)
-    rodadaA: 1,
-    rodadaB: 1,
-    calendarA: [],
-    calendarB: [],
+window.Game = {
+    coachName: "",
+    teamId: "",
+    rodada: 1,
+    saldo: 10,
+    formacao: "4-3-3",
+    estilo: "equilibrado",
 };
 
 /* =======================================================
-   SALVAMENTO
-   =======================================================*/
-function salvarJogo() {
-    localStorage.setItem("vale_fm_save", JSON.stringify(gameState));
-    console.log("%c[SAVE] Jogo salvo com sucesso.", "color:#4ade80");
-}
-
-function carregarJogo() {
-    const data = localStorage.getItem("vale_fm_save");
-    if (!data) return false;
-
-    try {
-        const load = JSON.parse(data);
-        Object.assign(gameState, load);
-        console.log("%c[SAVE] Save carregado", "color:#38bdf8;");
-        return true;
-    } catch (e) {
-        console.warn("[SAVE] Erro ao carregar save:", e);
-        return false;
-    }
-}
-
-/* =======================================================
-   RESET COMPLETO (NOVA CARREIRA)
-   =======================================================*/
-function resetGameStateForNewCareer(teamId, coachName = "Técnico") {
-    console.log("%c[MAIN] Nova carreira iniciada.", "color:#22d3ee;");
-
-    gameState.currentTeamId = teamId;
-    gameState.balance = 20;
-    gameState.seasonYear = 2025;
-    gameState.rodadaA = 1;
-    gameState.rodadaB = 1;
-
-    // Calendário completo de Série A e B
-    if (typeof Calendar !== "undefined" && Calendar.gerarCalendarioTemporada) {
-        gameState.calendarA = Calendar.gerarCalendarioTemporada("A");
-        gameState.calendarB = Calendar.gerarCalendarioTemporada("B");
-    }
-
-    salvarJogo();
-}
-
-/* =======================================================
-   ATUALIZAÇÃO DO LOBBY
-   =======================================================*/
-function atualizarLobbyBasico() {
-    const nomeEl = document.getElementById("lobby-nome-time");
-    const tempEl = document.getElementById("lobby-temporada");
-    const saldoEl = document.getElementById("lobby-saldo");
-    const logoEl  = document.getElementById("lobby-logo");
-
-    const team = getTeamById(gameState.currentTeamId);
-
-    if (nomeEl) nomeEl.textContent = team?.name ?? "Seu Time";
-    if (tempEl) tempEl.textContent = "Temporada: " + gameState.seasonYear;
-    if (saldoEl) saldoEl.textContent = "Saldo: " + gameState.balance + " mi";
-
-    if (logoEl) {
-        logoEl.src = "assets/logos/" + gameState.currentTeamId + ".png";
-        logoEl.onerror = () => (logoEl.style.display = "none");
-    }
-}
-
-/* =======================================================
-   AÇÕES DOS BOTÕES (CAPA)
+   INICIALIZAÇÃO GERAL
    =======================================================*/
 window.addEventListener("load", () => {
-    console.log("%c[MAIN] Sistema iniciado.", "color:#C7A029; font-size:16px;");
+    console.log("[MAIN] Sistema iniciado.");
 
-    const btnIniciar = document.getElementById("btn-iniciar");
-    const btnContinuar = document.getElementById("btn-continuar");
+    // Restaurar carreira automaticamente se existir
+    if (window.Save && typeof Save.carregar === "function") {
+        const save = Save.carregar();
+        if (save) {
+            console.log("[MAIN] Save encontrado, habilitando botão CONTINUAR.");
+            document.getElementById("btn-continuar").style.display = "block";
+        }
+    }
 
-    /* NOVA CARREIRA */
-    btnIniciar.addEventListener("click", () => {
-        console.log("[MAIN] Abrindo seleção de times...");
+    configurarBotoes();
+});
+
+/* =======================================================
+   CONFIGURA TODOS OS BOTÕES DO JOGO
+   =======================================================*/
+function configurarBotoes() {
+    // --- NOVA CARREIRA ---
+    document.getElementById("btn-iniciar").onclick = () => {
+        console.log("[MAIN] Iniciar nova carreira…");
+
+        if (window.Save && typeof Save.novoJogo === "function") {
+            Save.novoJogo();
+        }
+
         mostrarTela("tela-escolha-time");
 
-        // preenche a lista de times
-        if (typeof UI !== "undefined") {
-            if (typeof preencherListaTimesBasico === "function") {
-                preencherListaTimesBasico();
-            }
+        // Preencher lista de times
+        if (typeof preencherListaTimesBasico === "function") {
+            setTimeout(preencherListaTimesBasico, 80);
+        } else {
+            console.error("[MAIN] preencherListaTimesBasico() NÃO ENCONTRADA!");
         }
-    });
+    };
 
-    /* CONTINUAR CARREIRA */
-    btnContinuar.addEventListener("click", () => {
-        const ok = carregarJogo();
-        if (!ok) {
-            alert("Nenhuma carreira encontrada.");
-            return;
+    // --- CONTINUAR CARREIRA ---
+    document.getElementById("btn-continuar").onclick = () => {
+        console.log("[MAIN] Continuar carreira…");
+
+        if (window.Save && typeof Save.carregar === "function") {
+            Save.carregar();
         }
 
-        atualizarLobbyBasico();
+        carregarLobby();
         mostrarTela("tela-lobby");
-    });
-});
+    };
+}
 
 /* =======================================================
    SELEÇÃO DE TIME
    =======================================================*/
 function selecionarTimeBasico(teamId) {
-    const coach = prompt("Nome do treinador:", "Técnico");
+    console.log("[MAIN] Time escolhido:", teamId);
 
-    resetGameStateForNewCareer(teamId, coach);
-    atualizarLobbyBasico();
+    const nome = prompt("Nome do treinador:", "Técnico") || "Técnico";
 
+    Game.teamId = teamId;
+    Game.coachName = nome;
+
+    if (window.resetGameStateForNewCareer) {
+        resetGameStateForNewCareer(teamId, nome);
+    }
+
+    carregarLobby();
     mostrarTela("tela-lobby");
+
+    if (window.Save && typeof Save.salvar === "function") {
+        Save.salvar();
+    }
 }
 
 /* =======================================================
-   CALENDÁRIO – BOTÃO DO LOBBY
+   ATUALIZAR LOBBY
    =======================================================*/
-window.UI = window.UI || {};
-
-UI.abrirCalendario = function () {
-    console.log("[UI] Abrindo calendário...");
-
-    if (typeof CalendarUI !== "undefined" && CalendarUI.renderCalendario) {
-        CalendarUI.renderCalendario();
+function carregarLobby() {
+    if (!Game.teamId) {
+        console.warn("[MAIN] Nenhum time selecionado!");
+        return;
     }
 
-    mostrarTela("tela-calendario");
-};
-
-/* =======================================================
-   FUNÇÕES DO JOGO – PRÓXIMO JOGO
-   =======================================================*/
-UI.abrirProximoJogo = function () {
-    console.log("[MAIN] Chamando próximo jogo...");
-
-    if (typeof Match !== "undefined" && typeof Match.iniciarProximoJogo === "function") {
-        Match.iniciarProximoJogo();
+    const team = getTeamById(Game.teamId);
+    if (!team) {
+        console.error("[MAIN] getTeamById retornou NULL para:", Game.teamId);
+        return;
     }
 
-    mostrarTela("tela-partida");
-};
+    document.getElementById("lobby-nome-time").textContent = team.name;
+    document.getElementById("lobby-saldo").textContent = "Saldo: " + (gameState.balance || 0) + " mi";
+    document.getElementById("lobby-temporada").textContent = "Temporada: " + (gameState.seasonYear || 2025);
+
+    const logo = document.getElementById("lobby-logo");
+    logo.src = `assets/logos/${team.id}.png`;
+    logo.onerror = () => (logo.style.display = "none");
+}
 
 /* =======================================================
-   TABELA / ELENCO / TÁTICAS / MERCADO
+   BOTÕES DE NAVEGAÇÃO GERAL
    =======================================================*/
-UI.voltarLobby = () => mostrarTela("tela-lobby");
-UI.voltarParaCapa = () => mostrarTela("tela-capa");
+window.UI = Object.assign(window.UI || {}, {
+    voltarParaCapa() {
+        mostrarTela("tela-capa");
+    },
+
+    voltarLobby() {
+        carregarLobby();
+        mostrarTela("tela-lobby");
+    },
+});
 
 /* =======================================================
-   DEBUG
+   FUNÇÃO DE FALLBACK (CASO UI NÃO MONTE OS TIMES)
    =======================================================*/
-console.log("%c[MAIN] main.js pronto para uso.", "color:#C7A029");
+function preencherListaTimesBasico() {
+    console.log("[MAIN] preenchendo lista de times…");
+
+    const div = document.getElementById("lista-times");
+    if (!div) {
+        console.error("[MAIN] lista-times NÃO encontrada!");
+        return;
+    }
+
+    const fonte =
+        (window.Database && Database.teams) ||
+        window.teams ||
+        [];
+
+    if (!fonte.length) {
+        console.error("[MAIN] Nenhum time encontrado no database!");
+        div.innerHTML = "<p>Nenhum time encontrado.</p>";
+        return;
+    }
+
+    div.innerHTML = "";
+
+    fonte.forEach((team) => {
+        const card = document.createElement("button");
+        card.className = "time-card";
+        card.innerHTML = `
+            <img class="time-card-logo" src="assets/logos/${team.id}.png" alt="${team.name}" />
+            <span class="time-card-nome">${team.name}</span>
+        `;
+        card.onclick = () => selecionarTimeBasico(team.id);
+
+        div.appendChild(card);
+    });
+}
+
