@@ -33,8 +33,13 @@ body {
     overflow-y: auto;   /* cada tela pode rolar */
 }
 
-.ativa {
-    display: block;
+/* CORREÇÃO GLOBAL DAS TELAS */
+.tela {
+    display: none !important;   /* TODAS começam escondidas */
+}
+
+.tela.ativa {
+    display: block !important;  /* Só a tela ativa aparece */
 }
 
 /* Título genérico (caso use <h1 class="titulo">) */
