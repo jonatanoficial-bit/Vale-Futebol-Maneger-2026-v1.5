@@ -32,7 +32,8 @@
         <!-- preenchido pelo main.js / UI.init -->
         <div id="lista-times" class="lista-times"></div>
 
-        <button class="btn-voltar" onclick="mostrarTela('tela-capa')">VOLTAR</button>
+        <!-- usa a mesma navegação de outras telas -->
+        <button class="btn-voltar" onclick="UI.voltarParaCapa()">VOLTAR</button>
     </div>
 
     <!-- =========================
@@ -42,19 +43,23 @@
         <div class="lobby-card">
             <img id="lobby-logo" class="lobby-logo" alt="Escudo do time">
 
-            <h2 id="lobby-nome-time"></h2>
-            <p id="lobby-temporada"></p>
-            <p id="lobby-saldo"></p>
+            <div class="lobby-info-time">
+                <h2 id="lobby-nome-time"></h2>
+                <p id="lobby-temporada"></p>
+                <p id="lobby-saldo"></p>
+            </div>
 
-            <button class="btn-green" onclick="UI.abrirProximoJogo()">PRÓXIMO JOGO</button>
-            <button class="btn-blue"  onclick="UI.abrirClassificacao()">TABELA</button>
-            <button class="btn-blue"  onclick="UI.abrirElenco()">ELENCO</button>
-            <button class="btn-blue"  onclick="UI.abrirMercado()">MERCADO</button>
-            <!-- NOVO BOTÃO: CALENDÁRIO ANUAL -->
-            <button class="btn-blue"  onclick="UI.abrirCalendario()">CALENDÁRIO</button>
-            <button class="btn-gold"  onclick="UI.abrirTaticas()">TÁTICAS</button>
+            <div class="lobby-botoes">
+                <button class="btn-green" onclick="UI.abrirProximoJogo()">PRÓXIMO JOGO</button>
+                <button class="btn-blue"  onclick="UI.abrirClassificacao()">TABELA</button>
+                <button class="btn-blue"  onclick="UI.abrirElenco()">ELENCO</button>
+                <button class="btn-blue"  onclick="UI.abrirMercado()">MERCADO</button>
+                <!-- NOVO BOTÃO: CALENDÁRIO ANUAL -->
+                <button class="btn-blue"  onclick="UI.abrirCalendario()">CALENDÁRIO</button>
+                <button class="btn-gold"  onclick="UI.abrirTaticas()">TÁTICAS</button>
 
-            <button class="btn-voltar" onclick="UI.voltarParaCapa()">SAIR</button>
+                <button class="btn-voltar" onclick="UI.voltarParaCapa()">SAIR</button>
+            </div>
         </div>
     </div>
 
@@ -75,7 +80,7 @@
          ========================= -->
     <section id="tela-taticas" class="tela">
         <div class="topo-taticas">
-            <h1>TÁTICAS E ESCALAÇÃO</h1>
+            <h1 class="titulo">TÁTICAS E ESCALAÇÃO</h1>
 
             <div class="taticas-controles">
                 <div class="grupo-controle">
@@ -99,7 +104,7 @@
                     Salvar Escalação
                 </button>
 
-                <button id="btn-voltar-lobby" class="btn-voltar-top">
+                <button id="btn-voltar-lobby" class="btn-voltar-top" onclick="UI.voltarLobby()">
                     Voltar ao Lobby
                 </button>
             </div>
@@ -223,10 +228,11 @@
          TELA 10 – CALENDÁRIO DA TEMPORADA
          ========================= -->
     <section id="tela-calendario" class="tela">
-        <h1 class="titulo">CALENDÁRIO DA TEMPORADA</h1>
+        <h1 id="titulo-calendario" class="titulo">CALENDÁRIO DA TEMPORADA</h1>
 
         <!-- lista de todos os jogos da temporada -->
-        <div id="lista-calendario" class="lista-calendario">
+        <!-- classe ajustada para bater com o CSS (.calendario-lista) -->
+        <div id="lista-calendario" class="calendario-lista">
             <!-- preenchido via CalendarUI.renderCalendario() -->
         </div>
 
@@ -242,6 +248,8 @@
         <div id="detalhe-calendario" class="detalhe-calendario">
             <!-- preenchido via CalendarUI.renderDetalhe() -->
         </div>
+
+        <button class="btn-voltar" onclick="UI.abrirCalendario()">VOLTAR AO CALENDÁRIO</button>
     </section>
 
     <!-- ==================================================
