@@ -1,7 +1,8 @@
 // ui/ui.js
 // ======================================================
 // UI principal do Vale Futebol Manager 2026
-// Cuida de: Tabela, Elenco, Táticas, Mercado e Troca de Telas
+// Cuida de: Tabela, Elenco, Táticas, Mercado, Calendário
+// e navegação entre telas
 // ======================================================
 
 (function () {
@@ -10,40 +11,57 @@
     "color:#0EA5E9; font-weight:bold;"
   );
 
-  // ------------- HELPERS GERAIS ------------- //
+  // ----------------------------------------------------
+  // HELPERS GERAIS
+  // ----------------------------------------------------
 
   function mostrarTela(id) {
     document.querySelectorAll(".tela").forEach((t) =>
       t.classList.remove("ativa")
     );
     const alvo = document.getElementById(id);
-    if (alvo) alvo.classList.add("ativa");
+    if (alvo) {
+      alvo.classList.add("ativa");
+    } else {
+      console.warn("[UI] mostrarTela: elemento não encontrado:", id);
+    }
   }
 
+  // expõe para o HTML (onclick="mostrarTela('tela-capa')")
+  window.mostrarTela = mostrarTela;
+
   function getCurrentTeamId() {
+    // Game.teamId (se a engine usar isso)
     if (window.Game && Game.teamId) return Game.teamId;
+
+    // gameState.currentTeamId (outro formato comum)
     if (window.gameState && gameState.currentTeamId)
       return gameState.currentTeamId;
+
     return null;
   }
 
   function getAllTeams() {
-    if (window.Database && Array.isArray(Database.teams)) return Database.teams;
-    if (Array.isArray(window.teams)) return teams;
+    if (window.Database && Array.isArray(Database.teams)) {
+      return Database.teams;
+    }
+    if (Array.isArray(window.teams)) {
+      return teams;
+    }
     return [];
   }
 
   function getTeamByIdSafe(teamId) {
     if (!teamId) return null;
 
-    // 1) função da engine (se existir)
+    // 1) função da engine/database.js
     try {
       if (typeof getTeamById === "function") {
         const t = getTeamById(teamId);
         if (t) return t;
       }
     } catch (e) {
-      console.warn("[UI] erro em getTeamById:", e);
+      console.warn("[UI] erro em getTeamById():", e);
     }
 
     // 2) Database.teams
@@ -59,10 +77,12 @@
     return team.division || team.serie || "A";
   }
 
-  // ------------- TABELA / CLASSIFICAÇÃO ------------- //
+  // ----------------------------------------------------
+  // CLASSIFICAÇÃO / TABELA
+  // ----------------------------------------------------
 
   function getStandingsForDivision(div) {
-    // 1) se a engine League montou standings, usa
+    // 1) se a engine League tiver standings prontos
     if (
       window.League &&
       typeof League.getStandingsForCurrentDivision === "function"
@@ -78,7 +98,7 @@
       }
     }
 
-    // 2) gameState.standings
+    // 2) gameState.standings[div]
     if (
       window.gameState &&
       gameState.standings &&
@@ -87,11 +107,12 @@
       return gameState.standings[div];
     }
 
-    // 3) fallback: monta tabela zerada só com os times da divisão
-    const teams = getAllTeams().filter(
+    // 3) fallback – tabela zerada com todos os times da divisão
+    const listaTimes = getAllTeams().filter(
       (t) => (t.division || t.serie || "A") === div
     );
-    return teams.map((t, idx) => ({
+
+    return listaTimes.map((t, idx) => ({
       position: idx + 1,
       teamId: t.id,
       name: t.name,
@@ -116,7 +137,12 @@
     const team = getTeamByIdSafe(teamId);
     const div = getDivisionForTeam(team); // "A" ou "B"
 
-    console.log("[UI] renderTabelaBrasileirao() – divisão:", div, "time atual:", teamId);
+    console.log(
+      "[UI] renderTabelaBrasileirao() – divisão:",
+      div,
+      "time atual:",
+      teamId
+    );
 
     const standings = getStandingsForDivision(div);
 
@@ -124,7 +150,7 @@
 
     if (!standings || !standings.length) {
       tabelaEl.innerHTML =
-        '<tr><td>Nenhuma informação de classificação encontrada.</td></tr>';
+        "<tr><td>Nenhuma informação de classificação encontrada.</td></tr>";
       return;
     }
 
@@ -146,7 +172,7 @@
       const t =
         getTeamByIdSafe(row.teamId) ||
         getTeamByIdSafe(row.id) ||
-        { name: row.name || row.teamName || "Time" };
+        { id: null, name: row.name || row.teamName || "Time" };
 
       const nome = t.name;
       const logoSrc = t.id ? `assets/logos/${t.id}.png` : "";
@@ -181,7 +207,9 @@
     });
   }
 
-  // ------------- ELENCO / JOGADORES ------------- //
+  // ----------------------------------------------------
+  // ELENCO / JOGADORES
+  // ----------------------------------------------------
 
   function getSquadForCurrentTeam() {
     const teamId = getCurrentTeamId();
@@ -190,16 +218,18 @@
       return [];
     }
 
-    // 1) Database.playersByTeam[teamId]
+    // 1) função oficial da engine/database.js
     if (
       window.Database &&
-      Database.playersByTeam &&
-      Array.isArray(Database.playersByTeam[teamId])
+      typeof Database.carregarElencoDoTime === "function"
     ) {
-      return Database.playersByTeam[teamId];
+      const elenco = Database.carregarElencoDoTime(teamId);
+      if (Array.isArray(elenco) && elenco.length) {
+        return elenco;
+      }
     }
 
-    // 2) Database.players filtrado
+    // 2) filtrar Database.players
     if (window.Database && Array.isArray(Database.players)) {
       const lista = Database.players.filter((p) => p.teamId === teamId);
       if (lista.length) return lista;
@@ -226,7 +256,9 @@
   function getFacePathForPlayer(p) {
     const faceId = p.faceId || p.id || p.code || "";
     if (!faceId) return "assets/geral/sem_foto.png";
-    return `assets/face/${faceId}.png`;
+
+    // pasta "faces" (plural) – conforme comentário do database.js
+    return `assets/faces/${faceId}.png`;
   }
 
   function renderElenco() {
@@ -265,7 +297,9 @@
     });
   }
 
-  // ------------- TÁTICAS / CAMPO + RESERVAS ------------- //
+  // ----------------------------------------------------
+  // TÁTICAS / CAMPO + RESERVAS
+  // ----------------------------------------------------
 
   function renderTaticas() {
     const campo = document.getElementById("campo-tatico");
@@ -290,6 +324,7 @@
     const titulares = elenco.slice(0, 11);
     const reservas = elenco.slice(11);
 
+    // posições aproximadas em % (x,y) no campo
     const slotsPos = [
       { x: 50, y: 88 }, // GOL
       { x: 20, y: 70 },
@@ -343,13 +378,47 @@
     });
   }
 
-  // ------------- MERCADO (apenas troca de tela por enquanto) ------------- //
+  // ----------------------------------------------------
+  // CALENDÁRIO (UI simples, usando calendar-ui.js se existir)
+  // ----------------------------------------------------
+
+  function abrirCalendarioTela() {
+    // Se existir um módulo CalendarUI, deixar ele montar a lista
+    if (
+      window.CalendarUI &&
+      typeof CalendarUI.renderCalendario === "function"
+    ) {
+      try {
+        CalendarUI.renderCalendario();
+      } catch (e) {
+        console.warn("[UI] erro ao chamar CalendarUI.renderCalendario():", e);
+      }
+    }
+    mostrarTela("tela-calendario");
+  }
+
+  // ----------------------------------------------------
+  // MERCADO (apenas navegação; render fica em market-ui.js)
+  // ----------------------------------------------------
 
   function abrirMercadoTela() {
+    // Se existir um módulo MarketUI, podemos chamar um refresh se quiser
+    if (
+      window.MarketUI &&
+      typeof MarketUI.renderMercado === "function"
+    ) {
+      try {
+        MarketUI.renderMercado();
+      } catch (e) {
+        console.warn("[UI] erro ao chamar MarketUI.renderMercado():", e);
+      }
+    }
     mostrarTela("tela-mercado");
   }
 
-  // ------------- OBJETO UI GLOBAL ------------- //
+  // ----------------------------------------------------
+  // OBJETO UI GLOBAL
+  // ----------------------------------------------------
 
   const UI = {
     init() {
@@ -357,9 +426,10 @@
         "%c[UI] init() chamado (ui.js).",
         "color:#C7A029; font-weight:bold;"
       );
-      // main.js já trata o botão INICIAR; aqui não precisamos repetir.
+      // main.js já cuida da tela inicial e do botão INICIAR.
     },
 
+    // navegação básica
     voltarParaCapa() {
       mostrarTela("tela-capa");
     },
@@ -368,34 +438,49 @@
       mostrarTela("tela-lobby");
     },
 
+    // PARTIDA
     abrirProximoJogo() {
       if (window.Match && typeof Match.iniciarProximoJogo === "function") {
-        Match.iniciarProximoJogo();
+        try {
+          Match.iniciarProximoJogo();
+        } catch (e) {
+          console.warn("[UI] erro em Match.iniciarProximoJogo():", e);
+        }
       }
       mostrarTela("tela-partida");
     },
 
+    // TABELA
     abrirClassificacao() {
       console.log("[UI] abrirClassificacao() disparado.");
       renderTabelaBrasileirao();
       mostrarTela("tela-classificacao");
     },
 
+    // ELENCO
     abrirElenco() {
       console.log("[UI] abrirElenco() disparado.");
       renderElenco();
       mostrarTela("tela-elenco");
     },
 
+    // TÁTICAS
     abrirTaticas() {
       console.log("[UI] abrirTaticas() disparado.");
       renderTaticas();
       mostrarTela("tela-taticas");
     },
 
+    // MERCADO
     abrirMercado() {
       console.log("[UI] abrirMercado() disparado.");
       abrirMercadoTela();
+    },
+
+    // CALENDÁRIO
+    abrirCalendario() {
+      console.log("[UI] abrirCalendario() disparado.");
+      abrirCalendarioTela();
     },
   };
 
