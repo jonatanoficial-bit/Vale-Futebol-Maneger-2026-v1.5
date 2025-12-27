@@ -1,20 +1,17 @@
 /* =======================================================
    VALE FUTEBOL MANAGER 2026
-   engine/match.js – Match Engine v3 + Relatório Pós-Jogo AAA
-
-   - Mantém compatibilidade com UI atual e League.processarRodadaComJogoDoUsuario
-   - Mantém painel ao vivo (Match.state.stats) para o Match Center AAA
-   - Agora guarda eventos em memória para "Momentos-chave"
-   - Ao final do jogo abre UI.abrirRelatorioPosJogo(report)
+   engine/match.js – Match Engine v4
+   + Relatório Pós-Jogo AAA
+   + Integra Dynamics (moral/forma/fadiga)
+   + Integra News (feed automático)
 
    =======================================================*/
 
 (function () {
-  console.log("%c[Match] match.js v3 carregado", "color:#22c55e; font-weight:bold;");
+  console.log("%c[Match] match.js v4 carregado", "color:#22c55e; font-weight:bold;");
 
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
   function rand() { return Math.random(); }
-  function randInt(a, b) { return Math.floor(a + rand() * (b - a + 1)); }
   function pick(arr) { return arr[Math.floor(rand() * arr.length)]; }
 
   function ensureGameState() { if (!window.gameState) window.gameState = {}; }
@@ -52,10 +49,7 @@
     let sample = [];
 
     if (preferUserTitulares && window.gameState && Array.isArray(gameState.titulares) && gameState.titulares.length) {
-      const ids = gameState.titulares
-        .map(x => x?.playerId || x?.id || x)
-        .filter(Boolean);
-
+      const ids = gameState.titulares.map(x => x?.playerId || x?.id || x).filter(Boolean);
       const chosen = ids.map(pid => all.find(p => (p.id === pid || p.playerId === pid))).filter(Boolean);
       if (chosen.length >= 8) sample = chosen.slice(0, 11);
     }
@@ -96,7 +90,6 @@
   function computePossessionBias(home, away, homeForm, awayForm) {
     const hf = parseFormation(homeForm);
     const af = parseFormation(awayForm);
-
     const homeMidFactor = (home.mid - away.mid) / 30;
     const homeMidCountFactor = (hf.mid - af.mid) / 10;
     return clamp(0.50 + homeMidFactor * 0.12 + homeMidCountFactor * 0.06, 0.35, 0.65);
@@ -139,17 +132,11 @@
       ensureGameState();
 
       const teamId = getCurrentUserTeamId();
-      if (!teamId) {
-        alert("Nenhum time selecionado.");
-        return;
-      }
+      if (!teamId) { alert("Nenhum time selecionado."); return; }
 
       const teams = getTeams();
       const userTeam = teams.find(t => t.id === teamId);
-      if (!userTeam) {
-        alert("Time não encontrado.");
-        return;
-      }
+      if (!userTeam) { alert("Time não encontrado."); return; }
 
       const div = userTeam.division || userTeam.league || "A";
       const candidates = teams.filter(t => t.id !== teamId && (t.division || t.league || "A") === div);
@@ -159,9 +146,7 @@
       this._startMatch(home.id, away.id, { competition: "FRIENDLY", competitionName: "Amistoso" });
     },
 
-    finalizarPartida() {
-      this._finalizarPartida();
-    },
+    finalizarPartida() { this._finalizarPartida(); },
 
     _setupTelaPartida(home, away) {
       const elHome = document.getElementById("partida-home");
@@ -189,11 +174,12 @@
 
     _startMatch(homeId, awayId, context) {
       ensureGameState();
+      if (window.Dynamics && typeof Dynamics.ensure === "function") Dynamics.ensure();
+      if (window.News && typeof News.ensure === "function") News.ensure();
 
       const homeTeam = getTeamById(homeId) || { id: homeId, name: homeId };
       const awayTeam = getTeamById(awayId) || { id: awayId, name: awayId };
 
-      // merge contexto externo
       if (context && typeof context === "object") {
         window.currentMatchContext = Object.assign({}, window.currentMatchContext || {}, context);
       }
@@ -211,24 +197,24 @@
       const possBiasHome = computePossessionBias(homePow, awayPow, homeForm, awayForm);
 
       this.state = {
-        homeId,
-        awayId,
+        homeId, awayId,
         minute: 0,
         goalsHome: 0,
         goalsAway: 0,
         finished: false,
         halftimeDone: false,
 
-        homePow,
-        awayPow,
-        homeForm,
-        awayForm,
+        homePow, awayPow,
+        homeForm, awayForm,
         possBiasHome,
 
-        cards: {
-          home: { y: 0, r: 0 },
-          away: { y: 0, r: 0 }
+        // quem jogou (usado por Dynamics)
+        played: {
+          home: homePow.sample.map(p => p.id).filter(Boolean),
+          away: awayPow.sample.map(p => p.id).filter(Boolean),
         },
+
+        cards: { home: { y: 0, r: 0 }, away: { y: 0, r: 0 } },
         injuries: [],
 
         stats: {
@@ -238,13 +224,10 @@
 
         best: { team: null, note: 6.0, reason: "" },
 
-        // novo: eventos para pós-jogo
         events: []
       };
 
-      if (typeof this._setupTelaPartida === "function") {
-        this._setupTelaPartida(homeTeam, awayTeam);
-      }
+      this._setupTelaPartida(homeTeam, awayTeam);
 
       const log = document.getElementById("log-partida");
       if (log) log.innerHTML = "";
@@ -293,18 +276,13 @@
             this.state._extraTimeSet = true;
             this.state._endMinute = 90 + extra;
           }
-          if (this.state.minute >= this.state._endMinute) {
-            this.finalizarPartida();
-          }
+          if (this.state.minute >= this.state._endMinute) this.finalizarPartida();
         }
       }, 600);
     },
 
     pausarLoop() {
-      if (this.timer) {
-        clearInterval(this.timer);
-        this.timer = null;
-      }
+      if (this.timer) { clearInterval(this.timer); this.timer = null; }
     },
 
     _intervalo() {
@@ -314,18 +292,12 @@
       const s = this.state.stats;
       const pHome = this._getPossessionPercent("home");
       const pAway = 100 - pHome;
-      this.registrarEvento(
-        `📊 Intervalo: Posse ${pHome}% x ${pAway}% | Finalizações ${s.home.shots} x ${s.away.shots} | xG ${s.home.xg.toFixed(2)} x ${s.away.xg.toFixed(2)}`
-      );
+      this.registrarEvento(`📊 Intervalo: Posse ${pHome}% x ${pAway}% | Finalizações ${s.home.shots} x ${s.away.shots} | xG ${s.home.xg.toFixed(2)} x ${s.away.xg.toFixed(2)}`);
 
       setTimeout(() => {
         const quer = confirm("Intervalo! Deseja ajustar táticas/escalação?");
-        if (quer && window.UI && typeof UI.abrirTaticas === "function") {
-          UI.abrirTaticas();
-        } else {
-          this.registrarEvento("Recomeça a partida!");
-          this.comecarLoop();
-        }
+        if (quer && window.UI && typeof UI.abrirTaticas === "function") UI.abrirTaticas();
+        else { this.registrarEvento("Recomeça a partida!"); this.comecarLoop(); }
       }, 50);
     },
 
@@ -348,25 +320,16 @@
       const minute = this.state.minute;
       const tempoFactor = minute < 45 ? 0.90 : 1.05;
 
-      const chanceBase = 0.10 * tempoFactor;
-      const secondChanceBase = 0.05 * tempoFactor;
+      if (rand() < 0.10 * tempoFactor) this._createAttackEvent();
+      if (rand() < 0.05 * tempoFactor && minute > 10) this._createAttackEvent(true);
 
-      if (rand() < chanceBase) this._createAttackEvent();
-      if (rand() < secondChanceBase && minute > 10) this._createAttackEvent(true);
-
-      const foulBase = 0.06 * tempoFactor;
-      if (rand() < foulBase) this._createFoulEvent();
-
+      if (rand() < 0.06 * tempoFactor) this._createFoulEvent();
       if (rand() < 0.035 * tempoFactor) this._createCornerEvent();
-
       if (rand() < 0.006 * tempoFactor) this._createInjuryEvent();
 
       if (rand() < 0.02) {
         const which = rand() < this.state.possBiasHome ? "home" : "away";
-        const msg = which === "home"
-          ? "O time da casa troca passes e pressiona."
-          : "O visitante encaixa uma boa sequência e avança no campo.";
-        this.registrarEvento(msg);
+        this.registrarEvento(which === "home" ? "O time da casa troca passes e pressiona." : "O visitante encaixa uma boa sequência e avança no campo.");
       }
     },
 
@@ -391,7 +354,6 @@
 
       const goalProb = goalProbability(atkPow.atk, defPow.def, defPow.gk, isBigChance);
       const isGoal = onTarget && (rand() < goalProb);
-
       const minTxt = formatMinute(this.state.minute);
 
       if (isGoal) {
@@ -400,11 +362,7 @@
 
         this._updateBestPlayerHeuristic(atkTeam, isBigChance ? 8.4 : 7.8, "Gol importante");
 
-        const goalMsgs = [
-          `⚽ ${minTxt} GOOOOOL!`,
-          `⚽ ${minTxt} Bola na rede!`,
-          `⚽ ${minTxt} É GOL! Explode o estádio!`
-        ];
+        const goalMsgs = [`⚽ ${minTxt} GOOOOOL!`, `⚽ ${minTxt} Bola na rede!`, `⚽ ${minTxt} É GOL! Explode o estádio!`];
         this.registrarEvento(`${pick(goalMsgs)} (${atkTeam === "home" ? "Casa" : "Visitante"})`);
         if (isBigChance) this.registrarEvento("Foi uma chance claríssima, finalização perfeita!");
         return;
@@ -412,18 +370,10 @@
 
       if (onTarget) {
         this._updateBestPlayerHeuristic(defTeam, 7.4, "Boa defesa do goleiro");
-        const saveMsgs = [
-          `🧤 ${minTxt} Chute no alvo... DEFESA do goleiro!`,
-          `🧤 ${minTxt} Finalização perigosa e o goleiro espalma!`,
-          `🧤 ${minTxt} O goleiro salva!`
-        ];
+        const saveMsgs = [`🧤 ${minTxt} Chute no alvo... DEFESA do goleiro!`, `🧤 ${minTxt} Finalização perigosa e o goleiro espalma!`, `🧤 ${minTxt} O goleiro salva!`];
         this.registrarEvento(`${pick(saveMsgs)} (xG ${xg.toFixed(2)})`);
       } else {
-        const missMsgs = [
-          `🎯 ${minTxt} Finaliza por cima!`,
-          `🎯 ${minTxt} Chute para fora!`,
-          `🎯 ${minTxt} Tentou de longe, sem direção.`
-        ];
+        const missMsgs = [`🎯 ${minTxt} Finaliza por cima!`, `🎯 ${minTxt} Chute para fora!`, `🎯 ${minTxt} Tentou de longe, sem direção.`];
         this.registrarEvento(`${pick(missMsgs)} (xG ${xg.toFixed(2)})`);
       }
     },
@@ -434,21 +384,14 @@
       this.state.stats[team].fouls += 1;
 
       const minTxt = formatMinute(this.state.minute);
-      const foulMsgs = [
-        `⚠️ ${minTxt} Falta dura no meio-campo.`,
-        `⚠️ ${minTxt} Chegada forte! O árbitro marca falta.`,
-        `⚠️ ${minTxt} Entrada atrasada, falta para o adversário.`
-      ];
+      const foulMsgs = [`⚠️ ${minTxt} Falta dura no meio-campo.`, `⚠️ ${minTxt} Chegada forte! O árbitro marca falta.`, `⚠️ ${minTxt} Entrada atrasada, falta para o adversário.`];
       this.registrarEvento(pick(foulMsgs));
 
-      const yellowProb = 0.16;
-      const redProb = 0.02;
-
-      if (rand() < redProb) {
+      if (rand() < 0.02) {
         this.state.cards[team].r += 1;
         this.registrarEvento(`🟥 ${minTxt} EXPULSO! Cartão vermelho! (${team === "home" ? "Casa" : "Visitante"})`);
         this._updateBestPlayerHeuristic(team === "home" ? "away" : "home", 7.6, "Superioridade numérica");
-      } else if (rand() < yellowProb) {
+      } else if (rand() < 0.16) {
         this.state.cards[team].y += 1;
         this.registrarEvento(`🟨 ${minTxt} Cartão amarelo. (${team === "home" ? "Casa" : "Visitante"})`);
       }
@@ -467,11 +410,8 @@
       const onHome = rand() < 0.50;
       const team = onHome ? "home" : "away";
       const minTxt = formatMinute(this.state.minute);
-      const msgs = [
-        `🤕 ${minTxt} Jogador sente a coxa e pede atendimento.`,
-        `🤕 ${minTxt} Pancada forte, o atleta fica no chão.`,
-        `🤕 ${minTxt} Problema físico, comissão médica em campo.`
-      ];
+
+      const msgs = [`🤕 ${minTxt} Jogador sente a coxa e pede atendimento.`, `🤕 ${minTxt} Pancada forte, o atleta fica no chão.`, `🤕 ${minTxt} Problema físico, comissão médica em campo.`];
       this.registrarEvento(pick(msgs));
       this.state.injuries.push({ team, minute: this.state.minute });
 
@@ -480,9 +420,7 @@
     },
 
     _updateBestPlayerHeuristic(team, note, reason) {
-      if (note > (this.state.best.note || 6.0)) {
-        this.state.best = { team, note, reason };
-      }
+      if (note > (this.state.best.note || 6.0)) this.state.best = { team, note, reason };
     },
 
     _getPossessionPercent(side) {
@@ -495,16 +433,12 @@
     },
 
     _buildReport(rodadaResultsOrNull) {
-      const homeId = this.state.homeId;
-      const awayId = this.state.awayId;
-
       const ctx = window.currentMatchContext || {};
       const competitionName =
         ctx.competitionName ||
         (ctx.competition === "REGIONAL" ? "Estadual" : (ctx.competition === "CUP" ? "Copa do Brasil" : "Série / Jogo"));
 
-      const roundLabel =
-        (ctx.roundNumber ? `Rodada ${ctx.roundNumber}` : (ctx.week ? `Semana ${ctx.week}` : (ctx.round ? `Rodada ${ctx.round}` : "—")));
+      const roundLabel = (ctx.roundNumber ? `Rodada ${ctx.roundNumber}` : (ctx.week ? `Semana ${ctx.week}` : (ctx.round ? `Rodada ${ctx.round}` : "—")));
 
       const s = this.state.stats;
       const pHome = this._getPossessionPercent("home");
@@ -515,20 +449,13 @@
       const cardsAwayY = safeNum(this.state.cards.away.y);
       const cardsAwayR = safeNum(this.state.cards.away.r);
 
-      // momentos-chave: pega últimos eventos relevantes (filtra alguns)
       const rawEvents = Array.isArray(this.state.events) ? this.state.events.slice() : [];
       const filtered = rawEvents
         .filter(e => typeof e?.text === "string")
         .map(e => e.text)
         .filter(t =>
-          t.includes("⚽") ||
-          t.includes("🟥") ||
-          t.includes("🟨") ||
-          t.includes("🤕") ||
-          t.includes("🧤") ||
-          t.includes("🏁") ||
-          t.includes("⏸️") ||
-          t.includes("🚩")
+          t.includes("⚽") || t.includes("🟥") || t.includes("🟨") || t.includes("🤕") ||
+          t.includes("🧤") || t.includes("🏁") || t.includes("⏸️") || t.includes("🚩")
         );
 
       const moments = filtered.slice(-12).reverse().slice(0, 8).reverse();
@@ -536,8 +463,8 @@
       return {
         competitionName,
         roundLabel,
-        homeId,
-        awayId,
+        homeId: this.state.homeId,
+        awayId: this.state.awayId,
         goalsHome: safeNum(this.state.goalsHome),
         goalsAway: safeNum(this.state.goalsAway),
         motmText: (this.state.best?.team ? ((this.state.best.team === "home" ? "Casa" : "Visitante") + " • " + (this.state.best.reason || "Destaque")) : "—"),
@@ -554,13 +481,13 @@
           cornersAway: safeNum(s.away.corners),
           foulsHome: safeNum(s.home.fouls),
           foulsAway: safeNum(s.away.fouls),
-          cardsHomeY,
-          cardsHomeR,
-          cardsAwayY,
-          cardsAwayR
+          cardsHomeY, cardsHomeR, cardsAwayY, cardsAwayR
         },
         moments,
-        roundResults: Array.isArray(rodadaResultsOrNull) ? rodadaResultsOrNull : null
+        roundResults: Array.isArray(rodadaResultsOrNull) ? rodadaResultsOrNull : null,
+
+        // novo: quem jogou
+        played: this.state.played
       };
     },
 
@@ -577,14 +504,29 @@
 
       this.registrarEvento("🏁 Fim de jogo!");
 
-      // Processa a rodada da liga (se aplicável)
       let rodada = null;
       if (window.League && typeof League.processarRodadaComJogoDoUsuario === "function") {
         rodada = League.processarRodadaComJogoDoUsuario(homeId, awayId, golsHome, golsAway);
       }
 
-      // Cria relatório e abre tela AAA de pós-jogo
       const report = this._buildReport(rodada);
+
+      // ======== NOVO: dinâmica de jogadores + notícias ========
+      try {
+        if (window.Dynamics && typeof Dynamics.applyPostMatch === "function") {
+          const summary = Dynamics.applyPostMatch(report);
+          if (window.News && typeof News.addMatchNews === "function") {
+            News.addMatchNews(report, summary);
+          }
+        } else {
+          if (window.News && typeof News.addMatchNews === "function") {
+            News.addMatchNews(report, null);
+          }
+        }
+      } catch (e) {
+        console.warn("[Match] Falha em Dynamics/News:", e);
+      }
+      // =======================================================
 
       if (window.UI && typeof UI.abrirRelatorioPosJogo === "function") {
         UI.abrirRelatorioPosJogo(report);
@@ -595,12 +537,7 @@
         if (window.UI && typeof UI.voltarLobby === "function") UI.voltarLobby();
       }
 
-      // salva
-      try {
-        if (window.Save && typeof Save.salvar === "function") Save.salvar();
-      } catch (e) {}
-
-      // limpa contexto
+      try { if (window.Save && typeof Save.salvar === "function") Save.salvar(); } catch (e) {}
       try { window.currentMatchContext = null; } catch (e) {}
     },
 
@@ -612,8 +549,6 @@
         log.appendChild(linha);
         log.scrollTop = log.scrollHeight;
       }
-
-      // novo: guarda em memória para pós-jogo
       if (this.state && Array.isArray(this.state.events)) {
         this.state.events.push({ minute: this.state.minute || 0, text: texto });
       }
@@ -621,47 +556,8 @@
 
     substituicoes() {
       if (!this.state) return;
-      if (this.state.minute < 45) {
-        alert("Faça substituições pelo botão TÁTICAS antes do jogo ou no intervalo.");
-        return;
-      }
+      if (this.state.minute < 45) { alert("Faça substituições pelo botão TÁTICAS antes do jogo ou no intervalo."); return; }
       alert("No intervalo você pode abrir a tela de tática e salvar a nova escalação.");
     }
-  };
-
-  // Compatibilidade: se League preparar Match.state manualmente
-  const originalComecarLoop = window.Match.comecarLoop.bind(window.Match);
-  window.Match.comecarLoop = function () {
-    if (window.Match.state && !window.Match.state.stats) {
-      const homeId = window.Match.state.homeId;
-      const awayId = window.Match.state.awayId;
-
-      const userTeamId = getCurrentUserTeamId();
-      const isUserHome = userTeamId && userTeamId === homeId;
-      const isUserAway = userTeamId && userTeamId === awayId;
-
-      const homeForm = (isUserHome ? getUserFormation() : null) || "4-4-2";
-      const awayForm = (isUserAway ? getUserFormation() : null) || "4-4-2";
-
-      const homePow = computeSquadStrength(homeId, isUserHome);
-      const awayPow = computeSquadStrength(awayId, isUserAway);
-      const possBiasHome = computePossessionBias(homePow, awayPow, homeForm, awayForm);
-
-      window.Match.state.homePow = homePow;
-      window.Match.state.awayPow = awayPow;
-      window.Match.state.homeForm = homeForm;
-      window.Match.state.awayForm = awayForm;
-      window.Match.state.possBiasHome = possBiasHome;
-
-      window.Match.state.cards = window.Match.state.cards || { home: { y: 0, r: 0 }, away: { y: 0, r: 0 } };
-      window.Match.state.injuries = window.Match.state.injuries || [];
-      window.Match.state.stats = window.Match.state.stats || {
-        home: { possessionTicks: 0, shots: 0, shotsOn: 0, corners: 0, fouls: 0, xg: 0 },
-        away: { possessionTicks: 0, shots: 0, shotsOn: 0, corners: 0, fouls: 0, xg: 0 }
-      };
-      window.Match.state.best = window.Match.state.best || { team: null, note: 6.0, reason: "" };
-      window.Match.state.events = window.Match.state.events || [];
-    }
-    return originalComecarLoop();
   };
 })();
