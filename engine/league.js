@@ -1,392 +1,455 @@
-// engine/league.js
-// =======================================================
-// Sistema de Ligas – Série A e B
-// - Gera calendário (38 rodadas)
-// - Simula resultados
-// - Mantém classificação
-// - Suporta salvar/carregar do localStorage
-// =======================================================
+/* =======================================================
+   VALE FUTEBOL MANAGER 2026
+   engine/league.js — Série A/B (Tabela + Rodadas) AAA
+   -------------------------------------------------------
+   IMPORTANTE:
+   - Este engine atualiza APENAS jogos de LIGA (LEAGUE).
+   - Se o Match chamar processarRodadaComJogoDoUsuario()
+     durante COPA/ESTADUAL, este arquivo detecta o contexto
+     e NÃO mexe na tabela.
+
+   Compatibilidade (usos no projeto):
+   - League.startNewCareer()
+   - League.saveGameState()
+   - League.getCurrentRound()
+   - League.getCurrentTeam()
+   - League.getStandingsForCurrentDivision()
+   - League.prepararProximoJogo()
+   - League.playNextRoundForUserTeam()
+   - League.processarRodadaComJogoDoUsuario(homeId, awayId, golsHome, golsAway)
+
+   Estruturas em gameState.league:
+   {
+     standings: { A:[...], B:[...] },
+     round: { A:1, B:1 },
+     fixtures: { A:{1:[matches...] ...}, B:{...} }
+   }
+
+   Match format:
+   { homeId, awayId, played:false, goalsHome:0, goalsAway:0, date:null, roundNumber, division }
+   =======================================================*/
 
 (function () {
-  console.log("%c[League] league.js carregado", "color:#22c55e; font-weight:bold;");
+  console.log("%c[League] league.js (AAA) carregado", "color:#22c55e; font-weight:bold;");
 
-  const SAVE_KEY = "VFM2026_SAVE";
+  // -----------------------------
+  // Utils
+  // -----------------------------
+  function n(v, d = 0) { const x = Number(v); return isNaN(x) ? d : x; }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function rnd() { return Math.random(); }
 
-  // Garante que gameState exista
-  function ensureGameState() {
+  function ensureGS() {
     if (!window.gameState) window.gameState = {};
     const gs = window.gameState;
-
-    if (!gs.seasonYear) gs.seasonYear = 2026;
-    if (!gs.standings) gs.standings = { A: [], B: [] };
-    if (!gs.fixtures) gs.fixtures = { A: [], B: [] };
-    if (gs.currentRoundA == null) gs.currentRoundA = 1;
-    if (gs.currentRoundB == null) gs.currentRoundB = 1;
-    if (!gs.currentTeamId && window.Game && Game.teamId) {
-      gs.currentTeamId = Game.teamId;
-    }
+    if (!gs.league || typeof gs.league !== "object") gs.league = {};
+    const lg = gs.league;
+    if (!lg.standings || typeof lg.standings !== "object") lg.standings = { A: [], B: [] };
+    if (!lg.round || typeof lg.round !== "object") lg.round = { A: 1, B: 1 };
+    if (!lg.fixtures || typeof lg.fixtures !== "object") lg.fixtures = { A: {}, B: {} };
     return gs;
   }
 
-  function saveGameState() {
-    try {
-      localStorage.setItem(SAVE_KEY, JSON.stringify(window.gameState));
-    } catch (e) {
-      console.warn("[League] Falha ao salvar no localStorage:", e);
-    }
+  function getTeams() {
+    return (window.Database && Array.isArray(Database.teams)) ? Database.teams : [];
   }
 
-  function loadGameState() {
-    try {
-      const raw = localStorage.getItem(SAVE_KEY);
-      if (!raw) return ensureGameState();
-      window.gameState = JSON.parse(raw) || {};
-    } catch (e) {
-      console.warn("[League] Falha ao carregar save:", e);
-    }
-    return ensureGameState();
+  function getTeamById(id) {
+    return getTeams().find(t => String(t.id) === String(id)) || null;
   }
 
-  // ---------------------------------------------------
-  // GERAÇÃO DO CALENDÁRIO (ROUND-ROBIN DUPLO)
-  // ---------------------------------------------------
-  function generateSingleRoundRobin(teamIds, division) {
-    const arr = [...teamIds];
-    const n = arr.length;
-    if (n % 2 === 1) arr.push(null); // não deve acontecer aqui (20 times), mas por segurança.
-
-    const rounds = [];
-    const m = arr.length;
-
-    for (let r = 0; r < m - 1; r++) {
-      const matches = [];
-      for (let i = 0; i < m / 2; i++) {
-        const home = arr[i];
-        const away = arr[m - 1 - i];
-        if (home && away) {
-          matches.push({
-            division,
-            homeId: home,
-            awayId: away,
-            goalsHome: null,
-            goalsAway: null,
-            played: false,
-          });
-        }
-      }
-
-      rounds.push(matches);
-
-      // Rotação estilo "ciclo"
-      const fixed = arr[0];
-      const rest = arr.slice(1);
-      rest.unshift(rest.pop());
-      arr.splice(1, rest.length, ...rest);
-    }
-    return rounds;
+  function getUserTeamId() {
+    const gs = ensureGS();
+    return gs.currentTeamId || gs.selectedTeamId || (window.Game ? Game.teamId : null);
   }
 
-  function generateFullSeason(teamIds, division) {
-    const firstHalf = generateSingleRoundRobin(teamIds, division);
-    const secondHalf = firstHalf.map((rodada) =>
-      rodada.map((m) => ({
-        division,
-        homeId: m.awayId,
-        awayId: m.homeId,
-        goalsHome: null,
-        goalsAway: null,
-        played: false,
-      }))
-    );
-    return firstHalf.concat(secondHalf); // 38 rodadas
+  function getDivision(teamId) {
+    const t = getTeamById(teamId);
+    return String(t?.division || t?.serie || "A").toUpperCase();
   }
 
-  function ensureFixtures() {
-    ensureGameState();
-    const gs = window.gameState;
+  function ensureStandingsForDiv(div) {
+    const gs = ensureGS();
+    const lg = gs.league;
 
-    ["A", "B"].forEach((div) => {
-      if (!gs.fixtures[div] || !gs.fixtures[div].length) {
-        const ids = (window.Database?.teams || teams).filter((t) => t.division === div).map((t) => t.id);
-        gs.fixtures[div] = generateFullSeason(ids, div);
-      }
-    });
+    const teams = getTeams().filter(t => String(t.division || t.serie || "A").toUpperCase() === div);
+    if (!teams.length) return;
 
-    saveGameState();
-  }
-
-  // ---------------------------------------------------
-  // CLASSIFICAÇÃO
-  // ---------------------------------------------------
-  function ensureStandings(division) {
-    ensureGameState();
-    const gs = window.gameState;
-
-    if (!Array.isArray(gs.standings[division]) || !gs.standings[division].length) {
-      const base = (window.Database?.teams || teams)
-        .filter((t) => t.division === division)
-        .map((t) => ({
-          teamId: t.id,
-          name: t.name,
-          pts: 0,
-          j: 0,
-          v: 0,
-          e: 0,
-          d: 0,
-          gp: 0,
-          gc: 0,
-          sg: 0,
-        }));
-      gs.standings[division] = base;
-    }
-  }
-
-  function getStandingRow(division, teamId) {
-    ensureStandings(division);
-    const gs = window.gameState;
-    let row = gs.standings[division].find((r) => r.teamId === teamId);
-    if (!row) {
-      const team = (window.Database?.teams || teams).find((t) => t.id === teamId);
-      row = {
-        teamId,
-        name: team ? team.name : teamId,
-        pts: 0,
-        j: 0,
-        v: 0,
-        e: 0,
+    if (!Array.isArray(lg.standings[div]) || lg.standings[div].length !== teams.length) {
+      lg.standings[div] = teams.map(t => ({
+        id: t.id,
+        name: t.name,
+        pld: 0,
+        w: 0,
         d: 0,
-        gp: 0,
-        gc: 0,
-        sg: 0,
-      };
-      gs.standings[division].push(row);
-    }
-    return row;
-  }
-
-  function applyResultToStandings(division, homeId, awayId, gH, gA) {
-    ensureStandings(division);
-    const rowH = getStandingRow(division, homeId);
-    const rowA = getStandingRow(division, awayId);
-
-    rowH.j += 1;
-    rowA.j += 1;
-    rowH.gp += gH;
-    rowH.gc += gA;
-    rowA.gp += gA;
-    rowA.gc += gH;
-    rowH.sg = rowH.gp - rowH.gc;
-    rowA.sg = rowA.gp - rowA.gc;
-
-    if (gH > gA) {
-      rowH.v += 1;
-      rowA.d += 1;
-      rowH.pts += 3;
-    } else if (gH < gA) {
-      rowA.v += 1;
-      rowH.d += 1;
-      rowA.pts += 3;
-    } else {
-      rowH.e += 1;
-      rowA.e += 1;
-      rowH.pts += 1;
-      rowA.pts += 1;
+        l: 0,
+        gf: 0,
+        ga: 0,
+        gd: 0,
+        pts: 0
+      }));
     }
   }
 
-  function recomputeStandingsFromFixtures(division) {
-    ensureStandings(division);
-    const gs = window.gameState;
+  function sortStandings(div) {
+    const gs = ensureGS();
+    const st = gs.league.standings[div] || [];
+    st.forEach(r => { r.gd = n(r.gf, 0) - n(r.ga, 0); });
 
-    // Zera
-    gs.standings[division].forEach((r) => {
-      r.pts = r.j = r.v = r.e = r.d = r.gp = r.gc = r.sg = 0;
-    });
-
-    const fixturesDiv = gs.fixtures[division] || [];
-    fixturesDiv.forEach((rodada) => {
-      rodada.forEach((m) => {
-        if (m.played && m.goalsHome != null && m.goalsAway != null) {
-          applyResultToStandings(division, m.homeId, m.awayId, m.goalsHome, m.goalsAway);
-        }
-      });
-    });
-  }
-
-  function sortStandings(division) {
-    ensureStandings(division);
-    const gs = window.gameState;
-    gs.standings[division].sort((a, b) => {
+    st.sort((a, b) => {
       if (b.pts !== a.pts) return b.pts - a.pts;
-      const sgA = a.sg;
-      const sgB = b.sg;
-      if (sgB !== sgA) return sgB - sgA;
-      if (b.gp !== a.gp) return b.gp - a.gp;
-      return a.name.localeCompare(b.name);
+      if (b.gd !== a.gd) return b.gd - a.gd;
+      if (b.gf !== a.gf) return b.gf - a.gf;
+      return String(a.name).localeCompare(String(b.name));
     });
-    gs.standings[division].forEach((r, idx) => (r.position = idx + 1));
+    return st;
   }
 
-  // ---------------------------------------------------
-  // FORÇA DOS TIMES E SIMULAÇÃO
-  // ---------------------------------------------------
-  function getTeamStrength(teamId) {
-    const elenco = (window.Database?.carregarElencoDoTime)
-      ? Database.carregarElencoDoTime(teamId)
-      : (window.Database?.players || players).filter((p) => p.teamId === teamId);
+  // -----------------------------
+  // Fixtures (rodadas)
+  // - Gerador simples e leve (não é round-robin perfeito, mas estável)
+  // - Cada rodada tenta formar pares sem repetir demais
+  // -----------------------------
+  function ensureFixtures(div) {
+    const gs = ensureGS();
+    const lg = gs.league;
 
-    if (!elenco.length) return 70;
-    const ordenado = [...elenco].sort((a, b) => (b.overall || 70) - (a.overall || 70));
-    const titulares = ordenado.slice(0, 11);
-    const soma = titulares.reduce((acc, p) => acc + (p.overall || 70), 0);
-    return soma / titulares.length;
-  }
+    ensureStandingsForDiv(div);
 
-  function randGoals(base) {
-    // base ~1.0–3.0
-    const r = Math.random();
-    let g = 0;
-    if (r < 0.20) g = 0;
-    else if (r < 0.50) g = 1;
-    else if (r < 0.75) g = 2;
-    else if (r < 0.93) g = 3;
-    else g = 4;
+    const st = lg.standings[div] || [];
+    const teamIds = st.map(r => r.id);
 
-    if (base > 2.3 && Math.random() < 0.35) g += 1;
-    if (base < 1.0 && Math.random() < 0.4 && g > 0) g -= 1;
-    if (g < 0) g = 0;
-    return g;
-  }
+    if (!lg.fixtures[div]) lg.fixtures[div] = {};
+    if (!lg.round[div]) lg.round[div] = 1;
 
-  function simulateMatch(division, m) {
-    const strH = getTeamStrength(m.homeId);
-    const strA = getTeamStrength(m.awayId);
-    const diff = (strH - strA) / 10; // +- ~1
-    const base = 1.6;
+    // gera até 38 rodadas (Série A/B)
+    const roundsTarget = 38;
+    const existing = lg.fixtures[div];
 
-    const baseH = Math.max(0.5, base + diff * 0.7);
-    const baseA = Math.max(0.5, base - diff * 0.7);
-
-    const gH = randGoals(baseH);
-    const gA = randGoals(baseA);
-
-    m.goalsHome = gH;
-    m.goalsAway = gA;
-    m.played = true;
-
-    applyResultToStandings(division, m.homeId, m.awayId, gH, gA);
-  }
-
-  // ---------------------------------------------------
-  // UTILITÁRIOS PÚBLICOS
-  // ---------------------------------------------------
-  function getCurrentTeam() {
-    const gs = ensureGameState();
-    const id = gs.currentTeamId || (window.Game && Game.teamId);
-    if (!id) return null;
-    const lista = window.Database?.teams || teams;
-    return lista.find((t) => t.id === id) || null;
-  }
-
-  function getCurrentRound(division) {
-    ensureGameState();
-    const gs = window.gameState;
-    return division === "B" ? gs.currentRoundB || 1 : gs.currentRoundA || 1;
-  }
-
-  function setCurrentRound(division, round) {
-    ensureGameState();
-    const gs = window.gameState;
-    if (division === "B") gs.currentRoundB = round;
-    else gs.currentRoundA = round;
-  }
-
-  function getCalendarForDivision(division) {
-    ensureFixtures();
-    const gs = window.gameState;
-    const baseDate = new Date(gs.seasonYear, 3, 6); // 6 de abril (só pra ter datas)
-    const msPerRound = 4 * 24 * 60 * 60 * 1000; // a cada 4 dias
-
-    return (gs.fixtures[division] || []).map((rodada, idx) => {
-      const d = new Date(baseDate.getTime() + idx * msPerRound);
-      const dia = String(d.getDate()).padStart(2, "0");
-      const mes = String(d.getMonth() + 1).padStart(2, "0");
-      const ano = d.getFullYear();
-      return {
-        round: idx + 1,
-        date: `${dia}/${mes}/${ano}`,
-        matches: rodada,
-      };
-    });
-  }
-
-  function getStandingsForCurrentDivision(division) {
-    ensureFixtures();
-    recomputeStandingsFromFixtures(division);
-    sortStandings(division);
-    // devolve uma cópia pra UI
-    return (window.gameState.standings[division] || []).map((r) => ({ ...r }));
-  }
-
-  function playNextRoundForUserTeam() {
-    ensureFixtures();
-    const gs = window.gameState;
-    const team = getCurrentTeam();
-    if (!team) {
-      console.warn("[League] Nenhum time selecionado para o usuário.");
-      return null;
-    }
-    const div = team.division || "A";
-    const round = getCurrentRound(div);
-    const fixturesDiv = gs.fixtures[div] || [];
-    if (round > fixturesDiv.length) {
-      console.log("[League] Temporada encerrada nessa divisão.");
-      return null;
+    // contagem de confrontos para evitar repetição excessiva
+    const pairCount = {};
+    function pairKey(a, b) {
+      const x = String(a), y = String(b);
+      return x < y ? `${x}_${y}` : `${y}_${x}`;
     }
 
-    const rodada = fixturesDiv[round - 1];
-
-    // Simula TODOS os jogos da rodada (incluindo o do usuário)
-    rodada.forEach((m) => {
-      if (!m.played) simulateMatch(div, m);
+    // se já tem fixtures, alimentar pairCount
+    Object.keys(existing).forEach(rk => {
+      const arr = existing[rk];
+      if (Array.isArray(arr)) {
+        arr.forEach(m => {
+          const k = pairKey(m.homeId, m.awayId);
+          pairCount[k] = (pairCount[k] || 0) + 1;
+        });
+      }
     });
 
-    setCurrentRound(div, round + 1);
-    saveGameState();
-    return rodada;
+    for (let r = 1; r <= roundsTarget; r++) {
+      if (Array.isArray(existing[r]) && existing[r].length) continue;
+
+      const remaining = teamIds.slice();
+      // embaralha levemente
+      for (let i = remaining.length - 1; i > 0; i--) {
+        const j = Math.floor(rnd() * (i + 1));
+        [remaining[i], remaining[j]] = [remaining[j], remaining[i]];
+      }
+
+      const matches = [];
+
+      while (remaining.length >= 2) {
+        const home = remaining.shift();
+        // escolhe oponente com menor repetição
+        let bestIdx = 0;
+        let bestScore = 999;
+
+        for (let i = 0; i < remaining.length; i++) {
+          const away = remaining[i];
+          const k = pairKey(home, away);
+          const score = pairCount[k] || 0;
+          if (score < bestScore) {
+            bestScore = score;
+            bestIdx = i;
+          }
+        }
+
+        const away = remaining.splice(bestIdx, 1)[0];
+        const k = pairKey(home, away);
+        pairCount[k] = (pairCount[k] || 0) + 1;
+
+        matches.push({
+          homeId: home,
+          awayId: away,
+          played: false,
+          goalsHome: 0,
+          goalsAway: 0,
+          date: null,
+          roundNumber: r,
+          division: div
+        });
+      }
+
+      existing[r] = matches;
+    }
   }
 
-  function startNewCareer(teamId) {
-    console.log("[League] Iniciando nova carreira para", teamId);
-    window.gameState = {
-      seasonYear: 2026,
-      currentTeamId: teamId,
-      standings: { A: [], B: [] },
-      fixtures: { A: [], B: [] },
-      currentRoundA: 1,
-      currentRoundB: 1,
+  // -----------------------------
+  // Resultado simulado (IA)
+  // -----------------------------
+  function simulateScore() {
+    // placar simples e estável
+    const baseHome = 0.85;
+    const baseAway = 0.65;
+
+    const gh = Math.max(0, Math.round((rnd() + rnd()) * baseHome));
+    const ga = Math.max(0, Math.round((rnd() + rnd()) * baseAway));
+
+    // chance pequena de goleada
+    if (rnd() < 0.06) return { gh: gh + Math.floor(rnd() * 3), ga };
+    if (rnd() < 0.05) return { gh, ga: ga + Math.floor(rnd() * 3) };
+    return { gh, ga };
+  }
+
+  // -----------------------------
+  // Aplicar resultado na tabela
+  // -----------------------------
+  function applyResultToStandings(div, homeId, awayId, gh, ga) {
+    const gs = ensureGS();
+    ensureStandingsForDiv(div);
+
+    const st = gs.league.standings[div] || [];
+    const h = st.find(r => String(r.id) === String(homeId));
+    const a = st.find(r => String(r.id) === String(awayId));
+    if (!h || !a) return;
+
+    h.pld += 1; a.pld += 1;
+    h.gf += gh; h.ga += ga;
+    a.gf += ga; a.ga += gh;
+
+    if (gh > ga) { h.w += 1; a.l += 1; h.pts += 3; }
+    else if (gh < ga) { a.w += 1; h.l += 1; a.pts += 3; }
+    else { h.d += 1; a.d += 1; h.pts += 1; a.pts += 1; }
+
+    sortStandings(div);
+  }
+
+  // -----------------------------
+  // Filtro de contexto: só LEAGUE atualiza
+  // -----------------------------
+  function isLeagueContext() {
+    const ctx = window.currentMatchContext || {};
+    const comp = String(ctx.competition || ctx.comp || ctx.type || "").toUpperCase();
+    if (!comp) return true; // se não tiver contexto, assume liga (compat)
+    return comp === "LEAGUE";
+  }
+
+  // -----------------------------
+  // Preparar próximo jogo (fallback quando Calendar não existir)
+  // -----------------------------
+  function prepararProximoJogo() {
+    const teamId = getUserTeamId();
+    if (!teamId) return null;
+
+    const div = getDivision(teamId);
+    ensureFixtures(div);
+
+    const gs = ensureGS();
+    const lg = gs.league;
+    const round = n(lg.round[div], 1);
+    const fixturesRound = lg.fixtures[div][round] || [];
+
+    const m = fixturesRound.find(x => String(x.homeId) === String(teamId) || String(x.awayId) === String(teamId)) || null;
+    if (!m) return null;
+
+    return {
+      homeId: m.homeId,
+      awayId: m.awayId,
+      roundNumber: m.roundNumber,
+      division: div,
+      competitionName: `Campeonato Brasileiro Série ${div}`,
+      date: m.date || null
     };
-    ensureFixtures();
-    ensureStandings("A");
-    ensureStandings("B");
-    saveGameState();
   }
 
-  // Inicializa carregando save (se houver)
-  loadGameState();
-  ensureFixtures();
-  ensureStandings("A");
-  ensureStandings("B");
+  // -----------------------------
+  // Processar rodada quando o usuário joga (chamado pelo Match)
+  // - se não for LEAGUE, retorna null e NÃO muda nada
+  // -----------------------------
+  function processarRodadaComJogoDoUsuario(homeId, awayId, golsHome, golsAway) {
+    ensureGS();
 
-  // Expor API
+    if (!isLeagueContext()) {
+      // Jogo era Copa/Estadual: não mexer na tabela
+      return null;
+    }
+
+    const div = getDivision(homeId);
+    ensureFixtures(div);
+
+    const gs = ensureGS();
+    const lg = gs.league;
+    const round = n(lg.round[div], 1);
+    const fixturesRound = lg.fixtures[div][round] || [];
+
+    // marca jogo do usuário
+    let found = false;
+    for (const m of fixturesRound) {
+      const same = (String(m.homeId) === String(homeId) && String(m.awayId) === String(awayId)) ||
+                   (String(m.homeId) === String(awayId) && String(m.awayId) === String(homeId));
+      if (same) {
+        // respeitar mando
+        if (String(m.homeId) === String(homeId)) {
+          m.goalsHome = n(golsHome, 0);
+          m.goalsAway = n(golsAway, 0);
+          applyResultToStandings(div, homeId, awayId, n(golsHome, 0), n(golsAway, 0));
+        } else {
+          // usuário passou invertido
+          m.goalsHome = n(golsAway, 0);
+          m.goalsAway = n(golsHome, 0);
+          applyResultToStandings(div, m.homeId, m.awayId, m.goalsHome, m.goalsAway);
+        }
+        m.played = true;
+        found = true;
+        break;
+      }
+    }
+
+    // se não encontrou (caso calendário gerou match fora das fixtures),
+    // ainda assim aplicar o resultado na tabela
+    if (!found) {
+      applyResultToStandings(div, homeId, awayId, n(golsHome, 0), n(golsAway, 0));
+    }
+
+    // simula outros jogos da rodada
+    const roundResults = [];
+    for (const m of fixturesRound) {
+      if (m.played) {
+        roundResults.push({ homeId: m.homeId, awayId: m.awayId, golsHome: n(m.goalsHome, 0), golsAway: n(m.goalsAway, 0) });
+        continue;
+      }
+      const s = simulateScore();
+      m.goalsHome = s.gh;
+      m.goalsAway = s.ga;
+      m.played = true;
+
+      applyResultToStandings(div, m.homeId, m.awayId, s.gh, s.ga);
+      roundResults.push({ homeId: m.homeId, awayId: m.awayId, golsHome: s.gh, golsAway: s.ga });
+    }
+
+    // avança rodada
+    lg.round[div] = round + 1;
+
+    // salva
+    try { if (window.Save && typeof Save.salvar === "function") Save.salvar(); } catch (e) {}
+
+    return roundResults;
+  }
+
+  // -----------------------------
+  // Jogar próxima rodada automaticamente (simulação)
+  // -----------------------------
+  function playNextRoundForUserTeam() {
+    const teamId = getUserTeamId();
+    if (!teamId) return null;
+
+    const div = getDivision(teamId);
+    ensureFixtures(div);
+
+    const gs = ensureGS();
+    const lg = gs.league;
+    const round = n(lg.round[div], 1);
+    const fixturesRound = lg.fixtures[div][round] || [];
+    if (!fixturesRound.length) return null;
+
+    // simula todos
+    const results = [];
+    for (const m of fixturesRound) {
+      if (m.played) continue;
+      const s = simulateScore();
+      m.goalsHome = s.gh;
+      m.goalsAway = s.ga;
+      m.played = true;
+      applyResultToStandings(div, m.homeId, m.awayId, s.gh, s.ga);
+      results.push({ homeId: m.homeId, awayId: m.awayId, golsHome: s.gh, golsAway: s.ga });
+    }
+
+    lg.round[div] = round + 1;
+    try { if (window.Save && typeof Save.salvar === "function") Save.salvar(); } catch (e) {}
+    return results;
+  }
+
+  // -----------------------------
+  // Standings atuais
+  // -----------------------------
+  function getStandingsForCurrentDivision() {
+    const teamId = getUserTeamId();
+    if (!teamId) return [];
+    const div = getDivision(teamId);
+    ensureStandingsForDiv(div);
+    ensureFixtures(div);
+    return sortStandings(div).map(x => Object.assign({}, x));
+  }
+
+  function getCurrentRound() {
+    const teamId = getUserTeamId();
+    if (!teamId) return 1;
+    const gs = ensureGS();
+    const div = getDivision(teamId);
+    ensureFixtures(div);
+    return n(gs.league.round[div], 1);
+  }
+
+  function getCurrentTeam() {
+    const teamId = getUserTeamId();
+    if (!teamId) return null;
+    return getTeamById(teamId);
+  }
+
+  // -----------------------------
+  // Carreira
+  // -----------------------------
+  function startNewCareer(teamId) {
+    const gs = ensureGS();
+    if (teamId) {
+      gs.selectedTeamId = teamId;
+      gs.currentTeamId = teamId;
+      if (window.Game) Game.teamId = teamId;
+    }
+
+    // reset liga
+    gs.league = { standings: { A: [], B: [] }, round: { A: 1, B: 1 }, fixtures: { A: {}, B: {} } };
+
+    // cria standings e fixtures para A e B (se existirem)
+    ensureStandingsForDiv("A");
+    ensureStandingsForDiv("B");
+    ensureFixtures("A");
+    ensureFixtures("B");
+
+    try { if (window.Save && typeof Save.salvar === "function") Save.salvar(); } catch (e) {}
+    return true;
+  }
+
+  function saveGameState() {
+    try { if (window.Save && typeof Save.salvar === "function") Save.salvar(); return true; } catch (e) {}
+    return false;
+  }
+
+  // ----------------------------------------------------
+  // API pública
+  // ----------------------------------------------------
   window.League = {
-    loadGameState,
-    saveGameState,
+    // compat / util
     ensureFixtures,
-    getCalendarForDivision,
-    getStandingsForCurrentDivision,
+
+    // interface usada no projeto
     getCurrentRound,
+    getCurrentTeam,
+    getStandingsForCurrentDivision,
     playNextRoundForUserTeam,
     startNewCareer,
+    saveGameState,
+
+    // integração Match
+    prepararProximoJogo,
+    processarRodadaComJogoDoUsuario
   };
 })();
