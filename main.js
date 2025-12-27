@@ -1,6 +1,6 @@
 /* =======================================================
    VALE FUTEBOL MANAGER 2026
-   main.js — Inicialização + Lobby AAA + feed de notícias real
+   main.js — Inicialização + Lobby AAA (Saldo + Folha)
    =======================================================*/
 
 console.log("%c[MAIN] Vale Futebol Manager 2026 carregado", "color:#C7A029; font-size:16px; font-weight:bold");
@@ -30,8 +30,14 @@ function getDivisionForTeam(team) {
 
 function fmtMoneyMi(val) {
   const n = Number(val);
-  if (isNaN(n)) return "0 mi";
+  if (isNaN(n)) return "0.0 mi";
   return `${n.toFixed(1)} mi`;
+}
+
+function fmtMoneyMi2(val) {
+  const n = Number(val);
+  if (isNaN(n)) return "0.00 mi";
+  return `${n.toFixed(2)} mi`;
 }
 
 function safeText(el, txt) {
@@ -83,10 +89,7 @@ function configurarBotoes() {
     btnContinuar.onclick = () => {
       if (window.Save && typeof Save.carregar === "function") {
         const ok = Save.carregar();
-        if (!ok) {
-          alert("Não foi possível carregar o save.");
-          return;
-        }
+        if (!ok) { alert("Não foi possível carregar o save."); return; }
       }
       carregarLobbyAAA();
       mostrarTela("tela-lobby");
@@ -257,9 +260,6 @@ function renderRegionalsSummary() {
   });
 }
 
-/* =======================================================
-   Notícias do Lobby: agora vem do gameState.newsFeed (AAA)
-   =======================================================*/
 function renderNews(teamId, division) {
   const box = document.getElementById("lobby-news");
   if (!box) return;
@@ -268,7 +268,6 @@ function renderNews(teamId, division) {
   const gs = window.gameState || {};
   const feed = Array.isArray(gs.newsFeed) ? gs.newsFeed : [];
 
-  // Se existir feed real, mostra ele
   if (feed.length) {
     const slice = feed.slice().reverse().slice(0, 6);
     slice.forEach((n) => {
@@ -286,7 +285,6 @@ function renderNews(teamId, division) {
     return;
   }
 
-  // Fallback (se ainda não gerou feed)
   const items = [];
   const phase = getPhaseLabel();
   if (phase === "ESTADUAIS") items.push(`Estaduais começaram! Foque em moral e ritmo.`);
@@ -313,24 +311,34 @@ function carregarLobbyAAA() {
     return;
   }
 
-  const teamId = gs.selectedTeamId || Game.teamId;
+  const teamId = gs.selectedTeamId || gs.currentTeamId || (window.Game ? Game.teamId : null);
   const team = getTeamById(teamId);
-  if (!team) {
-    console.error("[MAIN] Time inválido no lobby:", teamId);
-    return;
-  }
+  if (!team) { console.error("[MAIN] Time inválido no lobby:", teamId); return; }
 
+  // garante coerência
   if (window.Game) Game.teamId = teamId;
   if (window.gameState) gameState.currentTeamId = teamId;
 
-  // garante estruturas novas
-  if (window.Dynamics && typeof Dynamics.ensure === "function") Dynamics.ensure();
-  if (window.News && typeof News.ensure === "function") News.ensure();
+  // garante sistemas
+  try { if (window.Dynamics && typeof Dynamics.ensure === "function") Dynamics.ensure(); } catch (e) {}
+  try { if (window.News && typeof News.ensure === "function") News.ensure(); } catch (e) {}
+  try { if (window.Contracts && typeof Contracts.ensure === "function") Contracts.ensure(); } catch (e) {}
+
+  // recalcula folha do usuário (mostra no lobby)
+  let wageUsed = 0, wageBudget = 0;
+  try {
+    if (window.Contracts && typeof Contracts.recalcWageUsed === "function") Contracts.recalcWageUsed(teamId);
+    if (window.Contracts && typeof Contracts.getClubFinance === "function") {
+      const cf = Contracts.getClubFinance(teamId);
+      wageUsed = Number(cf?.wageUsed ?? 0);
+      wageBudget = Number(cf?.wageBudget ?? 0);
+    }
+  } catch (e) {}
 
   safeText(document.getElementById("lobby-nome-time"), team.name);
 
   const bal = (gs.balance != null ? gs.balance : (window.Game ? Game.saldo : 0));
-  safeText(document.getElementById("lobby-saldo"), "Saldo: " + fmtMoneyMi(bal));
+  safeText(document.getElementById("lobby-saldo"), `Saldo: ${fmtMoneyMi(bal)}  •  Folha: ${fmtMoneyMi2(wageUsed)} / ${fmtMoneyMi2(wageBudget)} mi/mês`);
   safeText(document.getElementById("lobby-temporada"), "Temporada: " + (gs.seasonYear ?? 2025));
 
   const lobbyLogo = document.getElementById("lobby-logo");
@@ -352,6 +360,15 @@ function carregarLobbyAAA() {
   renderMiniTable(teamId, division);
   renderRegionalsSummary();
   renderNews(teamId, division);
+
+  // alerta visual no saldo (se negativo)
+  if (n(bal, 0) < 0) {
+    try {
+      if (window.News && typeof News.pushNews === "function") {
+        News.pushNews("Crise financeira!", `Seu saldo está negativo (${fmtMoneyMi(bal)}). Venda jogadores e reduza salários.`, "FINANCE");
+      }
+    } catch (e) {}
+  }
 }
 
 /* =======================================================
