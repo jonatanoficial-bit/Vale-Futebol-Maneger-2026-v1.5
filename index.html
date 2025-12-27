@@ -5,13 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vale Futebol Manager 2026</title>
 
-    <!-- Fonte EA Sports Style -->
+    <!-- Fonte -->
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700;900&display=swap" rel="stylesheet">
 
-    <!-- CSS -->
+    <!-- CSS base -->
     <link rel="stylesheet" href="style.css">
-    <!-- AAA UI Add-on (novo) -->
+
+    <!-- AAA UI (lobby premium) -->
     <link rel="stylesheet" href="aaa.css">
+
+    <!-- Match Center AAA (painel lateral ao vivo) -->
+    <link rel="stylesheet" href="match-center.css">
 </head>
 <body>
 
@@ -168,7 +172,7 @@
     </section>
 
     <!-- =========================
-         TELA 8 – PARTIDA
+         TELA 8 – PARTIDA (COM MATCH CENTER AAA)
          ========================= -->
     <section id="tela-partida" class="tela">
         <div class="placar-area">
@@ -187,6 +191,47 @@
             <div class="time-area">
                 <span id="partida-away"></span>
                 <img id="logo-away" class="logo-time" alt="Logo Away">
+            </div>
+        </div>
+
+        <!-- MATCH CENTER AAA (painel lateral ao vivo) -->
+        <div class="match-center">
+            <h3>ESTATÍSTICAS</h3>
+
+            <div class="mc-row">
+                <div id="mc-posse-home" class="mc-home">50%</div>
+                <div class="mc-label">POSSE</div>
+                <div id="mc-posse-away" class="mc-away">50%</div>
+            </div>
+
+            <div class="mc-row">
+                <div id="mc-chutes-home" class="mc-home">0</div>
+                <div class="mc-label">CHUTES</div>
+                <div id="mc-chutes-away" class="mc-away">0</div>
+            </div>
+
+            <div class="mc-row">
+                <div id="mc-alvo-home" class="mc-home">0</div>
+                <div class="mc-label">NO ALVO</div>
+                <div id="mc-alvo-away" class="mc-away">0</div>
+            </div>
+
+            <div class="mc-row">
+                <div id="mc-xg-home" class="mc-home">0.00</div>
+                <div class="mc-label">xG</div>
+                <div id="mc-xg-away" class="mc-away">0.00</div>
+            </div>
+
+            <div class="mc-row">
+                <div id="mc-esc-home" class="mc-home">0</div>
+                <div class="mc-label">ESC</div>
+                <div id="mc-esc-away" class="mc-away">0</div>
+            </div>
+
+            <div class="mc-row">
+                <div id="mc-faltas-home" class="mc-home">0</div>
+                <div class="mc-label">FALTAS</div>
+                <div id="mc-faltas-away" class="mc-away">0</div>
             </div>
         </div>
 
@@ -226,15 +271,11 @@
     <script defer src="engine/cup.js"></script>
     <script defer src="engine/cup_integration.js"></script>
 
-    <!-- Estaduais (novo) -->
+    <!-- Estaduais -->
     <script defer src="engine/regionals.js"></script>
     <script defer src="engine/regionals_integration.js"></script>
 
-    <!-- UI -->
-    <!-- Use the correct case for the UI folder.  On
-         case-sensitive file systems like Linux the
-         directory name "Ui" (capital U) must be referenced
-         exactly to load the scripts. -->
+    <!-- UI (pasta Ui com U maiúsculo) -->
     <script defer src="Ui/ui.js"></script>
     <script defer src="Ui/league-ui.js"></script>
     <script defer src="Ui/market-ui.js"></script>
@@ -242,7 +283,10 @@
     <script defer src="Ui/tactics-ui.js"></script>
     <script defer src="Ui/calendar-ui.js"></script>
 
-    <!-- MAIN (por último) -->
+    <!-- Match Center UI -->
+    <script defer src="Ui/match-center-ui.js"></script>
+
+    <!-- MAIN por último -->
     <script defer src="main.js"></script>
 
 </body>
