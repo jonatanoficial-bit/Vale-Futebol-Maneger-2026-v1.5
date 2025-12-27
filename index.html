@@ -56,7 +56,7 @@
                     <button class="btn-blue"  onclick="UI.abrirMercado()">MERCADO</button>
                     <button class="btn-blue"  onclick="UI.abrirCalendarioAnual()">CALENDÁRIO</button>
                     <button class="btn-blue"  onclick="UI.abrirTaticas()">TÁTICAS</button>
-                    <!-- botão TREINO será injetado via JS (TrainingUI) -->
+                    <!-- botão TREINO é injetado via JS (engine/training.js) -->
                     <button class="btn-blue"  onclick="UI.salvarCarreira()">SALVAR (JSON)</button>
                 </div>
             </div>
@@ -314,10 +314,13 @@
     <script defer src="engine/database.js"></script>
     <script defer src="engine/save.js"></script>
 
-    <!-- NOVO: contratos/salários -->
+    <!-- Contratos/salários -->
     <script defer src="engine/contracts.js"></script>
 
-    <!-- NOVO: treino (engine + UI modal) -->
+    <!-- Fitness (LESÕES/SUSPENSÕES/FADIGA) -->
+    <script defer src="engine/fitness.js"></script>
+
+    <!-- Treino (engine + UI modal) -->
     <script defer src="engine/training.js"></script>
 
     <!-- dinâmica + notícias -->
