@@ -1,42 +1,63 @@
 /* =======================================================
    VALE FUTEBOL MANAGER 2026
-   engine/market.js — Mercado + Integração Contratos/Salários
+   engine/market.js — Mercado AAA (FFP/Wage Cap/Negociação Simples)
    -------------------------------------------------------
-   Este arquivo entrega 2 camadas:
-   - window.Market (engine): filtros + compra
-   - window.MarketUI (UI): renderiza a tela #lista-mercado
+   Objetivo:
+   - Fornecer uma base robusta de mercado estilo manager:
+     • Lista de mercado (free agents + jogadores de outros clubes)
+     • Preço de transferência (estimado por OVR + idade opcional)
+     • Contratação com checagem de Wage Cap (FFP)
+     • Integração com Contracts (wageMi, monthsLeft) quando existir
+     • Integração com News + Save quando existir
+   - Fallback seguro se algum módulo não existir
 
-   Compatibilidade:
-   - Ui/market-ui.js (wrapper) pode chamar MarketUI.renderMarket()
-   - Se existir Game.saldo legado, usamos gameState.balance como fonte real
+   API exposta:
+   - Market.ensure()
+   - Market.getMarketList(options?)
+   - Market.signPlayer(teamId, playerId, offer?)
+   - Market.buyPlayer(teamId, playerId, offer?)  // alias
+   - Market.getAskingPrice(playerId)
+   - Market.estimateWageMi(playerId)
+   - Market.canAffordWage(teamId, wageMi)
+   - Market.getTeamMoney(teamId)
+   - Market.setTeamMoney(teamId, moneyMi)
+   - Market.releasePlayer(playerId)  // vira free agent (teamId=0)
+
+   Convenções:
+   - Valores monetários em "milhões" (mi)
+   - Wage cap: se Contracts.getWageCap existir, usa; senão fallback por divisão
    =======================================================*/
 
 (function () {
-  console.log("%c[Market] market.js (engine+ui) carregado", "color:#0EA5E9; font-weight:bold;");
+  console.log("%c[Market] market.js carregado", "color:#f59e0b; font-weight:bold;");
 
+  // -----------------------------
+  // Utils
+  // -----------------------------
   function n(v, d = 0) { const x = Number(v); return isNaN(x) ? d : x; }
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function rnd() { return Math.random(); }
+  function pick(arr) { return arr[Math.floor(rnd() * arr.length)]; }
+  function nowIso() { try { return new Date().toISOString(); } catch { return ""; } }
 
   function ensureGS() {
     if (!window.gameState) window.gameState = {};
-    if (typeof gameState.balance !== "number") gameState.balance = 50;
-    return window.gameState;
+    const gs = window.gameState;
+    if (gs.money == null) gs.money = 50; // saldo do usuário (fallback)
+    if (!gs.market || typeof gs.market !== "object") gs.market = {};
+    if (!gs.market.lastRefreshAt) gs.market.lastRefreshAt = null;
+    if (!gs.market.cache || typeof gs.market.cache !== "object") gs.market.cache = {};
+    return gs;
   }
 
-  function getPlayersArray() {
-    if (window.Database && Array.isArray(Database.players)) return Database.players;
-    try { if (Array.isArray(players)) return players; } catch (e) {}
-    return [];
+  function getTeams() {
+    return (window.Database && Array.isArray(Database.teams)) ? Database.teams : [];
   }
-
-  function getTeamsArray() {
-    if (window.Database && Array.isArray(Database.teams)) return Database.teams;
-    try { if (Array.isArray(teams)) return teams; } catch (e) {}
-    return [];
+  function getPlayers() {
+    return (window.Database && Array.isArray(Database.players)) ? Database.players : [];
   }
-
   function getTeamById(id) {
-    return getTeamsArray().find(t => t.id === id) || null;
+    return getTeams().find(t => String(t.id) === String(id)) || null;
   }
 
   function getUserTeamId() {
@@ -44,413 +65,370 @@
     return gs.currentTeamId || gs.selectedTeamId || (window.Game ? Game.teamId : null);
   }
 
-  function moneyMi(x) {
-    return `${n(x, 0).toFixed(2)} mi`;
-  }
-
-  function clear(el) { if (!el) return; while (el.firstChild) el.removeChild(el.firstChild); }
-  function el(tag, cls, txt) { const d = document.createElement(tag); if (cls) d.className = cls; if (txt != null) d.textContent = txt; return d; }
-
   // -----------------------------
-  // ENGINE: Market
+  // News + Save (opcional)
   // -----------------------------
-  function normalizePos(p) {
-    return String(p || "").toUpperCase().trim();
-  }
-
-  function getJogadoresFiltrados(filtros) {
-    const teamId = getUserTeamId();
-    const all = getPlayersArray();
-
-    const pos = normalizePos(filtros?.posicao || "");
-    const minOvr = n(filtros?.minOvr, 0);
-    const maxOvr = n(filtros?.maxOvr, 99);
-    const premium = !!filtros?.premium;
-
-    // Premium = jogadores com OVR >= 84 (pode ajustar depois)
-    const premMin = 84;
-
-    return all
-      .filter(p => String(p.teamId) !== String(teamId)) // fora do elenco do usuário
-      .filter(p => {
-        const ovr = n(p.overall ?? p.ovr, 0);
-        if (ovr < minOvr || ovr > maxOvr) return false;
-        if (premium && ovr < premMin) return false;
-        if (pos && pos !== "TODOS" && normalizePos(p.position || p.pos) !== pos) return false;
-        return true;
-      })
-      .sort((a, b) => n(b.overall ?? b.ovr, 0) - n(a.overall ?? a.ovr, 0));
-  }
-
-  function comprarJogador(jogadorId) {
-    const gs = ensureGS();
-    const teamId = getUserTeamId();
-    if (!teamId) { alert("Nenhum time selecionado."); return false; }
-
-    // garante Contracts
-    if (window.Contracts && typeof Contracts.ensure === "function") Contracts.ensure();
-
-    const all = getPlayersArray();
-    const p = all.find(x => String(x.id) === String(jogadorId));
-    if (!p) { alert("Jogador não encontrado."); return false; }
-
-    if (String(p.teamId) === String(teamId)) {
-      alert("Esse jogador já está no seu elenco.");
-      return false;
-    }
-
-    const fee = n(p.value, 0); // milhões (taxa de transferência simplificada)
-    const contract = (window.Contracts && typeof Contracts.ensurePlayerContract === "function")
-      ? Contracts.ensurePlayerContract(p.id, p)
-      : { salary: 0.2, monthsLeft: 24 };
-
-    const addedSalary = n(contract.salary, 0);
-
-    // valida saldo
-    if (window.Contracts && typeof Contracts.canAffordTransfer === "function") {
-      if (!Contracts.canAffordTransfer(teamId, fee)) {
-        alert(`Saldo insuficiente.\nCusto: ${moneyMi(fee)} | Saldo: ${moneyMi(gs.balance)}`);
-        return false;
-      }
-    } else {
-      if (gs.balance < fee) {
-        alert(`Saldo insuficiente.\nCusto: ${moneyMi(fee)} | Saldo: ${moneyMi(gs.balance)}`);
-        return false;
-      }
-    }
-
-    // valida folha
-    if (window.Contracts && typeof Contracts.recalcWageUsed === "function") {
-      Contracts.recalcWageUsed(teamId);
-    }
-    if (window.Contracts && typeof Contracts.canAffordWages === "function") {
-      if (!Contracts.canAffordWages(teamId, addedSalary)) {
-        const cf = Contracts.getClubFinance(teamId);
-        alert(
-          `Folha estouraria!\nSalário do jogador: ${moneyMi(addedSalary)}/mês\nFolha: ${moneyMi(cf.wageUsed)} / Orçamento: ${moneyMi(cf.wageBudget)}`
-        );
-        return false;
-      }
-    }
-
-    // aplica compra: debita saldo e muda teamId
-    gs.balance = Math.round((n(gs.balance, 0) - fee) * 100) / 100;
-    p.teamId = teamId;
-
-    // novo contrato ao chegar (se já existia, reseta para padrão seguro)
-    if (window.Contracts && typeof Contracts.setPlayerContract === "function") {
-      const newSalary = (window.Contracts && typeof Contracts.estimateSalary === "function")
-        ? Contracts.estimateSalary(p)
-        : addedSalary;
-
-      Contracts.setPlayerContract(p.id, newSalary, 24);
-      Contracts.recalcWageUsed(teamId);
-    }
-
-    // compat com Game.saldo legado
-    if (window.Game) {
-      if (typeof Game.saldo === "number") Game.saldo = gs.balance;
-      if (Array.isArray(Game.elenco)) {
-        // tenta manter coerência em versões antigas (se seu jogo usar Game.elenco)
-        const already = Game.elenco.some(x => String(x.id) === String(p.id));
-        if (!already) Game.elenco.push(p);
-      }
-      if (typeof Game.onElencoAtualizado === "function") Game.onElencoAtualizado();
-    }
-
-    // notícia
+  function pushNews(title, body, tag) {
     try {
-      if (window.News && typeof News.pushNews === "function") {
-        const t = getTeamById(teamId);
-        News.pushNews(
-          "Contratação confirmada",
-          `${p.name || p.nome || "Jogador"} chegou ao ${t?.name || teamId} por ${moneyMi(fee)}. Salário: ${moneyMi((Contracts.getPlayerContract(p.id)?.salary ?? newSalary))}/mês.`,
-          "TRANSFER"
-        );
-      }
+      if (window.News && typeof News.pushNews === "function") News.pushNews(title, body, tag || "MARKET");
+    } catch (e) {}
+  }
+
+  function save() {
+    try { if (window.Save && typeof Save.salvar === "function") Save.salvar(); } catch (e) {}
+  }
+
+  // -----------------------------
+  // Contracts (opcional) — Wage cap / wages
+  // -----------------------------
+  function ensureContracts() {
+    try { if (window.Contracts && typeof Contracts.ensure === "function") Contracts.ensure(); } catch (e) {}
+  }
+
+  function getWageCap(teamId) {
+    try {
+      if (window.Contracts && typeof Contracts.getWageCap === "function") return n(Contracts.getWageCap(teamId), 40);
+      if (window.Contracts && typeof Contracts.wageCap === "number") return n(Contracts.wageCap, 40);
     } catch (e) {}
 
-    alert(`Contratado!\n${p.name || p.nome} por ${moneyMi(fee)}\nNovo saldo: ${moneyMi(gs.balance)}`);
-    return true;
+    const team = getTeamById(teamId);
+    const div = String(team?.division || team?.serie || "A").toUpperCase();
+    return div === "B" ? 25 : 45; // mi/mês
   }
 
-  window.Market = {
-    getJogadoresFiltrados,
-    comprarJogador
-  };
+  function getWageUsed(teamId) {
+    try {
+      if (window.Contracts && typeof Contracts.getWageUsed === "function") return n(Contracts.getWageUsed(teamId), 0);
+      if (window.Contracts && typeof Contracts.recalcWageUsed === "function") {
+        const v = Contracts.recalcWageUsed(teamId);
+        if (v != null) return n(v, 0);
+      }
+      if (window.gameState && typeof gameState.wageUsed === "number") return n(gameState.wageUsed, 0);
+    } catch (e) {}
+    return 0;
+  }
+
+  function setContract(playerId, wageMi, monthsLeft) {
+    try {
+      if (window.Contracts && typeof Contracts.setContractForPlayer === "function") {
+        Contracts.setContractForPlayer(playerId, { wageMi: n(wageMi, 0), monthsLeft: n(monthsLeft, 24) });
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  function getContract(playerId) {
+    try {
+      if (window.Contracts && typeof Contracts.getContractForPlayer === "function") {
+        return Contracts.getContractForPlayer(playerId);
+      }
+    } catch (e) {}
+    return null;
+  }
 
   // -----------------------------
-  // UI: MarketUI
+  // Money (simples)
   // -----------------------------
-  function renderMarket() {
-    const box = document.getElementById("lista-mercado");
-    if (!box) {
-      console.warn("[MarketUI] #lista-mercado não encontrado");
-      return;
-    }
-    clear(box);
-
+  function getTeamMoney(teamId) {
+    // por enquanto o jogo usa money global do usuário (fallback)
     const gs = ensureGS();
-    const teamId = getUserTeamId();
-    if (!teamId) {
-      box.appendChild(el("div", "", "Nenhum time selecionado."));
-      return;
+    const userTeamId = getUserTeamId();
+    if (userTeamId && String(teamId) === String(userTeamId)) return n(gs.money, 0);
+    // clubes IA (opcional): tenta budget no team
+    const t = getTeamById(teamId);
+    return n(t?.moneyMi ?? t?.budgetMi, 80);
+  }
+
+  function setTeamMoney(teamId, moneyMi) {
+    const gs = ensureGS();
+    const userTeamId = getUserTeamId();
+    if (userTeamId && String(teamId) === String(userTeamId)) {
+      gs.money = n(moneyMi, 0);
+      return true;
+    }
+    const t = getTeamById(teamId);
+    if (t) {
+      t.moneyMi = n(moneyMi, 0);
+      return true;
+    }
+    return false;
+  }
+
+  // -----------------------------
+  // Estimativas (preço / salário)
+  // -----------------------------
+  function getOVR(p) { return n(p?.ovr ?? p?.overall, 60); }
+  function getAge(p) { return n(p?.age ?? p?.idade, 25); }
+
+  function estimateWageMi(playerId) {
+    const p = getPlayers().find(x => String(x.id) === String(playerId));
+    if (!p) return 0.30;
+
+    // se já tem contrato:
+    const c = getContract(playerId);
+    if (c && c.wageMi != null) return clamp(n(c.wageMi, 0.3), 0.05, 4.5);
+
+    const ovr = getOVR(p);
+    const age = getAge(p);
+
+    // faixa base por OVR
+    let wage = 0.12 + ((ovr - 55) / 45) * 1.65; // ~0.12 a ~1.77
+    // ajuste por idade (pico 26-29)
+    if (age >= 26 && age <= 29) wage *= 1.12;
+    else if (age >= 30 && age <= 33) wage *= 1.05;
+    else if (age >= 34) wage *= 0.82;
+    else if (age <= 21) wage *= 0.78;
+
+    // variação pequena
+    wage *= (0.92 + rnd() * 0.18);
+
+    return clamp(wage, 0.08, 3.80);
+  }
+
+  function getAskingPrice(playerId) {
+    const p = getPlayers().find(x => String(x.id) === String(playerId));
+    if (!p) return 1.0;
+
+    const ovr = getOVR(p);
+    const age = getAge(p);
+
+    // preço por OVR em mi
+    let price = 0.6 + Math.pow((ovr - 50) / 10, 2) * 1.2; // cresce rápido com ovr
+    // ajuste por idade (jovem vale mais)
+    if (age <= 21) price *= 1.35;
+    else if (age <= 24) price *= 1.15;
+    else if (age >= 32) price *= 0.78;
+    else if (age >= 35) price *= 0.62;
+
+    // se for free agent: preço zero
+    const isFree = (p?.isFreeAgent || p?.freeAgent || p?.teamId == null || String(p.teamId) === "0");
+    if (isFree) price = 0;
+
+    // variação
+    price *= (0.90 + rnd() * 0.22);
+
+    return clamp(price, 0, 120);
+  }
+
+  function canAffordWage(teamId, wageMi) {
+    const cap = getWageCap(teamId);
+    const used = getWageUsed(teamId);
+    return (used + n(wageMi, 0)) <= cap;
+  }
+
+  // -----------------------------
+  // Market list (cache leve)
+  // -----------------------------
+  function buildMarketList(teamId, options) {
+    const all = getPlayers().slice();
+    const mine = String(teamId);
+
+    // free agents primeiro
+    const free = all.filter(p => p?.isFreeAgent || p?.freeAgent || p?.teamId == null || String(p.teamId) === "0");
+    const others = all.filter(p => String(p.teamId) !== mine && !(p?.isFreeAgent || p?.freeAgent || p?.teamId == null || String(p.teamId) === "0"));
+
+    // recorte para performance
+    const freeCut = free.slice(0, 120);
+    const othersCut = others.slice(0, 220);
+
+    let pool = freeCut.concat(othersCut);
+
+    // filtros básicos
+    const minOvr = options?.minOvr != null ? n(options.minOvr, 0) : null;
+    const maxWage = options?.maxWage != null ? n(options.maxWage, 999) : null;
+    const pos = options?.pos ? String(options.pos).toUpperCase() : null;
+
+    function normPos(p) {
+      const s = String(p.pos || p.position || "").toUpperCase();
+      if (s.includes("GOL") || s === "GK") return "GOL";
+      if (s.includes("ZAG") || s.includes("CB")) return "ZAG";
+      if (s.includes("LD") || s.includes("RB")) return "LD";
+      if (s.includes("LE") || s.includes("LB")) return "LE";
+      if (s.includes("VOL") || s.includes("DM")) return "VOL";
+      if (s.includes("MEI") || s.includes("MID") || s.includes("CM") || s.includes("AM")) return "MEI";
+      if (s.includes("PON") || s.includes("W")) return "PON";
+      if (s.includes("ATA") || s.includes("ST") || s.includes("FW")) return "ATA";
+      return "MEI";
     }
 
-    if (window.Contracts && typeof Contracts.ensure === "function") Contracts.ensure();
-    if (window.Contracts && typeof Contracts.recalcWageUsed === "function") Contracts.recalcWageUsed(teamId);
-
-    const cf = (window.Contracts && typeof Contracts.getClubFinance === "function")
-      ? Contracts.getClubFinance(teamId)
-      : { wageUsed: 0, wageBudget: 0, balance: gs.balance };
-
-    // Header AAA
-    const header = el("div", "");
-    header.style.background = "rgba(10,10,10,0.82)";
-    header.style.border = "1px solid rgba(255,255,255,0.08)";
-    header.style.borderRadius = "16px";
-    header.style.padding = "12px";
-    header.style.marginBottom = "12px";
-    header.style.boxShadow = "0 0 18px rgba(0,0,0,0.55)";
-
-    const h1 = el("div", "");
-    h1.style.display = "flex";
-    h1.style.justifyContent = "space-between";
-    h1.style.alignItems = "center";
-    h1.style.gap = "10px";
-
-    const title = el("div", "", "MERCADO");
-    title.style.fontWeight = "900";
-    title.style.letterSpacing = "0.6px";
-
-    const badges = el("div", "");
-    badges.style.display = "flex";
-    badges.style.gap = "8px";
-    badges.style.flexWrap = "wrap";
-
-    const b1 = el("div", "", `Saldo: ${moneyMi(gs.balance)}`);
-    b1.style.padding = "6px 10px";
-    b1.style.borderRadius = "999px";
-    b1.style.border = "1px solid rgba(255,255,255,0.10)";
-    b1.style.background = "rgba(255,255,255,0.04)";
-    b1.style.fontWeight = "900";
-    b1.style.fontSize = "12px";
-
-    const b2 = el("div", "", `Folha: ${moneyMi(cf.wageUsed)} / ${moneyMi(cf.wageBudget)} (mês)`);
-    b2.style.padding = "6px 10px";
-    b2.style.borderRadius = "999px";
-    b2.style.border = "1px solid rgba(255,255,255,0.10)";
-    b2.style.background = "rgba(255,255,255,0.04)";
-    b2.style.fontWeight = "900";
-    b2.style.fontSize = "12px";
-
-    if (n(cf.wageUsed, 0) > n(cf.wageBudget, 0)) {
-      b2.style.border = "1px solid rgba(255,90,90,0.6)";
-      b2.style.background = "rgba(255,90,90,0.12)";
-    }
-
-    badges.appendChild(b1);
-    badges.appendChild(b2);
-
-    h1.appendChild(title);
-    h1.appendChild(badges);
-
-    // Filtros
-    const filters = el("div", "");
-    filters.style.display = "grid";
-    filters.style.gridTemplateColumns = "repeat(auto-fit, minmax(160px, 1fr))";
-    filters.style.gap = "10px";
-    filters.style.marginTop = "12px";
-
-    function field(labelTxt, inputEl) {
-      const wrap = el("div", "");
-      const lab = el("div", "", labelTxt);
-      lab.style.fontSize = "11px";
-      lab.style.fontWeight = "900";
-      lab.style.opacity = "0.75";
-      lab.style.marginBottom = "6px";
-      wrap.appendChild(lab);
-      wrap.appendChild(inputEl);
-      return wrap;
-    }
-
-    const selPos = document.createElement("select");
-    ["TODOS","GOL","ZAG","LD","LE","VOL","MEI","ATA"].forEach(v => {
-      const o = document.createElement("option");
-      o.value = v; o.textContent = v;
-      selPos.appendChild(o);
+    pool = pool.filter(p => {
+      if (minOvr != null && getOVR(p) < minOvr) return false;
+      if (maxWage != null && estimateWageMi(p.id) > maxWage) return false;
+      if (pos && pos !== "TODAS" && normPos(p) !== pos) return false;
+      return true;
     });
-    selPos.style.padding = "10px";
-    selPos.style.borderRadius = "12px";
-    selPos.style.border = "1px solid rgba(255,255,255,0.10)";
-    selPos.style.background = "rgba(0,0,0,0.35)";
-    selPos.style.color = "white";
-    selPos.style.fontWeight = "900";
 
-    const minO = document.createElement("input");
-    minO.type = "number"; minO.value = "0"; minO.min = "0"; minO.max = "99";
-    minO.style.padding = "10px";
-    minO.style.borderRadius = "12px";
-    minO.style.border = "1px solid rgba(255,255,255,0.10)";
-    minO.style.background = "rgba(0,0,0,0.35)";
-    minO.style.color = "white";
-    minO.style.fontWeight = "900";
+    // ordena: free agents (preço 0) + OVR desc
+    pool.sort((a, b) => {
+      const pa = getAskingPrice(a.id);
+      const pb = getAskingPrice(b.id);
+      if (pa !== pb) return pa - pb;
+      return getOVR(b) - getOVR(a);
+    });
 
-    const maxO = document.createElement("input");
-    maxO.type = "number"; maxO.value = "99"; maxO.min = "0"; maxO.max = "99";
-    maxO.style.padding = "10px";
-    maxO.style.borderRadius = "12px";
-    maxO.style.border = "1px solid rgba(255,255,255,0.10)";
-    maxO.style.background = "rgba(0,0,0,0.35)";
-    maxO.style.color = "white";
-    maxO.style.fontWeight = "900";
+    return pool.slice(0, 240);
+  }
 
-    const chk = document.createElement("input");
-    chk.type = "checkbox";
-    chk.style.transform = "scale(1.2)";
-    const chkWrap = el("label", "");
-    chkWrap.style.display = "flex";
-    chkWrap.style.alignItems = "center";
-    chkWrap.style.gap = "10px";
-    chkWrap.style.padding = "10px";
-    chkWrap.style.borderRadius = "12px";
-    chkWrap.style.border = "1px solid rgba(255,255,255,0.10)";
-    chkWrap.style.background = "rgba(0,0,0,0.35)";
-    chkWrap.style.fontWeight = "900";
-    chkWrap.appendChild(chk);
-    chkWrap.appendChild(el("span", "", "Premium (OVR 84+)"));
+  // -----------------------------
+  // Contratação (simples, mas “manager-like”)
+  // -----------------------------
+  function signPlayer(teamId, playerId, offer) {
+    ensureGS();
+    ensureContracts();
 
-    filters.appendChild(field("Posição", selPos));
-    filters.appendChild(field("OVR mínimo", minO));
-    filters.appendChild(field("OVR máximo", maxO));
-    filters.appendChild(field("Filtro", chkWrap));
+    const p = getPlayers().find(x => String(x.id) === String(playerId));
+    if (!p) return { ok: false, msg: "Jogador não encontrado." };
 
-    header.appendChild(h1);
-    header.appendChild(filters);
-    box.appendChild(header);
+    const fromTeamId = p.teamId;
+    const isFree = (p?.isFreeAgent || p?.freeAgent || p?.teamId == null || String(p.teamId) === "0");
 
-    const list = el("div", "");
-    list.style.display = "grid";
-    list.style.gridTemplateColumns = "repeat(auto-fit, minmax(260px, 1fr))";
-    list.style.gap = "12px";
-    box.appendChild(list);
+    // oferta
+    const asking = getAskingPrice(playerId);
+    const offerFee = offer?.feeMi != null ? n(offer.feeMi, 0) : asking; // para free agent = 0
+    const wageMi = offer?.wageMi != null ? n(offer.wageMi, estimateWageMi(playerId)) : estimateWageMi(playerId);
+    const monthsLeft = offer?.monthsLeft != null ? n(offer.monthsLeft, 24) : 24;
 
-    function renderList() {
-      clear(list);
+    // cheque folha / FFP
+    const cap = getWageCap(teamId);
+    const used = getWageUsed(teamId);
+    if ((used + wageMi) > cap) {
+      return { ok: false, msg: `FFP: Folha estourada. Cap ${cap.toFixed(2)} mi/mês, usado ${used.toFixed(2)} mi/mês.` };
+    }
 
-      const filtros = {
-        posicao: selPos.value,
-        minOvr: n(minO.value, 0),
-        maxOvr: n(maxO.value, 99),
-        premium: chk.checked
+    // cheque dinheiro
+    const money = getTeamMoney(teamId);
+    if (!isFree && offerFee > money) {
+      return { ok: false, msg: `Dinheiro insuficiente. Necessário R$ ${offerFee.toFixed(2)} mi, disponível R$ ${money.toFixed(2)} mi.` };
+    }
+
+    // aceitação simples:
+    // - se oferta >= asking * 0.92 quase sempre aceita
+    // - se oferta menor, chance reduz
+    let accept = true;
+    if (!isFree) {
+      const ratio = asking <= 0 ? 1 : (offerFee / asking);
+      const baseChance = clamp(0.25 + ratio * 0.75, 0.05, 0.98);
+      accept = rnd() < baseChance;
+    }
+
+    if (!accept) {
+      // contra-proposta simples
+      const counterFee = isFree ? 0 : clamp(asking * (1.03 + rnd() * 0.15), asking, asking * 1.25);
+      const counterWage = clamp(wageMi * (1.02 + rnd() * 0.12), wageMi, wageMi * 1.25);
+      return {
+        ok: false,
+        msg: "Clube recusou. Quer contra-proposta?",
+        counter: { feeMi: Number(counterFee.toFixed(2)), wageMi: Number(counterWage.toFixed(2)), monthsLeft }
       };
+    }
 
-      const arr = getJogadoresFiltrados(filtros);
-      if (!arr.length) {
-        const empty = el("div", "");
-        empty.textContent = "Nenhum jogador encontrado com esses filtros.";
-        empty.style.opacity = "0.8";
-        list.appendChild(empty);
-        return;
+    // aplica transferência
+    if (!isFree) {
+      setTeamMoney(teamId, money - offerFee);
+
+      // opcional: paga ao clube vendedor (IA)
+      try {
+        if (fromTeamId && String(fromTeamId) !== "0") {
+          const sellerMoney = getTeamMoney(fromTeamId);
+          setTeamMoney(fromTeamId, sellerMoney + offerFee);
+        }
+      } catch (e) {}
+    }
+
+    p.teamId = teamId;
+    p.isFreeAgent = false;
+    p.freeAgent = false;
+
+    // aplica contrato se puder
+    setContract(playerId, wageMi, monthsLeft);
+
+    // recalcula folha
+    try { if (window.Contracts && typeof Contracts.recalcWageUsed === "function") Contracts.recalcWageUsed(teamId); } catch (e) {}
+
+    // news
+    const pName = p.name || p.nome || `Jogador ${p.id}`;
+    const tName = getTeamById(teamId)?.name || "Seu clube";
+    if (isFree) pushNews("Contratação (Agente livre)", `${tName} assinou com ${pName}. Salário: R$ ${wageMi.toFixed(2)} mi/mês`, "MARKET");
+    else pushNews("Contratação", `${tName} comprou ${pName} por R$ ${offerFee.toFixed(2)} mi. Salário: R$ ${wageMi.toFixed(2)} mi/mês`, "MARKET");
+
+    save();
+
+    return { ok: true, msg: "Contratação realizada!" };
+  }
+
+  function releasePlayer(playerId) {
+    ensureGS();
+    const p = getPlayers().find(x => String(x.id) === String(playerId));
+    if (!p) return { ok: false, msg: "Jogador não encontrado." };
+
+    p.teamId = 0;
+    p.isFreeAgent = true;
+    p.freeAgent = true;
+
+    pushNews("Rescisão", `${p.name || p.nome || "Jogador"} virou agente livre.`, "MARKET");
+    save();
+    return { ok: true, msg: "Jogador liberado." };
+  }
+
+  // -----------------------------
+  // Public API
+  // -----------------------------
+  window.Market = {
+    ensure() {
+      ensureGS();
+      ensureContracts();
+    },
+
+    getMarketList(options) {
+      this.ensure();
+      const gs = ensureGS();
+      const teamId = getUserTeamId();
+      const key = JSON.stringify({ teamId, options: options || {} });
+
+      // cache rápido pra não travar no celular
+      const cached = gs.market.cache[key];
+      const now = Date.now();
+      if (cached && cached.time && (now - cached.time) < 5000 && Array.isArray(cached.list)) {
+        return cached.list;
       }
 
-      arr.slice(0, 60).forEach((p) => {
-        const card = el("div", "");
-        card.style.background = "rgba(10,10,10,0.82)";
-        card.style.border = "1px solid rgba(255,255,255,0.08)";
-        card.style.borderRadius = "16px";
-        card.style.padding = "10px";
-        card.style.boxShadow = "0 0 18px rgba(0,0,0,0.55)";
-        card.style.display = "flex";
-        card.style.flexDirection = "column";
-        card.style.gap = "10px";
+      const list = buildMarketList(teamId, options);
+      gs.market.cache[key] = { time: now, list };
+      gs.market.lastRefreshAt = nowIso();
+      return list;
+    },
 
-        const top = el("div", "");
-        top.style.display = "flex";
-        top.style.justifyContent = "space-between";
-        top.style.alignItems = "center";
-        top.style.gap = "10px";
+    buyPlayer(teamId, playerId, offer) {
+      return signPlayer(teamId, playerId, offer);
+    },
 
-        const nm = el("div", "");
-        nm.style.fontWeight = "900";
-        nm.style.fontSize = "14px";
-        nm.style.whiteSpace = "nowrap";
-        nm.style.overflow = "hidden";
-        nm.style.textOverflow = "ellipsis";
-        nm.textContent = p.name || p.nome || "Jogador";
+    signPlayer(teamId, playerId, offer) {
+      return signPlayer(teamId, playerId, offer);
+    },
 
-        const ovr = el("div", "");
-        ovr.style.fontWeight = "900";
-        ovr.style.padding = "6px 8px";
-        ovr.style.borderRadius = "999px";
-        ovr.style.background = "rgba(34,197,94,0.12)";
-        ovr.style.border = "1px solid rgba(34,197,94,0.35)";
-        ovr.style.fontSize = "12px";
-        ovr.textContent = `OVR ${n(p.overall ?? p.ovr, 0)}`;
+    getAskingPrice(playerId) {
+      return getAskingPrice(playerId);
+    },
 
-        top.appendChild(nm);
-        top.appendChild(ovr);
+    estimateWageMi(playerId) {
+      return estimateWageMi(playerId);
+    },
 
-        const mid = el("div", "");
-        mid.style.display = "flex";
-        mid.style.justifyContent = "space-between";
-        mid.style.opacity = "0.85";
-        mid.style.fontSize = "12px";
-        mid.textContent = `${p.position || p.pos || "POS"} • Valor: ${moneyMi(p.value)}`;
+    canAffordWage(teamId, wageMi) {
+      return canAffordWage(teamId, wageMi);
+    },
 
-        let salaryPreview = 0.2;
-        try {
-          if (window.Contracts && typeof Contracts.ensurePlayerContract === "function") {
-            const c = Contracts.ensurePlayerContract(p.id, p);
-            salaryPreview = n(c?.salary, salaryPreview);
-          }
-        } catch (e) {}
+    getTeamMoney(teamId) {
+      return getTeamMoney(teamId);
+    },
 
-        const sal = el("div", "");
-        sal.style.opacity = "0.85";
-        sal.style.fontSize = "12px";
-        sal.textContent = `Salário estimado: ${moneyMi(salaryPreview)}/mês`;
+    setTeamMoney(teamId, moneyMi) {
+      return setTeamMoney(teamId, moneyMi);
+    },
 
-        const btn = document.createElement("button");
-        btn.className = "btn-green";
-        btn.textContent = "CONTRATAR";
-        btn.onclick = () => {
-          const ok = comprarJogador(p.id);
-          if (ok) {
-            // atualiza topo (saldo/folha) e lista
-            if (window.Contracts && typeof Contracts.recalcWageUsed === "function") Contracts.recalcWageUsed(teamId);
-            const cf2 = Contracts.getClubFinance(teamId);
-            b1.textContent = `Saldo: ${moneyMi(ensureGS().balance)}`;
-            b2.textContent = `Folha: ${moneyMi(cf2.wageUsed)} / ${moneyMi(cf2.wageBudget)} (mês)`;
-            if (n(cf2.wageUsed, 0) > n(cf2.wageBudget, 0)) {
-              b2.style.border = "1px solid rgba(255,90,90,0.6)";
-              b2.style.background = "rgba(255,90,90,0.12)";
-            } else {
-              b2.style.border = "1px solid rgba(255,255,255,0.10)";
-              b2.style.background = "rgba(255,255,255,0.04)";
-            }
-            renderList();
-          }
-        };
-
-        card.appendChild(top);
-        card.appendChild(mid);
-        card.appendChild(sal);
-        card.appendChild(btn);
-
-        list.appendChild(card);
-      });
+    releasePlayer(playerId) {
+      return releasePlayer(playerId);
     }
-
-    selPos.onchange = renderList;
-    minO.oninput = renderList;
-    maxO.oninput = renderList;
-    chk.onchange = renderList;
-
-    renderList();
-  }
-
-  window.MarketUI = {
-    renderMarket
   };
 })();
