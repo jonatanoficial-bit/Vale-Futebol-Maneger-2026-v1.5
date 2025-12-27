@@ -1,381 +1,333 @@
 /* =======================================================
    VALE FUTEBOL MANAGER 2026
-   Ui/post-match-ui.js — Pós-Jogo AAA (SM26-like)
+   Ui/post-match-ui.js — Tela Pós-jogo AAA (SM26-like)
    -------------------------------------------------------
-   Preenche a tela #tela-pos-jogo (index.html) com:
-   - competição, rodada/fase
-   - placar, logos, nomes
-   - MOTM
-   - estatísticas (posse/chutes/alvo/xG/esc/faltas)
-   - momentos-chave
-   - resultados da rodada (Liga) + fallbacks
-   - status Copa/Estaduais (se existirem) embutidos nos momentos
-   -------------------------------------------------------
+   - Overlay bonito, mobile-friendly
+   - Mostra:
+     • placar
+     • gols (scorers)
+     • MOTM
+     • top ratings (time do usuário + adversário)
+     • lesões (se houver)
+   - Botão "Continuar" volta ao lobby (ou UI.voltarLobby)
+
    API:
-   - PostMatchUI.render(report)
+   - PostMatchUI.open(report)
+   - PostMatchUI.close()
    =======================================================*/
 
 (function () {
-  console.log("%c[PostMatchUI] post-match-ui.js carregado", "color:#f97316; font-weight:bold;");
+  console.log("%c[PostMatchUI] post-match-ui.js carregado", "color:#fb7185; font-weight:bold;");
 
-  // -----------------------------
-  // CSS AAA injetado
-  // -----------------------------
   function injectCssOnce() {
     if (document.getElementById("vf-postmatch-css")) return;
-    const style = document.createElement("style");
-    style.id = "vf-postmatch-css";
-    style.textContent = `
-      .pm-wrap{max-width:1100px;margin:0 auto}
-      .pm-header{gap:14px}
-      .pm-scoreboard{flex-wrap:wrap}
-      .pm-motm{font-weight:1000}
-      .pm-card{background:rgba(0,0,0,.35)!important;border:1px solid rgba(255,255,255,.08)!important;border-radius:18px!important;box-shadow:0 10px 30px rgba(0,0,0,.25)!important}
-      .pm-card-title{letter-spacing:.6px;text-transform:uppercase;font-weight:1000;font-size:12px;opacity:.9}
-      .pm-stats .row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)}
-      .pm-stats .row:last-child{border-bottom:none}
-      .pm-stats .k{opacity:.8;font-weight:900;font-size:12px}
-      .pm-stats .v{font-weight:1000}
-      .pm-moments .m{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.06)}
-      .pm-moments .m:last-child{border-bottom:none}
-      .pm-moments .t{min-width:48px;font-weight:1000;opacity:.95}
-      .pm-moments .d{font-weight:800;opacity:.92}
-      .pm-round-results .rr{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)}
-      .pm-round-results .rr:last-child{border-bottom:none}
-      .pm-round-results .rr .mid{opacity:.8;font-weight:900}
-      .pm-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.06);font-weight:1000;font-size:11px;letter-spacing:.3px}
-      .pm-pill.ok{color:#86efac}
-      .pm-pill.warn{color:#fbbf24}
-      .pm-pill.bad{color:#fb7185}
-      .pm-muted{opacity:.75}
+    const s = document.createElement("style");
+    s.id = "vf-postmatch-css";
+    s.textContent = `
+      .vf-pm-overlay{
+        position:fixed; inset:0; z-index:9995;
+        background: radial-gradient(1200px 600px at 20% 10%, rgba(251,113,133,.18), transparent 52%),
+                    radial-gradient(1200px 600px at 85% 0%, rgba(167,139,250,.16), transparent 60%),
+                    rgba(0,0,0,.76);
+        backdrop-filter: blur(9px);
+        display:none;
+      }
+      .vf-pm-overlay.active{display:block}
+      .vf-pm-shell{max-width:1100px;margin:18px auto;padding:14px}
+      .vf-pm-top{
+        display:flex; align-items:center; justify-content:space-between; gap:10px;
+        padding:12px; border-radius:18px;
+        background: rgba(0,0,0,.38);
+        border:1px solid rgba(255,255,255,.10);
+        box-shadow: 0 10px 30px rgba(0,0,0,.28);
+      }
+      .vf-pm-title h2{margin:0;font-weight:1000;letter-spacing:.6px;text-transform:uppercase;font-size:14px}
+      .vf-pm-title .sub{opacity:.75;font-weight:900;font-size:12px}
+
+      .vf-btn{
+        border-radius:14px;
+        border:1px solid rgba(255,255,255,.10);
+        background: rgba(255,255,255,.06);
+        color: rgba(255,255,255,.92);
+        font-weight:1000;
+        padding:10px 12px;
+        cursor:pointer;
+      }
+      .vf-btn.primary{background: rgba(34,197,94,.18)}
+      .vf-btn.alt{background: rgba(96,165,250,.16)}
+
+      .vf-grid{display:grid;grid-template-columns:1fr 1fr; gap:12px; margin-top:12px}
+      @media(max-width:980px){.vf-grid{grid-template-columns:1fr}}
+
+      .vf-card{
+        border-radius:18px;
+        background: rgba(0,0,0,.35);
+        border:1px solid rgba(255,255,255,.08);
+        box-shadow: 0 10px 30px rgba(0,0,0,.25);
+        padding:12px;
+      }
+      .vf-card .hd{
+        display:flex; align-items:center; justify-content:space-between; gap:10px;
+        margin-bottom:10px;
+      }
+      .vf-card .hd .t{
+        font-weight:1000;
+        letter-spacing:.6px;
+        text-transform:uppercase;
+        font-size:12px;
+        opacity:.9;
+      }
+
+      .vf-score{
+        display:flex; align-items:center; justify-content:space-between; gap:10px;
+        padding:10px 12px;
+        border-radius:18px;
+        border:1px solid rgba(255,255,255,.10);
+        background: rgba(0,0,0,.28);
+      }
+      .vf-team{
+        display:flex; flex-direction:column; gap:2px; min-width:0;
+      }
+      .vf-team .name{font-weight:1000; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+      .vf-team .sub{opacity:.75; font-weight:900; font-size:12px}
+      .vf-score .mid{
+        display:flex; align-items:center; gap:10px;
+        font-weight:1000;
+      }
+      .vf-score .num{
+        font-size:28px;
+        letter-spacing:1px;
+      }
+
+      .vf-pill{
+        display:inline-flex; align-items:center; gap:8px;
+        padding:6px 10px; border-radius:999px;
+        border:1px solid rgba(255,255,255,.10);
+        background: rgba(255,255,255,.06);
+        font-weight:1000; font-size:11px; letter-spacing:.2px;
+      }
+      .vf-pill.ok{color:#86efac}
+      .vf-pill.warn{color:#fbbf24}
+      .vf-pill.bad{color:#fb7185}
+      .vf-pill.blue{color:#60a5fa}
+      .vf-muted{opacity:.75}
+
+      .vf-list{display:grid; gap:6px}
+      .vf-item{
+        display:flex; align-items:center; justify-content:space-between; gap:10px;
+        padding:8px 10px;
+        border-radius:14px;
+        background: rgba(255,255,255,.05);
+        border:1px solid rgba(255,255,255,.07);
+      }
+      .vf-item .l{display:flex; flex-direction:column; gap:2px; min-width:0}
+      .vf-item .l .name{font-weight:1000; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+      .vf-item .l .sub{opacity:.75; font-weight:900; font-size:12px}
+      .vf-item .r{display:flex; align-items:center; gap:10px; font-weight:1000}
+      .vf-divider{height:1px;background: rgba(255,255,255,.08); margin:10px 0}
     `;
-    document.head.appendChild(style);
+    document.head.appendChild(s);
   }
 
-  // -----------------------------
-  // Utils
-  // -----------------------------
-  function n(v, d = 0) { const x = Number(v); return isNaN(x) ? d : x; }
-  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
   function el(tag, cls, txt) {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
     if (txt != null) e.textContent = String(txt);
     return e;
   }
-  function clear(node) { if (!node) return; while (node.firstChild) node.removeChild(node.firstChild); }
+  function clear(node) { if (!node) return; node.innerHTML = ""; }
+  function n(v, d = 0) { const x = Number(v); return isNaN(x) ? d : x; }
 
-  function getTeams() {
-    return (window.Database && Array.isArray(Database.teams)) ? Database.teams : [];
-  }
-  function getTeamById(id) {
-    return getTeams().find(t => String(t.id) === String(id)) || null;
-  }
-  function teamName(id) {
-    if (id == null) return "—";
-    if (String(id) === "TBD") return "TBD";
-    return getTeamById(id)?.name || String(id);
+  let overlay = null;
+  let lastReport = null;
+
+  function ensureOverlay() {
+    injectCssOnce();
+    if (overlay) return;
+
+    overlay = el("div", "vf-pm-overlay");
+    overlay.id = "vf-postmatch-overlay";
+
+    const shell = el("div", "vf-pm-shell");
+    overlay.appendChild(shell);
+
+    const top = el("div", "vf-pm-top");
+    const title = el("div", "vf-pm-title");
+    title.appendChild(el("h2", "", "Relatório Pós-Jogo"));
+    title.appendChild(el("div", "sub", "Notas • Melhor em Campo • Lesões • Destaques"));
+
+    const actions = el("div", "");
+    actions.style.display = "flex";
+    actions.style.gap = "8px";
+    actions.style.flexWrap = "wrap";
+
+    const btnCont = el("button", "vf-btn primary", "Continuar");
+    btnCont.onclick = () => {
+      PostMatchUI.close();
+      try {
+        if (window.UI && typeof UI.voltarLobby === "function") UI.voltarLobby();
+        else if (typeof mostrarTela === "function") mostrarTela("tela-lobby");
+      } catch (e) {}
+    };
+
+    const btnClose = el("button", "vf-btn", "Fechar");
+    btnClose.onclick = () => PostMatchUI.close();
+
+    actions.appendChild(btnCont);
+    actions.appendChild(btnClose);
+
+    top.appendChild(title);
+    top.appendChild(actions);
+
+    const scoreWrap = el("div", "");
+    scoreWrap.id = "vf-pm-scorewrap";
+    scoreWrap.style.marginTop = "12px";
+
+    const grid = el("div", "vf-grid");
+
+    const left = el("div", "vf-card");
+    left.id = "vf-pm-left";
+    const right = el("div", "vf-card");
+    right.id = "vf-pm-right";
+
+    grid.appendChild(left);
+    grid.appendChild(right);
+
+    shell.appendChild(top);
+    shell.appendChild(scoreWrap);
+    shell.appendChild(grid);
+
+    document.body.appendChild(overlay);
   }
 
-  function setText(id, txt) {
-    const node = document.getElementById(id);
-    if (node) node.textContent = String(txt);
+  function show() { if (overlay) overlay.classList.add("active"); }
+  function hide() { if (overlay) overlay.classList.remove("active"); }
+
+  function renderScore(report) {
+    const wrap = document.getElementById("vf-pm-scorewrap");
+    if (!wrap) return;
+    clear(wrap);
+
+    const score = el("div", "vf-score");
+
+    const home = el("div", "vf-team");
+    home.appendChild(el("div", "name", report.homeName || "Casa"));
+    const hs = el("div", "sub", `Gols: ${(report.scorersHome||[]).map(s=>s.name).slice(0,3).join(", ") || "—"}`);
+    home.appendChild(hs);
+
+    const mid = el("div", "mid");
+    const num = el("div", "num", `${report.goalsHome}  x  ${report.goalsAway}`);
+    mid.appendChild(num);
+
+    const away = el("div", "vf-team");
+    away.appendChild(el("div", "name", report.awayName || "Visitante"));
+    const as = el("div", "sub", `Gols: ${(report.scorersAway||[]).map(s=>s.name).slice(0,3).join(", ") || "—"}`);
+    away.appendChild(as);
+
+    score.appendChild(home);
+    score.appendChild(mid);
+    score.appendChild(away);
+
+    wrap.appendChild(score);
+
+    const motm = report.motm;
+    const pill = el("div", "vf-pill ok", `MOTM: ${motm?.name || "—"} (${n(motm?.rating,0).toFixed(1)})`);
+    pill.style.marginTop = "10px";
+    wrap.appendChild(pill);
   }
-  function setImg(id, teamId) {
-    const node = document.getElementById(id);
-    if (!node) return;
-    node.src = `assets/logos/${teamId}.png`;
-    node.onerror = () => { node.src = "assets/logos/default.png"; };
-  }
 
-  function compLabel(comp) {
-    const c = String(comp || "").toUpperCase();
-    if (c === "LEAGUE") return "LEAGUE";
-    if (c === "CUP") return "CUP";
-    if (c === "REGIONAL") return "REGIONAL";
-    return "FRIENDLY";
-  }
+  function renderTeamRatings(card, titleText, ratings) {
+    clear(card);
 
-  // -----------------------------
-  // Render helpers
-  // -----------------------------
-  function renderStats(node, report) {
-    clear(node);
-    const s = report?.stats || {};
+    const hd = el("div", "hd");
+    hd.appendChild(el("div", "t", titleText));
+    const pill = el("div", "vf-pill blue", `Top ${Math.min(8, ratings.length)}`);
+    hd.appendChild(pill);
+    card.appendChild(hd);
 
-    const rows = [
-      ["POSSE", `${n(s.posseHome, 50)}% x ${n(s.posseAway, 50)}%`],
-      ["CHUTES", `${n(s.chutesHome, 0)} x ${n(s.chutesAway, 0)}`],
-      ["NO ALVO", `${n(s.alvoHome, 0)} x ${n(s.alvoAway, 0)}`],
-      ["xG", `${n(s.xgHome, 0).toFixed(2)} x ${n(s.xgAway, 0).toFixed(2)}`],
-      ["ESCANTEIOS", `${n(s.escanteiosHome, 0)} x ${n(s.escanteiosAway, 0)}`],
-      ["FALTAS", `${n(s.faltasHome, 0)} x ${n(s.faltasAway, 0)}`]
-    ];
+    const list = el("div", "vf-list");
+    (ratings || []).slice(0, 8).forEach(r => {
+      const item = el("div", "vf-item");
 
-    const wrap = el("div", "pm-stats");
-    rows.forEach(([k, v]) => {
-      const r = el("div", "row");
-      r.appendChild(el("div", "k", k));
-      r.appendChild(el("div", "v", v));
-      wrap.appendChild(r);
+      const l = el("div", "l");
+      l.appendChild(el("div", "name", `${r.name} (${r.pos})`));
+      l.appendChild(el("div", "sub", `OVR ${r.ovr} • Gols ${r.goals || 0} • Min ${r.minutes || 90}`));
+
+      const rr = el("div", "r");
+      const rating = n(r.rating, 0);
+      const pillCls = rating >= 7.6 ? "ok" : rating >= 6.7 ? "warn" : "bad";
+      rr.appendChild(el("div", "vf-pill " + pillCls, rating.toFixed(1)));
+
+      item.appendChild(l);
+      item.appendChild(rr);
+      list.appendChild(item);
     });
 
-    node.appendChild(wrap);
+    card.appendChild(list);
   }
 
-  function renderMoments(node, report, extraPills) {
-    clear(node);
-    const moments = Array.isArray(report?.moments) ? report.moments.slice() : [];
+  function renderInjuries(card, injHome, injAway) {
+    const wrap = el("div", "");
+    wrap.style.marginTop = "10px";
 
-    // ordena por minuto (se houver)
-    moments.sort((a, b) => n(a.minute, 0) - n(b.minute, 0));
+    const title = el("div", "vf-divider");
+    wrap.appendChild(title);
 
-    // se não tiver momentos, cria um resumo mínimo
-    if (!moments.length) {
-      moments.push({ minute: 90, type: "INFO", text: "Fim de jogo." });
-    }
+    const hd = el("div", "hd");
+    hd.appendChild(el("div", "t", "Lesões"));
+    wrap.appendChild(hd);
 
-    const wrap = el("div", "pm-moments");
+    const all = []
+      .concat((injHome || []).map(x => Object.assign({ side: "Casa" }, x)))
+      .concat((injAway || []).map(x => Object.assign({ side: "Fora" }, x)));
 
-    // pills (status de copa/estadual etc.)
-    if (Array.isArray(extraPills) && extraPills.length) {
-      extraPills.forEach(p => {
-        const pill = el("div", `pm-pill ${p.cls || ""}`, p.text);
-        const m = el("div", "m");
-        m.appendChild(el("div", "t", "INFO"));
-        const d = el("div", "d");
-        d.appendChild(pill);
-        m.appendChild(d);
-        wrap.appendChild(m);
+    const list = el("div", "vf-list");
+    if (!all.length) {
+      list.appendChild(el("div", "vf-muted", "Nenhuma lesão relevante registrada."));
+    } else {
+      all.slice(0, 10).forEach(x => {
+        const item = el("div", "vf-item");
+        const l = el("div", "l");
+        l.appendChild(el("div", "name", `${x.name}`));
+        l.appendChild(el("div", "sub", `${x.side} • ${x.weeks} semana(s)`));
+        const r = el("div", "r");
+        r.appendChild(el("div", "vf-pill bad", "LESÃO"));
+        item.appendChild(l);
+        item.appendChild(r);
+        list.appendChild(item);
       });
     }
 
-    moments.slice(0, 18).forEach(m => {
-      const row = el("div", "m");
-      const t = el("div", "t", `${n(m.minute, 0)}'`);
-      const d = el("div", "d", m.text || m.desc || "—");
-      row.appendChild(t);
-      row.appendChild(d);
-      wrap.appendChild(row);
-    });
-
-    node.appendChild(wrap);
+    wrap.appendChild(list);
+    card.appendChild(wrap);
   }
 
-  function leagueRoundResultsFallback(report) {
-    // fallback simples e estável quando não temos resultados reais da rodada.
-    // Mostra o jogo do usuário + placeholders.
-    const res = [];
-    res.push({
-      homeId: report.homeId,
-      awayId: report.awayId,
-      gh: report.goalsHome,
-      ga: report.goalsAway,
-      isUser: true
-    });
-
-    // tenta gerar mais 5 placares de times aleatórios da mesma divisão
-    const teams = getTeams().slice();
-    if (teams.length >= 6) {
-      for (let i = 0; i < 5; i++) {
-        const a = teams[Math.floor(Math.random() * teams.length)];
-        let b = teams[Math.floor(Math.random() * teams.length)];
-        if (String(b.id) === String(a.id)) b = teams[(teams.indexOf(b) + 1) % teams.length];
-        const gh = Math.max(0, Math.round((Math.random() + Math.random()) * 1.2));
-        const ga = Math.max(0, Math.round((Math.random() + Math.random()) * 1.0));
-        res.push({ homeId: a.id, awayId: b.id, gh, ga, isUser: false });
-      }
-    }
-
-    return res;
-  }
-
-  function tryGetRoundResultsFromEngines(report) {
-    // Como o League.processarRodadaComJogoDoUsuario já roda no fim do jogo,
-    // ele pode ter salvo algo em gameState, ou não.
-    // Tentamos capturar algo plausível, sem quebrar.
-    try {
-      if (window.gameState && Array.isArray(window.gameState.lastRoundResults)) {
-        return window.gameState.lastRoundResults.map(x => ({
-          homeId: x.homeId, awayId: x.awayId,
-          gh: n(x.golsHome ?? x.gh, 0),
-          ga: n(x.golsAway ?? x.ga, 0),
-          isUser: false
-        }));
-      }
-    } catch (e) {}
-
-    // Se League tiver uma API dedicada (futuro), usa
-    try {
-      if (window.League && typeof League.getLastRoundResults === "function") {
-        const arr = League.getLastRoundResults();
-        if (Array.isArray(arr) && arr.length) {
-          return arr.map(x => ({
-            homeId: x.homeId, awayId: x.awayId,
-            gh: n(x.golsHome ?? x.gh, 0),
-            ga: n(x.golsAway ?? x.ga, 0),
-            isUser: false
-          }));
-        }
-      }
-    } catch (e) {}
-
-    return null;
-  }
-
-  function renderRoundResults(node, report) {
-    clear(node);
-
-    const comp = compLabel(report?.competition);
-    if (comp !== "LEAGUE") {
-      node.appendChild(el("div", "pm-muted", "Resultados de rodada só aparecem na Liga."));
-      return;
-    }
-
-    let results = tryGetRoundResultsFromEngines(report);
-    if (!results || !results.length) results = leagueRoundResultsFallback(report);
-
-    // garante jogo do usuário no topo
-    const userLine = {
-      homeId: report.homeId,
-      awayId: report.awayId,
-      gh: report.goalsHome,
-      ga: report.goalsAway,
-      isUser: true
-    };
-
-    const rest = results.filter(r => !(String(r.homeId) === String(userLine.homeId) && String(r.awayId) === String(userLine.awayId)));
-    const final = [userLine].concat(rest.slice(0, 9));
-
-    const wrap = el("div", "pm-round-results");
-    final.forEach(r => {
-      const row = el("div", "rr");
-
-      const left = el("div", "", teamName(r.homeId));
-      const mid = el("div", "mid", `${n(r.gh, 0)} x ${n(r.ga, 0)}`);
-      const right = el("div", "", teamName(r.awayId));
-
-      if (r.isUser) {
-        left.style.fontWeight = "1000";
-        right.style.fontWeight = "1000";
-      }
-
-      row.appendChild(left);
-      row.appendChild(mid);
-      row.appendChild(right);
-
-      wrap.appendChild(row);
-    });
-
-    node.appendChild(wrap);
-  }
-
-  function buildExtraPills(report) {
-    const pills = [];
-    const comp = compLabel(report?.competition);
-
-    // Copa do Brasil status
-    if (comp === "CUP") {
-      try {
-        if (window.Cup && typeof Cup.getStatus === "function") {
-          const st = Cup.getStatus(window.gameState?.currentTeamId || window.gameState?.selectedTeamId || null);
-          if (st?.champion) pills.push({ cls: "ok", text: "🏆 Copa do Brasil: CAMPEÃO" });
-          else if (st?.eliminated) pills.push({ cls: "bad", text: `❌ Copa do Brasil: ELIMINADO (${st.phase || "—"})` });
-          else if (st?.active) pills.push({ cls: "warn", text: `➡️ Copa do Brasil: Classificado • Próxima fase: ${st.phase || "—"}` });
-        }
-      } catch (e) {}
-    }
-
-    // Estaduais status
-    if (comp === "REGIONAL") {
-      try {
-        if (window.Regionals && typeof Regionals.getStatus === "function") {
-          const st = Regionals.getStatus(window.gameState?.currentTeamId || window.gameState?.selectedTeamId || null);
-          if (st?.finished && st?.championId) pills.push({ cls: "ok", text: `🏆 Estadual (${st.uf || "—"}): Campeão ${st.championName || ""}`.trim() });
-          else if (st?.active) pills.push({ cls: "warn", text: `📌 Estadual (${st.uf || "—"}): Rodada ${st.round || "—"}` });
-        }
-      } catch (e) {}
-    }
-
-    // Liga: mini-status FFP (se Contracts existir)
-    if (comp === "LEAGUE") {
-      try {
-        const teamId = window.gameState?.currentTeamId || window.gameState?.selectedTeamId || null;
-        if (teamId && window.Contracts && typeof Contracts.getWageCap === "function" && typeof Contracts.getWageUsed === "function") {
-          const cap = n(Contracts.getWageCap(teamId), 0);
-          const used = n(Contracts.getWageUsed(teamId), 0);
-          if (cap > 0) {
-            const pct = (used / cap) * 100;
-            if (pct < 75) pills.push({ cls: "ok", text: `FFP OK • Folha ${used.toFixed(2)} / ${cap.toFixed(2)} mi` });
-            else if (pct < 95) pills.push({ cls: "warn", text: `FFP ATENÇÃO • Folha ${used.toFixed(2)} / ${cap.toFixed(2)} mi` });
-            else pills.push({ cls: "bad", text: `FFP ESTOURADO • Folha ${used.toFixed(2)} / ${cap.toFixed(2)} mi` });
-          }
-        }
-      } catch (e) {}
-    }
-
-    return pills;
-  }
-
-  // -----------------------------
-  // Render principal
-  // -----------------------------
   function render(report) {
-    injectCssOnce();
+    ensureOverlay();
+    if (!overlay) return;
+    if (!report) return;
 
-    // valida
-    if (!report) report = {};
-    const comp = compLabel(report.competition);
-    const compName = report.competitionName || (comp === "LEAGUE" ? "Campeonato Brasileiro" : comp === "CUP" ? "Copa do Brasil" : comp === "REGIONAL" ? "Estadual" : "Partida");
+    lastReport = report;
 
-    // Header top
-    setText("pm-competition", compName);
+    renderScore(report);
 
-    const roundText =
-      (comp === "LEAGUE")
-        ? (report.roundNumber ? `Rodada ${report.roundNumber}` : "Rodada —")
-        : (comp === "CUP")
-          ? (report.roundNumber ? `Fase ${report.roundNumber}` : "Fase —")
-          : (comp === "REGIONAL")
-            ? (report.roundNumber ? `Rodada ${report.roundNumber}` : "Rodada —")
-            : "—";
+    const left = document.getElementById("vf-pm-left");
+    const right = document.getElementById("vf-pm-right");
 
-    setText("pm-round", roundText);
+    renderTeamRatings(left, `${report.homeName} — Notas`, report.ratingsHome || []);
+    renderTeamRatings(right, `${report.awayName} — Notas`, report.ratingsAway || []);
 
-    // Scoreboard
-    setImg("pm-logo-home", report.homeId);
-    setImg("pm-logo-away", report.awayId);
-
-    setText("pm-home", teamName(report.homeId));
-    setText("pm-away", teamName(report.awayId));
-
-    setText("pm-gh", n(report.goalsHome, 0));
-    setText("pm_ga", n(report.goalsAway, 0));
-
-    // MOTM
-    setText("pm-motm", report.motm || "—");
-
-    // Stats
-    const statsNode = document.getElementById("pm-stats");
-    if (statsNode) renderStats(statsNode, report);
-
-    // Moments + extras
-    const momentsNode = document.getElementById("pm-moments");
-    const pills = buildExtraPills(report);
-    if (momentsNode) renderMoments(momentsNode, report, pills);
-
-    // Round results
-    const rrNode = document.getElementById("pm-round-results");
-    if (rrNode) renderRoundResults(rrNode, report);
-
-    // guarda último report
-    try { window.lastMatchReport = JSON.parse(JSON.stringify(report)); } catch (e) { window.lastMatchReport = report; }
+    // Injuries no card esquerdo (compacto)
+    renderInjuries(left, report.injuriesHome || [], report.injuriesAway || []);
   }
 
-  // -----------------------------
-  // API pública
-  // -----------------------------
   window.PostMatchUI = {
-    render
+    open(report) {
+      ensureOverlay();
+      render(report);
+      show();
+    },
+    close() { hide(); },
+    getLastReport() { return lastReport; }
   };
 })();
