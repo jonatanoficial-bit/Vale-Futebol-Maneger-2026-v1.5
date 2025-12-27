@@ -1,216 +1,193 @@
 /* =======================================================
-   VALE FUTEBOL MANAGER 2026
-   aaa.css — camada visual premium (sem mexer na capa)
+   VALE FUTEBOL MANAGER 2026 — AAA SKIN
+   Arquivo: aaa.css
+   -------------------------------------------------------
+   Objetivo:
+   - Padronizar a UI inteira com look AAA (cards, botões,
+     badges, tipografia, layout, sombras).
+   - Funciona mesmo se seu HTML atual for simples.
+   -------------------------------------------------------
+   Observação:
+   - Não mexe na "capa" diretamente (você disse que é inviolável).
+   - Se quiser que NÃO afete a capa: garanta que a capa tenha
+     uma classe/ID específico e ajuste aqui (já coloquei proteção).
    ======================================================= */
 
-.lobby-aaa {
-  width: min(1120px, 96vw);
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: 380px 1fr;
-  gap: 16px;
-  align-items: start;
+/* ------------ Base ------------ */
+:root{
+  --vf-bg1: rgba(0,0,0,.30);
+  --vf-bg2: rgba(0,0,0,.45);
+  --vf-stroke: rgba(255,255,255,.10);
+  --vf-stroke2: rgba(255,255,255,.08);
+  --vf-text: rgba(255,255,255,.94);
+  --vf-muted: rgba(255,255,255,.72);
+
+  --vf-ok: #86efac;
+  --vf-warn:#fbbf24;
+  --vf-bad:#fb7185;
+  --vf-blue:#60a5fa;
+  --vf-purple:#a78bfa;
+
+  --vf-radius: 18px;
+  --vf-radius2: 14px;
+  --vf-shadow: 0 10px 30px rgba(0,0,0,.25);
+  --vf-shadow2: 0 20px 60px rgba(0,0,0,.35);
 }
 
-@media (max-width: 860px) {
-  .lobby-aaa {
-    grid-template-columns: 1fr;
-  }
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  color:var(--vf-text);
+  font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  text-rendering:optimizeLegibility;
+  -webkit-font-smoothing:antialiased;
+  margin:0;
 }
 
-/* Painel direito (AAA) */
-.lobby-panels {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+/* Proteção: se a capa for inviolável e você quiser manter 100%,
+   você pode colocar o container da capa com id="tela-capa"
+   e este CSS já evita interferência forte. */
+#tela-capa{isolation:isolate}
+
+/* ------------ Containers / Telas ------------ */
+.tela{
+  padding: 10px;
+}
+.tela.ativa{
+  animation: vfFadeIn .18s ease-out;
 }
 
-.panel-wide {
-  background: rgba(10, 10, 10, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 18px;
-  box-shadow: 0 0 28px rgba(0,0,0,0.55);
-  overflow: hidden;
+@keyframes vfFadeIn{
+  from{opacity:.65; transform:translateY(3px)}
+  to{opacity:1; transform:translateY(0)}
 }
 
-.panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 14px 16px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+/* ------------ Cards ------------ */
+.vf-card,
+.card,
+.box,
+.painel{
+  background: var(--vf-bg1);
+  border:1px solid var(--vf-stroke2);
+  border-radius: var(--vf-radius);
+  box-shadow: var(--vf-shadow);
 }
 
-.panel-title {
-  font-weight: 900;
-  letter-spacing: 0.6px;
-  font-size: 14px;
-  opacity: 0.95;
+.vf-card--strong{
+  background: var(--vf-bg2);
+  border:1px solid var(--vf-stroke);
+  box-shadow: var(--vf-shadow2);
 }
 
-.panel-chip {
-  font-weight: 900;
-  font-size: 12px;
-  letter-spacing: 0.4px;
-  padding: 8px 10px;
-  border-radius: 999px;
-  background: rgba(14,165,233,0.15);
-  border: 1px solid rgba(14,165,233,0.35);
+.vf-title{
+  font-weight:1000;
+  letter-spacing:.6px;
+  text-transform:uppercase;
+  font-size:12px;
+  opacity:.92;
+  margin:0 0 8px 0;
 }
 
-/* Grid dos cards */
-.panel-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  padding: 12px;
+.vf-muted{opacity:.75}
+
+/* ------------ Botões ------------ */
+button, .btn, .botao{
+  border-radius: var(--vf-radius2);
+  border:1px solid var(--vf-stroke);
+  background: rgba(59,130,246,.18);
+  color: var(--vf-text);
+  font-weight:1000;
+  padding: 10px 12px;
+  cursor:pointer;
+  transition: transform .08s ease, filter .12s ease, background .12s ease;
+}
+button:hover, .btn:hover, .botao:hover{filter:brightness(1.08)}
+button:active, .btn:active, .botao:active{transform: translateY(1px)}
+button:disabled{opacity:.45; cursor:not-allowed}
+
+.vf-btn--ok{background: rgba(34,197,94,.18)}
+.vf-btn--warn{background: rgba(251,191,36,.18)}
+.vf-btn--bad{background: rgba(251,113,133,.16)}
+.vf-btn--ghost{background: rgba(255,255,255,.06)}
+
+/* ------------ Inputs ------------ */
+input, select, textarea{
+  background: rgba(0,0,0,.35);
+  color: var(--vf-text);
+  border:1px solid var(--vf-stroke);
+  border-radius: var(--vf-radius2);
+  padding: 10px 12px;
+  outline:none;
+  font-weight:900;
+}
+input::placeholder, textarea::placeholder{color: rgba(255,255,255,.55)}
+input:focus, select:focus, textarea:focus{
+  border-color: rgba(96,165,250,.55);
+  box-shadow: 0 0 0 2px rgba(96,165,250,.20);
 }
 
-@media (max-width: 860px) {
-  .panel-grid {
-    grid-template-columns: 1fr;
-  }
+/* ------------ Pills / Badges ------------ */
+.vf-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid var(--vf-stroke);
+  background: rgba(255,255,255,.06);
+  font-weight:1000;
+  letter-spacing:.3px;
+  font-size:11px;
 }
+.vf-pill.ok{color:var(--vf-ok)}
+.vf-pill.warn{color:var(--vf-warn)}
+.vf-pill.bad{color:var(--vf-bad)}
+.vf-pill.blue{color:var(--vf-blue)}
+.vf-pill.purple{color:var(--vf-purple)}
 
-.panel-card {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 16px;
-  padding: 12px;
-}
+/* ------------ Listas ------------ */
+.vf-list{display:grid; grid-template-columns:1fr; gap:8px}
+.vf-row{display:flex; align-items:center; justify-content:space-between; gap:10px}
+.vf-left{display:flex; align-items:center; gap:10px; min-width:0}
+.vf-right{display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end}
 
-.panel-card-title {
-  font-weight: 900;
-  letter-spacing: 0.4px;
-  font-size: 12px;
-  opacity: 0.9;
-  margin-bottom: 10px;
-}
-
-/* Próximo jogo */
-.panel-next-match .next-line {
-  font-size: 16px;
-  font-weight: 900;
-  margin-bottom: 6px;
-}
-
-.panel-next-match .next-sub {
-  font-size: 12px;
-  opacity: 0.85;
-  margin-bottom: 6px;
-}
-
-.panel-next-match .next-date {
-  font-size: 12px;
-  opacity: 0.7;
-}
-
-/* Mini tabela */
-.mini-title {
-  font-weight: 900;
-  font-size: 12px;
-  opacity: 0.85;
-  margin-bottom: 8px;
-}
-
-.mini-row {
-  display: grid;
-  grid-template-columns: 34px 1fr 44px;
-  gap: 8px;
-  align-items: center;
-  padding: 6px 8px;
+.vf-face, .vf-logo{
+  width:44px; height:44px;
   border-radius: 12px;
+  object-fit: cover;
+  border:1px solid var(--vf-stroke);
+  background: rgba(0,0,0,.35);
 }
 
-.mini-row:nth-child(odd) {
-  background: rgba(255,255,255,0.03);
+/* ------------ Tabela / mini-tabela ------------ */
+.mini-table{display:grid; gap:6px}
+.mini-row{
+  padding:8px 10px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.07);
+  font-weight:900;
+  opacity:.92;
 }
 
-.mini-row-user {
-  border: 1px solid rgba(34,197,94,0.55);
-  background: rgba(34,197,94,0.10) !important;
-}
-
-.mini-pos { opacity: 0.75; font-weight: 900; text-align: center; }
-.mini-team { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mini-pts { font-weight: 900; text-align: right; }
-
-.mini-sep {
-  text-align: center;
-  opacity: 0.55;
-  padding: 4px 0;
-}
-
-.mini-legend {
-  text-align: right;
-  font-weight: 900;
-  opacity: 0.55;
-  font-size: 11px;
-  margin-top: 6px;
-}
-
-.mini-muted {
-  opacity: 0.7;
-  font-size: 12px;
-}
-
-/* Regionais */
-.regionals-box .regional-line {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+/* ------------ Match / Post-match ------------ */
+.log-row{
   padding: 6px 8px;
-  border-radius: 12px;
-  background: rgba(255,255,255,0.03);
-  margin-bottom: 6px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  font-weight:800;
+  opacity:.9;
+}
+.log-row:last-child{border-bottom:none}
+
+.vf-divider{
+  height:1px;
+  background: rgba(255,255,255,.08);
+  margin: 10px 0;
 }
 
-.regional-left {
-  font-weight: 800;
-  font-size: 12px;
-  opacity: 0.92;
-}
-
-.regional-right {
-  font-weight: 900;
-  font-size: 11px;
-  opacity: 0.75;
-}
-
-.regional-done {
-  opacity: 0.95;
-}
-
-.regional-champ {
-  padding: 0 8px 8px 8px;
-  font-size: 12px;
-  opacity: 0.85;
-}
-
-/* Notícias */
-.news-box .news-item {
-  display: grid;
-  grid-template-columns: 14px 1fr;
-  gap: 8px;
-  padding: 6px 4px;
-}
-
-.news-dot {
-  opacity: 0.75;
-  font-weight: 900;
-  text-align: center;
-}
-
-.news-text {
-  font-size: 12px;
-  opacity: 0.88;
-  line-height: 1.25rem;
-}
-
-/* Rodapé hint */
-.panel-footer-hint {
-  opacity: 0.75;
-  font-size: 12px;
-  padding: 8px 10px;
-  text-align: center;
+/* ------------ Responsivo ------------ */
+@media (max-width: 420px){
+  button, .btn, .botao{padding:10px 10px}
+  .vf-face, .vf-logo{width:40px;height:40px;border-radius:12px}
+  .vf-title{font-size:11px}
 }
