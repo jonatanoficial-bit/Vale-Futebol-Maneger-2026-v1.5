@@ -1,0 +1,49 @@
+/* =======================================================
+   MATCH CENTER AAA – painel lateral da partida
+   ======================================================= */
+
+.match-center {
+  position: fixed;
+  right: 10px;
+  top: 90px;
+  width: 260px;
+  background: rgba(10,10,10,0.88);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 12px;
+  z-index: 50;
+  box-shadow: 0 0 24px rgba(0,0,0,0.6);
+}
+
+.match-center h3 {
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  font-weight: 900;
+  text-align: center;
+  opacity: 0.9;
+}
+
+.mc-row {
+  display: grid;
+  grid-template-columns: 1fr 60px 1fr;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.mc-home {
+  text-align: right;
+  font-weight: 900;
+}
+
+.mc-away {
+  text-align: left;
+  font-weight: 900;
+}
+
+.mc-label {
+  text-align: center;
+  opacity: 0.75;
+  font-weight: 700;
+}
