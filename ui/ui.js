@@ -1,489 +1,451 @@
-// ui/ui.js
+// Ui/ui.js
 // ======================================================
-// UI principal do Vale Futebol Manager 2026
-// Cuida de: Tabela, Elenco, Táticas, Mercado, Calendário
-// e navegação entre telas
+// UI principal do Vale Futebol Manager 2026 (AAA)
+// Navegação entre telas + integração com Calendar/Match
+// - Próximo Jogo: usa Calendar.consumeNextEvent() com contexto
+// - Mercado: usa MarketUI.renderMarket()
+// - Calendário: usa CalendarUI.renderCalendar()
+// - Elenco: usa TeamUI.renderTeamSquad()
+// - Táticas: usa TacticsUI.renderTactics()
+// - Tabela: usa LeagueUI.renderTabelaBrasileirao() se existir
 // ======================================================
 
 (function () {
-  console.log(
-    "%c[UI] ui.js carregado",
-    "color:#0EA5E9; font-weight:bold;"
-  );
+  console.log("%c[UI] ui.js (AAA) carregado", "color:#0EA5E9; font-weight:bold;");
 
   // ----------------------------------------------------
-  // HELPERS GERAIS
+  // HELPERS
   // ----------------------------------------------------
-
   function mostrarTela(id) {
-    document.querySelectorAll(".tela").forEach((t) =>
-      t.classList.remove("ativa")
-    );
+    document.querySelectorAll(".tela").forEach((t) => t.classList.remove("ativa"));
     const alvo = document.getElementById(id);
-    if (alvo) {
-      alvo.classList.add("ativa");
-    } else {
-      console.warn("[UI] mostrarTela: elemento não encontrado:", id);
-    }
+    if (alvo) alvo.classList.add("ativa");
+    else console.warn("[UI] mostrarTela: elemento não encontrado:", id);
   }
 
-  // expõe para o HTML (onclick="mostrarTela('tela-capa')")
-  window.mostrarTela = mostrarTela;
-
-  function getCurrentTeamId() {
-    // Game.teamId (se a engine usar isso)
-    if (window.Game && Game.teamId) return Game.teamId;
-
-    // gameState.currentTeamId (outro formato comum)
-    if (window.gameState && gameState.currentTeamId)
-      return gameState.currentTeamId;
-
-    return null;
+  function ensureGS() {
+    if (!window.gameState) window.gameState = {};
+    const gs = window.gameState;
+    if (!gs.seasonYear) gs.seasonYear = 2026;
+    if (gs.money == null) gs.money = 50;
+    return gs;
   }
 
-  function getAllTeams() {
-    if (window.Database && Array.isArray(Database.teams)) {
-      return Database.teams;
-    }
-    if (Array.isArray(window.teams)) {
-      return teams;
-    }
-    return [];
+  function getTeams() {
+    return (window.Database && Array.isArray(Database.teams)) ? Database.teams : [];
   }
 
-  function getTeamByIdSafe(teamId) {
-    if (!teamId) return null;
-
-    // 1) função da engine/database.js
-    try {
-      if (typeof getTeamById === "function") {
-        const t = getTeamById(teamId);
-        if (t) return t;
-      }
-    } catch (e) {
-      console.warn("[UI] erro em getTeamById():", e);
-    }
-
-    // 2) Database.teams
-    const all = getAllTeams();
-    const t2 = all.find((t) => t.id === teamId);
-    if (t2) return t2;
-
-    return null;
+  function getTeamById(id) {
+    return getTeams().find(t => String(t.id) === String(id)) || null;
   }
 
-  function getDivisionForTeam(team) {
-    if (!team) return "A";
-    return team.division || team.serie || "A";
+  function getUserTeamId() {
+    const gs = ensureGS();
+    return gs.currentTeamId || gs.selectedTeamId || (window.Game ? Game.teamId : null);
   }
 
-  // ----------------------------------------------------
-  // CLASSIFICAÇÃO / TABELA
-  // ----------------------------------------------------
+  function teamDivision(teamId) {
+    const t = getTeamById(teamId);
+    return String(t?.division || t?.serie || "A").toUpperCase();
+  }
 
-  function getStandingsForDivision(div) {
-    // 1) se a engine League tiver standings prontos
-    if (
-      window.League &&
-      typeof League.getStandingsForCurrentDivision === "function"
-    ) {
-      try {
-        const lista = League.getStandingsForCurrentDivision(div);
-        if (Array.isArray(lista) && lista.length) return lista;
-      } catch (e) {
-        console.warn(
-          "[UI] erro League.getStandingsForCurrentDivision:",
-          e
-        );
+  function setLobbyHeader() {
+    const teamId = getUserTeamId();
+    const t = teamId ? getTeamById(teamId) : null;
+
+    const logo = document.getElementById("lobby-logo");
+    const nome = document.getElementById("lobby-nome-time");
+    const temporada = document.getElementById("lobby-temporada");
+    const saldo = document.getElementById("lobby-saldo");
+    const fase = document.getElementById("lobby-fase");
+
+    if (logo) {
+      if (t) {
+        logo.src = `assets/logos/${t.id}.png`;
+        logo.onerror = () => { logo.src = "assets/logos/default.png"; };
+      } else {
+        logo.src = "assets/logos/default.png";
       }
     }
 
-    // 2) gameState.standings[div]
-    if (
-      window.gameState &&
-      gameState.standings &&
-      Array.isArray(gameState.standings[div])
-    ) {
-      return gameState.standings[div];
-    }
-
-    // 3) fallback – tabela zerada com todos os times da divisão
-    const listaTimes = getAllTeams().filter(
-      (t) => (t.division || t.serie || "A") === div
-    );
-
-    return listaTimes.map((t, idx) => ({
-      position: idx + 1,
-      teamId: t.id,
-      name: t.name,
-      pts: 0,
-      j: 0,
-      v: 0,
-      e: 0,
-      d: 0,
-      gp: 0,
-      gc: 0,
-    }));
+    if (nome) nome.textContent = t ? t.name : "Selecione um time";
+    if (temporada) temporada.textContent = `Temporada ${ensureGS().seasonYear}`;
+    if (saldo) saldo.textContent = `Saldo: R$ ${Number(ensureGS().money).toFixed(1)} mi`;
+    if (fase) fase.textContent = t ? `DIVISÃO: ${teamDivision(teamId)}` : "FASE: —";
   }
 
-  function renderTabelaBrasileirao() {
-    const tabelaEl = document.getElementById("tabela-classificacao");
-    if (!tabelaEl) {
-      console.warn("[UI] #tabela-classificacao não encontrado.");
+  function renderMiniTable() {
+    const box = document.getElementById("lobby-mini-table");
+    if (!box) return;
+    box.innerHTML = "";
+
+    if (!window.League || typeof League.getStandingsForCurrentDivision !== "function") {
+      box.innerHTML = `<div class="mini-muted">Tabela indisponível.</div>`;
       return;
     }
 
-    const teamId = getCurrentTeamId();
-    const team = getTeamByIdSafe(teamId);
-    const div = getDivisionForTeam(team); // "A" ou "B"
-
-    console.log(
-      "[UI] renderTabelaBrasileirao() – divisão:",
-      div,
-      "time atual:",
-      teamId
-    );
-
-    const standings = getStandingsForDivision(div);
-
-    tabelaEl.innerHTML = "";
-
-    if (!standings || !standings.length) {
-      tabelaEl.innerHTML =
-        "<tr><td>Nenhuma informação de classificação encontrada.</td></tr>";
+    const standings = League.getStandingsForCurrentDivision();
+    if (!Array.isArray(standings) || !standings.length) {
+      box.innerHTML = `<div class="mini-muted">Sem dados de tabela.</div>`;
       return;
     }
 
-    const headerRow = document.createElement("tr");
-    headerRow.innerHTML = `
-      <th>#</th>
-      <th>Time (${div === "B" ? "Série B" : "Série A"})</th>
-      <th>Pts</th>
-      <th>J</th>
-      <th>V</th>
-      <th>E</th>
-      <th>D</th>
-      <th>G+</th>
-      <th>G-</th>
-    `;
-    tabelaEl.appendChild(headerRow);
-
-    standings.forEach((row, index) => {
-      const t =
-        getTeamByIdSafe(row.teamId) ||
-        getTeamByIdSafe(row.id) ||
-        { id: null, name: row.name || row.teamName || "Time" };
-
-      const nome = t.name;
-      const logoSrc = t.id ? `assets/logos/${t.id}.png` : "";
-      const pts = row.pts ?? row.points ?? 0;
-      const j = row.j ?? row.games ?? 0;
-      const v = row.v ?? row.wins ?? 0;
-      const e = row.e ?? row.draws ?? 0;
-      const d = row.d ?? row.losses ?? 0;
-      const gp = row.gp ?? row.goalsFor ?? 0;
-      const gc = row.gc ?? row.goalsAgainst ?? 0;
-
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${index + 1}</td>
-        <td class="time-coluna">
-          ${
-            logoSrc
-              ? `<img class="logo-tabela" src="${logoSrc}" alt="${nome}" onerror="this.style.display='none'">`
-              : ""
-          }
-          <span>${nome}</span>
-        </td>
-        <td>${pts}</td>
-        <td>${j}</td>
-        <td>${v}</td>
-        <td>${e}</td>
-        <td>${d}</td>
-        <td>${gp}</td>
-        <td>${gc}</td>
-      `;
-      tabelaEl.appendChild(tr);
+    const top = standings.slice(0, 6);
+    top.forEach((row, i) => {
+      const div = document.createElement("div");
+      div.className = "mini-row";
+      div.textContent = `${i + 1}. ${row.name} (${row.pts} pts)`;
+      box.appendChild(div);
     });
   }
 
-  // ----------------------------------------------------
-  // ELENCO / JOGADORES
-  // ----------------------------------------------------
+  function renderLobbyNextMatch() {
+    const title = document.getElementById("lobby-next-title");
+    const sub = document.getElementById("lobby-next-sub");
+    const date = document.getElementById("lobby-next-date");
 
-  function getSquadForCurrentTeam() {
-    const teamId = getCurrentTeamId();
+    if (!title || !sub || !date) return;
+
+    const teamId = getUserTeamId();
     if (!teamId) {
-      console.warn("[UI] getSquadForCurrentTeam: sem teamId.");
-      return [];
+      title.textContent = "—";
+      sub.textContent = "Selecione um time";
+      date.textContent = "—";
+      return;
     }
 
-    // 1) função oficial da engine/database.js
-    if (
-      window.Database &&
-      typeof Database.carregarElencoDoTime === "function"
-    ) {
-      const elenco = Database.carregarElencoDoTime(teamId);
-      if (Array.isArray(elenco) && elenco.length) {
-        return elenco;
+    // Preferir Calendar
+    let ev = null;
+    try {
+      if (window.Calendar && typeof Calendar.getNextEvent === "function") {
+        ev = Calendar.getNextEvent(teamId);
       }
-    }
+    } catch (e) {}
 
-    // 2) filtrar Database.players
-    if (window.Database && Array.isArray(Database.players)) {
-      const lista = Database.players.filter((p) => p.teamId === teamId);
-      if (lista.length) return lista;
-    }
-
-    // 3) gameState.squads
-    if (
-      window.gameState &&
-      gameState.squads &&
-      Array.isArray(gameState.squads[teamId])
-    ) {
-      return gameState.squads[teamId];
-    }
-
-    // 4) gameState.currentSquad
-    if (window.gameState && Array.isArray(gameState.currentSquad)) {
-      return gameState.currentSquad;
-    }
-
-    console.warn("[UI] Nenhum elenco encontrado para o time", teamId);
-    return [];
-  }
-
-  function getFacePathForPlayer(p) {
-    const faceId = p.faceId || p.id || p.code || "";
-    if (!faceId) return "assets/geral/sem_foto.png";
-
-    // pasta "faces" (plural) – conforme comentário do database.js
-    return `assets/faces/${faceId}.png`;
-  }
-
-  function renderElenco() {
-    const container = document.getElementById("elenco-lista");
-    if (!container) {
-      console.warn("[UI] #elenco-lista não encontrado.");
-      return;
-    }
-
-    const elenco = getSquadForCurrentTeam();
-    console.log("[UI] renderElenco() – jogadores encontrados:", elenco.length);
-
-    container.innerHTML = "";
-
-    if (!elenco.length) {
-      container.innerHTML =
-        "<p style='padding:10px;'>Nenhum jogador encontrado para este time.</p>";
-      return;
-    }
-
-    elenco.forEach((p) => {
-      const nome = p.name || p.nome || "Jogador";
-      const pos = p.position || p.posicao || p.pos || p.role || "POS";
-      const ovr = p.ovr ?? p.rating ?? p.overall ?? 70;
-      const imgSrc = getFacePathForPlayer(p);
-
-      const card = document.createElement("div");
-      card.className = "card-jogador";
-      card.innerHTML = `
-        <img src="${imgSrc}" alt="${nome}" onerror="this.style.display='none'">
-        <h3>${nome}</h3>
-        <p>${pos}</p>
-        <p class="ovr">${ovr}</p>
-      `;
-      container.appendChild(card);
-    });
-  }
-
-  // ----------------------------------------------------
-  // TÁTICAS / CAMPO + RESERVAS
-  // ----------------------------------------------------
-
-  function renderTaticas() {
-    const campo = document.getElementById("campo-tatico");
-    const banco = document.getElementById("banco-reservas");
-    if (!campo || !banco) {
-      console.warn("[UI] #campo-tatico ou #banco-reservas não encontrados.");
-      return;
-    }
-
-    const elenco = getSquadForCurrentTeam();
-    console.log("[UI] renderTaticas() – jogadores:", elenco.length);
-
-    campo.innerHTML = "";
-    banco.innerHTML = "";
-
-    if (!elenco.length) {
-      campo.innerHTML =
-        "<p style='padding:10px;color:#fff;'>Nenhum jogador carregado para este time.</p>";
-      return;
-    }
-
-    const titulares = elenco.slice(0, 11);
-    const reservas = elenco.slice(11);
-
-    // posições aproximadas em % (x,y) no campo
-    const slotsPos = [
-      { x: 50, y: 88 }, // GOL
-      { x: 20, y: 70 },
-      { x: 40, y: 70 },
-      { x: 60, y: 70 },
-      { x: 80, y: 70 },
-      { x: 25, y: 52 },
-      { x: 50, y: 52 },
-      { x: 75, y: 52 },
-      { x: 25, y: 32 },
-      { x: 50, y: 30 },
-      { x: 75, y: 32 },
-    ];
-
-    titulares.forEach((p, idx) => {
-      const posCampo = slotsPos[idx] || { x: 50, y: 50 };
-      const nome = p.name || p.nome || "Jogador";
-      const pos = p.position || p.posicao || p.pos || p.role || "POS";
-      const ovr = p.ovr ?? p.rating ?? p.overall ?? 70;
-      const img = getFacePathForPlayer(p);
-
-      const slot = document.createElement("div");
-      slot.className = "slot-jogador";
-      slot.style.left = posCampo.x + "%";
-      slot.style.top = posCampo.y + "%";
-
-      slot.innerHTML = `
-        <div class="slot-card">
-          <img src="${img}" alt="${nome}" onerror="this.style.display='none'">
-          <div>${nome}</div>
-          <div>${pos} · OVR ${ovr}</div>
-        </div>
-      `;
-      campo.appendChild(slot);
-    });
-
-    reservas.forEach((p) => {
-      const nome = p.name || p.nome || "Jogador";
-      const pos = p.position || p.posicao || p.pos || p.role || "POS";
-      const ovr = p.ovr ?? p.rating ?? p.overall ?? 70;
-      const img = getFacePathForPlayer(p);
-
-      const linha = document.createElement("div");
-      linha.className = "reserva-card";
-      linha.innerHTML = `
-        <img src="${img}" alt="${nome}" onerror="this.style.display='none'">
-        <div>${nome}</div>
-        <div>${pos} · OVR ${ovr}</div>
-      `;
-      banco.appendChild(linha);
-    });
-  }
-
-  // ----------------------------------------------------
-  // CALENDÁRIO (UI simples, usando calendar-ui.js se existir)
-  // ----------------------------------------------------
-
-  function abrirCalendarioTela() {
-    // Se existir um módulo CalendarUI, deixar ele montar a lista
-    if (
-      window.CalendarUI &&
-      typeof CalendarUI.renderCalendario === "function"
-    ) {
+    // Fallback: League.prepararProximoJogo
+    if (!ev) {
       try {
-        CalendarUI.renderCalendario();
-      } catch (e) {
-        console.warn("[UI] erro ao chamar CalendarUI.renderCalendario():", e);
-      }
+        if (window.League && typeof League.prepararProximoJogo === "function") {
+          const fx = League.prepararProximoJogo();
+          if (fx) {
+            ev = {
+              date: fx.date || "—",
+              comp: "LEAGUE",
+              competitionName: fx.competitionName || "Campeonato Brasileiro",
+              homeId: fx.homeId,
+              awayId: fx.awayId,
+              roundNumber: fx.roundNumber || fx.round || null,
+              division: fx.division || teamDivision(teamId)
+            };
+          }
+        }
+      } catch (e) {}
     }
-    mostrarTela("tela-calendario");
+
+    if (!ev) {
+      title.textContent = "Sem calendário";
+      sub.textContent = "Use PRÓXIMO JOGO para gerar";
+      date.textContent = "—";
+      return;
+    }
+
+    const compName = ev.competitionName || ev.title || "Partida";
+    const home = getTeamById(ev.homeId)?.name || String(ev.homeId || "Casa");
+    const away = getTeamById(ev.awayId)?.name || String(ev.awayId || "Fora");
+
+    title.textContent = compName;
+    sub.textContent = `${home} vs ${away}`;
+    date.textContent = String(ev.date || "—");
+  }
+
+  function renderLobbyNews() {
+    const box = document.getElementById("lobby-news");
+    if (!box) return;
+    box.innerHTML = "";
+
+    try {
+      if (window.News && typeof News.getLatest === "function") {
+        const latest = News.getLatest(6);
+        if (Array.isArray(latest) && latest.length) {
+          latest.forEach(n => {
+            const div = document.createElement("div");
+            div.className = "news-row";
+            div.textContent = `• ${n.title || n.titulo || "Notícia"} — ${n.body || n.text || ""}`.slice(0, 120);
+            box.appendChild(div);
+          });
+          return;
+        }
+      }
+    } catch (e) {}
+
+    box.innerHTML = `<div class="mini-muted">Sem notícias no momento.</div>`;
+  }
+
+  function renderLobbyRegionals() {
+    const box = document.getElementById("lobby-regionais");
+    if (!box) return;
+    box.innerHTML = "";
+
+    // Placeholder simples (você já tem regionals engine; depois eu integro em detalhe)
+    box.innerHTML = `<div class="mini-muted">Estaduais ativos no calendário (Jan–Mar).</div>`;
+  }
+
+  function atualizarLobby() {
+    setLobbyHeader();
+    renderMiniTable();
+    renderLobbyNextMatch();
+    renderLobbyNews();
+    renderLobbyRegionals();
   }
 
   // ----------------------------------------------------
-  // MERCADO (apenas navegação; render fica em market-ui.js)
+  // TELAS (Renderers)
   // ----------------------------------------------------
-
   function abrirMercadoTela() {
-    // Se existir um módulo MarketUI, podemos chamar um refresh se quiser
-    if (
-      window.MarketUI &&
-      typeof MarketUI.renderMercado === "function"
-    ) {
-      try {
-        MarketUI.renderMercado();
-      } catch (e) {
-        console.warn("[UI] erro ao chamar MarketUI.renderMercado():", e);
-      }
+    if (window.MarketUI && typeof MarketUI.renderMarket === "function") {
+      MarketUI.renderMarket();
+    } else {
+      const node = document.getElementById("lista-mercado");
+      if (node) node.innerHTML = `<div class="mini-muted">MarketUI não encontrado.</div>`;
     }
     mostrarTela("tela-mercado");
   }
 
-  // ----------------------------------------------------
-  // OBJETO UI GLOBAL
-  // ----------------------------------------------------
+  function abrirCalendarioTela() {
+    if (window.Calendar && typeof Calendar.ensure === "function") {
+      try { Calendar.ensure(false); } catch (e) {}
+    }
+    if (window.CalendarUI && typeof CalendarUI.renderCalendar === "function") {
+      CalendarUI.renderCalendar();
+    } else {
+      const node = document.getElementById("calendario-anual");
+      if (node) node.innerHTML = `<div class="mini-muted">CalendarUI não encontrado.</div>`;
+    }
+    mostrarTela("tela-calendario");
+  }
 
+  function renderElenco() {
+    if (window.TeamUI && typeof TeamUI.renderTeamSquad === "function") {
+      TeamUI.renderTeamSquad();
+    } else {
+      const node = document.getElementById("lista-elenco");
+      if (node) node.innerHTML = `<div class="mini-muted">TeamUI não encontrado.</div>`;
+    }
+  }
+
+  function renderTaticas() {
+    if (window.TacticsUI && typeof TacticsUI.renderTactics === "function") {
+      TacticsUI.renderTactics();
+    } else {
+      alert("TacticsUI não encontrado.");
+    }
+  }
+
+  function renderTabelaBrasileirao() {
+    if (window.LeagueUI && typeof LeagueUI.renderTabelaBrasileirao === "function") {
+      LeagueUI.renderTabelaBrasileirao();
+    } else if (window.League && typeof League.getStandingsForCurrentDivision === "function") {
+      // fallback simples
+      const node = document.getElementById("tabela-classificacao");
+      if (!node) return;
+      const st = League.getStandingsForCurrentDivision() || [];
+      node.innerHTML = "";
+      const table = document.createElement("div");
+      table.className = "mini-table";
+      st.slice(0, 20).forEach((r, i) => {
+        const div = document.createElement("div");
+        div.className = "mini-row";
+        div.textContent = `${i + 1}. ${r.name} — ${r.pts} pts (J ${r.pld})`;
+        table.appendChild(div);
+      });
+      node.appendChild(table);
+    } else {
+      const node = document.getElementById("tabela-classificacao");
+      if (node) node.innerHTML = `<div class="mini-muted">LeagueUI/League não encontrado.</div>`;
+    }
+  }
+
+  // ----------------------------------------------------
+  // PRÓXIMO JOGO (AAA) — Calendar + Contexto
+  // ----------------------------------------------------
+  function iniciarPartidaComEvento(ev) {
+    const homeId = ev.homeId;
+    const awayId = ev.awayId;
+
+    // grava contexto global (Match.js lê isso)
+    window.currentMatchContext = {
+      competition: ev.comp || ev.competition || "LEAGUE",
+      competitionName: ev.competitionName || ev.title || "Partida",
+      roundNumber: ev.roundNumber || ev.round || null,
+      division: ev.division || null,
+      date: ev.date || null
+    };
+
+    // inicia match
+    if (window.Match) {
+      if (typeof Match._startMatch === "function") {
+        Match._startMatch(homeId, awayId, window.currentMatchContext);
+      } else if (typeof Match.iniciarProximoJogo === "function") {
+        // fallback (se seu match antigo existisse)
+        Match.iniciarProximoJogo();
+      } else {
+        alert("Engine de partida (Match) não encontrada.");
+        return;
+      }
+    } else {
+      alert("Match não encontrado.");
+      return;
+    }
+
+    mostrarTela("tela-partida");
+  }
+
+  function abrirProximoJogoAAA() {
+    const teamId = getUserTeamId();
+    if (!teamId) {
+      alert("Selecione um time primeiro!");
+      mostrarTela("tela-escolha-time");
+      return;
+    }
+
+    // garantir Calendar
+    try { if (window.Calendar && typeof Calendar.ensure === "function") Calendar.ensure(false); } catch (e) {}
+
+    // pega próximo evento e consome
+    let ev = null;
+    try {
+      if (window.Calendar && typeof Calendar.consumeNextEvent === "function") {
+        ev = Calendar.consumeNextEvent(teamId);
+      }
+    } catch (e) {}
+
+    // fallback: League.prepararProximoJogo()
+    if (!ev) {
+      try {
+        if (window.League && typeof League.prepararProximoJogo === "function") {
+          const fx = League.prepararProximoJogo();
+          if (fx) {
+            ev = {
+              date: fx.date || null,
+              comp: "LEAGUE",
+              competitionName: fx.competitionName || "Campeonato Brasileiro",
+              homeId: fx.homeId,
+              awayId: fx.awayId,
+              roundNumber: fx.roundNumber || fx.round || null,
+              division: fx.division || teamDivision(teamId)
+            };
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (!ev || !ev.homeId || !ev.awayId) {
+      // último fallback: Match.iniciarProximoJogo
+      if (window.Match && typeof Match.iniciarProximoJogo === "function") {
+        try { Match.iniciarProximoJogo(); mostrarTela("tela-partida"); return; } catch (e) {}
+      }
+      alert("Não foi possível encontrar o próximo jogo no calendário.");
+      return;
+    }
+
+    iniciarPartidaComEvento(ev);
+  }
+
+  // ----------------------------------------------------
+  // SALVAR JSON
+  // ----------------------------------------------------
+  function salvarCarreiraJSON() {
+    ensureGS();
+    try {
+      if (!window.Save || typeof Save.exportJSON !== "function") {
+        alert("Save.exportJSON não encontrado.");
+        return;
+      }
+      Save.exportJSON();
+    } catch (e) {
+      console.warn("[UI] erro ao salvar JSON:", e);
+      alert("Erro ao salvar.");
+    }
+  }
+
+  // ----------------------------------------------------
+  // MODAL CAMPEÃO (compat)
+  // ----------------------------------------------------
+  function showChampionModal(title, msg) {
+    alert(`${title}\n\n${msg}`);
+  }
+
+  // ----------------------------------------------------
+  // API UI
+  // ----------------------------------------------------
   const UI = {
     init() {
-      console.log(
-        "%c[UI] init() chamado (ui.js).",
-        "color:#C7A029; font-weight:bold;"
-      );
-      // main.js já cuida da tela inicial e do botão INICIAR.
+      console.log("%c[UI] init() chamado (AAA).", "color:#C7A029; font-weight:bold;");
     },
 
-    // navegação básica
-    voltarParaCapa() {
-      mostrarTela("tela-capa");
-    },
+    // navegação
+    voltarParaCapa() { mostrarTela("tela-capa"); },
 
     voltarLobby() {
+      atualizarLobby();
       mostrarTela("tela-lobby");
     },
 
-    // PARTIDA
-    abrirProximoJogo() {
-      if (window.Match && typeof Match.iniciarProximoJogo === "function") {
-        try {
-          Match.iniciarProximoJogo();
-        } catch (e) {
-          console.warn("[UI] erro em Match.iniciarProximoJogo():", e);
-        }
+    // seleção de time
+    abrirEscolhaTime() {
+      if (window.TeamUI && typeof TeamUI.renderTeamSelection === "function") {
+        TeamUI.renderTeamSelection();
       }
-      mostrarTela("tela-partida");
+      mostrarTela("tela-escolha-time");
+    },
+
+    // LOBBY
+    abrirLobby() {
+      atualizarLobby();
+      mostrarTela("tela-lobby");
+    },
+
+    // PRÓXIMO JOGO (AAA)
+    abrirProximoJogo() {
+      abrirProximoJogoAAA();
     },
 
     // TABELA
     abrirClassificacao() {
-      console.log("[UI] abrirClassificacao() disparado.");
       renderTabelaBrasileirao();
       mostrarTela("tela-classificacao");
     },
 
     // ELENCO
     abrirElenco() {
-      console.log("[UI] abrirElenco() disparado.");
       renderElenco();
       mostrarTela("tela-elenco");
     },
 
     // TÁTICAS
     abrirTaticas() {
-      console.log("[UI] abrirTaticas() disparado.");
       renderTaticas();
       mostrarTela("tela-taticas");
     },
 
     // MERCADO
     abrirMercado() {
-      console.log("[UI] abrirMercado() disparado.");
       abrirMercadoTela();
     },
 
-    // CALENDÁRIO
-    abrirCalendario() {
-      console.log("[UI] abrirCalendario() disparado.");
-      abrirCalendarioTela();
-    },
+    // CALENDÁRIO (compat + alias do index)
+    abrirCalendario() { abrirCalendarioTela(); },
+    abrirCalendarioAnual() { abrirCalendarioTela(); },
+
+    // SALVAR
+    salvarCarreira() { salvarCarreiraJSON(); },
+
+    // atualização manual
+    atualizarLobby() { atualizarLobby(); }
   };
 
-  // NÃO sobrescreve se já existir algo, apenas complementa
+  UI.showChampionModal = showChampionModal;
+
+  // complementa sem sobrescrever
   window.UI = Object.assign(window.UI || {}, UI);
 })();
