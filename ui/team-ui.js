@@ -1,276 +1,241 @@
 /* =======================================================
    VALE FUTEBOL MANAGER 2026
-   Ui/team-ui.js — Seleção de time + Elenco AAA
+   Ui/team-ui.js — Elenco AAA (Status Fitness + Contrato)
+   -------------------------------------------------------
+   Entrega:
+   - Tela de seleção de time (capa -> escolha)
+   - Tela de elenco com badges:
+     • LESIONADO (X sem.)
+     • SUSPENSO
+     • FADIGA (xx%)
+   - (Opcional) mostra salário e meses de contrato, se Contracts estiver disponível
+   - Botão "Treino" já existe no Lobby; aqui é apenas ELENCO
    =======================================================*/
 
 (function () {
-  console.log("%c[TEAM-UI] team-ui.js AAA carregado", "color:#a855f7; font-weight:bold;");
+  console.log("%c[TeamUI] team-ui.js carregado", "color:#38bdf8; font-weight:bold;");
+
+  // -----------------------------
+  // Utils
+  // -----------------------------
+  function n(v, d = 0) { const x = Number(v); return isNaN(x) ? d : x; }
+  function el(tag, cls, txt) {
+    const d = document.createElement(tag);
+    if (cls) d.className = cls;
+    if (txt != null) d.textContent = txt;
+    return d;
+  }
+  function clear(node) { if (!node) return; while (node.firstChild) node.removeChild(node.firstChild); }
 
   function getTeams() {
     return (window.Database && Array.isArray(Database.teams)) ? Database.teams : [];
   }
-
   function getPlayers() {
     return (window.Database && Array.isArray(Database.players)) ? Database.players : [];
   }
+  function getTeamById(id) { return getTeams().find(t => String(t.id) === String(id)) || null; }
 
   function ensureGS() {
     if (!window.gameState) window.gameState = {};
     return window.gameState;
   }
 
-  function getCurrentTeamId() {
+  function getUserTeamId() {
     const gs = ensureGS();
-    return gs.selectedTeamId || gs.currentTeamId || (window.Game ? Game.teamId : null);
+    return gs.currentTeamId || gs.selectedTeamId || (window.Game ? Game.teamId : null);
   }
 
-  function clear(el) {
-    if (!el) return;
-    while (el.firstChild) el.removeChild(el.firstChild);
+  // Fitness API (resistente a ausência)
+  function fitnessOf(pid) {
+    try { if (window.Fitness && typeof Fitness.ensurePlayer === "function") return Fitness.ensurePlayer(pid); } catch (e) {}
+    // fallback neutro
+    return { fatigue: 10, injuryWeeks: 0, suspended: false, yellowCards: 0 };
+  }
+  function isAvailable(pid) {
+    try { if (window.Fitness && typeof Fitness.isAvailable === "function") return Fitness.isAvailable(pid); } catch (e) {}
+    return true;
   }
 
-  function el(tag, cls, text) {
-    const d = document.createElement(tag);
-    if (cls) d.className = cls;
-    if (text != null) d.textContent = text;
-    return d;
+  // Contracts (opcional)
+  function getPlayerContract(pid) {
+    try { if (window.Contracts && typeof Contracts.getContractForPlayer === "function") return Contracts.getContractForPlayer(pid); } catch (e) {}
+    return null;
   }
 
-  function normNameToFaceKey(name) {
-    return String(name || "")
-      .trim()
-      .toUpperCase()
-      .replace(/[ÁÀÂÃ]/g, "A")
-      .replace(/[ÉÈÊ]/g, "E")
-      .replace(/[ÍÌÎ]/g, "I")
-      .replace(/[ÓÒÔÕ]/g, "O")
-      .replace(/[ÚÙÛ]/g, "U")
-      .replace(/[Ç]/g, "C")
-      .replace(/[^A-Z0-9]+/g, "_")
-      .replace(/^_+|_+$/g, "");
-  }
-
-  // Estratégia de face:
-  // 1) se player.face existir -> usa
-  // 2) tenta assets/face/{TEAMID}_{KEY}.png (ex: FLA_GABIGOL.png)
-  // 3) tenta assets/face/{player.id}.png (fallback antigo)
-  function getFacePath(player, teamId) {
-    if (player && player.face) return player.face;
-
-    const nameKey = normNameToFaceKey(player?.faceKey || player?.apelido || player?.nickname || player?.name || player?.nome);
-    if (teamId && nameKey) return `assets/face/${teamId}_${nameKey}.png`;
-    if (player && player.id) return `assets/face/${player.id}.png`;
-    return "";
-  }
-
-  function getPlayerState(pid) {
-    if (window.Dynamics && typeof Dynamics.getPlayerState === "function") return Dynamics.getPlayerState(pid);
-    const gs = ensureGS();
-    if (!gs.playerStates) return null;
-    return gs.playerStates[String(pid)] || null;
-  }
-
-  /* =======================================================
-     SELEÇÃO DE TIME (tela-escolha-time)
-     =======================================================*/
+  // -----------------------------
+  // SELEÇÃO DE TIME (Tela 2)
+  // -----------------------------
   function renderTeamSelection() {
-    const container = document.getElementById("lista-times");
-    if (!container) {
-      console.warn("[TEAM-UI] #lista-times não encontrado.");
-      return;
-    }
-    clear(container);
+    const wrap = document.getElementById("lista-times");
+    clear(wrap);
 
-    const teams = getTeams();
-    if (!teams.length) {
-      container.appendChild(el("div", "", "Sem times no banco de dados."));
-      return;
-    }
+    const teams = getTeams().slice();
+    // destaque dos principais (ex.: Série A primeiro)
+    teams.sort((a, b) => {
+      const da = String(a.division || a.serie || "A");
+      const db = String(b.division || b.serie || "A");
+      if (da !== db) return da.localeCompare(db);
+      return String(a.name || a.id).localeCompare(String(b.name || b.id));
+    });
 
-    teams.forEach((t) => {
-      const card = el("div", "team-card");
-      const img = document.createElement("img");
-      img.src = `assets/logos/${t.id}.png`;
-      img.alt = t.name || t.id;
-      img.onerror = () => { img.src = "assets/logos/default.png"; };
+    teams.forEach(team => {
+      const card = el("div", "time-card");
+      const logo = el("img", "time-logo");
+      logo.src = `assets/logos/${team.id}.png`;
+      logo.alt = team.name;
+      logo.onerror = () => { logo.src = "assets/logos/default.png"; };
 
-      const name = el("div", "team-name", t.name || t.id);
-      const meta = el("div", "team-meta", `Série ${t.division || t.serie || "A"}`);
+      const name = el("div", "time-name", team.name);
+      const serie = el("div", "time-serie", `Série ${team.division || team.serie || "A"}`);
 
-      card.appendChild(img);
-      card.appendChild(name);
-      card.appendChild(meta);
-
-      card.onclick = () => {
+      const pickBtn = el("button", "btn-green", "ESCOLHER");
+      pickBtn.onclick = () => {
         const gs = ensureGS();
-        gs.selectedTeamId = t.id;
-        gs.currentTeamId = t.id;
-        if (window.Game) Game.teamId = t.id;
+        gs.selectedTeamId = team.id;
+        gs.currentTeamId = team.id;
+        if (window.Game) Game.teamId = team.id;
 
-        // inicia estruturas de Dynamics/News
-        if (window.Dynamics && typeof Dynamics.ensure === "function") Dynamics.ensure();
-        if (window.News && typeof News.ensure === "function") News.ensure();
+        // inicializa arranjos táticos mínimos
+        if (!gs.formacao) gs.formacao = "4-4-2";
+        if (!Array.isArray(gs.titulares)) gs.titulares = [];
 
-        // primeira notícia
-        if (window.News && typeof News.pushNews === "function") {
-          News.pushNews("Carreira iniciada", `Você assumiu o comando do ${t.name || t.id}. Boa sorte!`, "SYSTEM");
-        }
-
-        // volta ao lobby
-        if (window.UI && typeof UI.voltarLobby === "function") UI.voltarLobby();
+        try { if (window.Save && typeof Save.salvar === "function") Save.salvar(); } catch (e) {}
+        try { if (window.UI && typeof UI.voltarLobby === "function") { UI.voltarLobby(); return; } } catch (e) {}
+        // fallback
+        alert(`Time selecionado: ${team.name}`);
       };
 
-      container.appendChild(card);
+      card.appendChild(logo);
+      card.appendChild(name);
+      card.appendChild(serie);
+      card.appendChild(pickBtn);
+      wrap.appendChild(card);
     });
   }
 
-  /* =======================================================
-     ELENCO AAA (tela-elenco)
-     =======================================================*/
+  // -----------------------------
+  // ELENCO (Tela 6)
+  // -----------------------------
   function renderTeamSquad() {
-    const container = document.getElementById("lista-elenco");
-    if (!container) {
-      console.warn("[TEAM-UI] #lista-elenco não encontrado.");
-      return;
-    }
-    clear(container);
+    const teamId = getUserTeamId();
+    const team = getTeamById(teamId);
+    const list = document.getElementById("lista-elenco");
+    clear(list);
 
-    const teamId = getCurrentTeamId();
-    if (!teamId) {
-      container.appendChild(el("div", "", "Nenhum time selecionado."));
+    if (!team) {
+      list.appendChild(el("div", "mini-muted", "Nenhum time selecionado."));
       return;
     }
 
-    if (window.Dynamics && typeof Dynamics.ensure === "function") Dynamics.ensure();
+    // Título
+    const header = el("div", "elenco-header");
+    const hTitle = el("h2", "elenco-title", team.name);
+    const hSerie = el("div", "elenco-serie", `Série ${team.division || team.serie || "A"}`);
+    header.appendChild(hTitle);
+    header.appendChild(hSerie);
+    list.appendChild(header);
 
-    const elenco = getPlayers().filter(p => p.teamId === teamId);
-    if (!elenco.length) {
-      container.appendChild(el("div", "", "Nenhum jogador encontrado para este time."));
-      return;
+    // Tabela
+    const table = el("div", "elenco-table");
+    const head = el("div", "elenco-row elenco-head");
+    ["#", "Jogador", "Pos", "OVR", "Status", "Contrato"].forEach(t => head.appendChild(el("div", "cell", t)));
+    table.appendChild(head);
+
+    const players = getPlayers().filter(p => String(p.teamId) === String(teamId));
+    if (!players.length) {
+      table.appendChild(el("div", "mini-muted", "Elenco vazio."));
+    } else {
+      // ordena por pos -> ovr
+      players.sort((a, b) => {
+        const pa = String(a.pos || a.position || "");
+        const pb = String(b.pos || b.position || "");
+        if (pa !== pb) return pa.localeCompare(pb);
+        return n(b.ovr ?? b.overall, 0) - n(a.ovr ?? a.overall, 0);
+      });
+
+      players.forEach((p, idx) => {
+        const row = el("div", "elenco-row");
+
+        // #
+        row.appendChild(el("div", "cell cell-idx", String(idx + 1)));
+
+        // Jogador (com face, se existir)
+        const cellJ = el("div", "cell cell-jogador");
+        const face = el("img", "face");
+        face.src = `assets/faces/${p.id}.png`;
+        face.alt = p.name || p.nome || ("#" + p.id);
+        face.onerror = () => { face.src = "assets/faces/default.png"; };
+        const nm = el("div", "nome", p.name || p.nome || ("Jogador " + p.id));
+        cellJ.appendChild(face);
+        cellJ.appendChild(nm);
+        row.appendChild(cellJ);
+
+        // Pos
+        row.appendChild(el("div", "cell cell-pos", String(p.pos || p.position || "—")));
+
+        // OVR
+        row.appendChild(el("div", "cell cell-ovr", String(n(p.ovr ?? p.overall, 0))));
+
+        // Status Fitness
+        const f = fitnessOf(p.id);
+        const statusCell = el("div", "cell cell-status");
+        const badges = [];
+
+        if (f.injuryWeeks > 0) {
+          const b = el("span", "badge badge-injury", `LESIONADO (${f.injuryWeeks} sem.)`);
+          badges.push(b);
+        }
+        if (f.suspended) {
+          const b = el("span", "badge badge-susp", "SUSPENSO");
+          badges.push(b);
+        }
+
+        // fadiga
+        const fatiguePct = n(f.fatigue, 0);
+        const fd = el("span", "badge badge-fatigue", `FADIGA ${fatiguePct}%`);
+        if (fatiguePct >= 80) fd.classList.add("badge-red");
+        else if (fatiguePct >= 60) fd.classList.add("badge-amber");
+        badges.push(fd);
+
+        if (!badges.length) badges.push(el("span", "badge badge-ok", "OK"));
+        badges.forEach(b => statusCell.appendChild(b));
+        row.appendChild(statusCell);
+
+        // Contrato (opcional)
+        const cCell = el("div", "cell cell-contrato");
+        const c = getPlayerContract(p.id);
+        if (c) {
+          // esperado (se existir): { wageMi, monthsLeft }
+          const wage = typeof c.wageMi === "number" ? c.wageMi.toFixed(2) : (c.wageMi || "—");
+          const months = (c.monthsLeft != null) ? String(c.monthsLeft) : "—";
+          cCell.textContent = `R$ ${wage} mi/mês • ${months} m`;
+        } else {
+          cCell.textContent = "—";
+        }
+        row.appendChild(cCell);
+
+        table.appendChild(row);
+      });
     }
 
-    // ordena por overall
-    elenco.sort((a, b) => (Number(b.ovr || b.overall || 0) - Number(a.ovr || a.overall || 0)));
+    list.appendChild(table);
 
-    // estilo simples AAA inline para não depender de CSS novo
-    container.style.display = "grid";
-    container.style.gridTemplateColumns = "repeat(auto-fit, minmax(260px, 1fr))";
-    container.style.gap = "12px";
+    // Ação
+    const actions = el("div", "elenco-actions");
+    const btnTaticas = el("button", "btn-blue", "ABRIR TÁTICAS");
+    btnTaticas.onclick = () => { if (window.UI && typeof UI.abrirTaticas === "function") UI.abrirTaticas(); };
+    actions.appendChild(btnTaticas);
 
-    elenco.forEach((p) => {
-      const pid = String(p.id || p.playerId || "");
-      const st = getPlayerState(pid) || { morale: 55, form: 55, fatigue: 10 };
+    const btnLobby = el("button", "btn-green", "VOLTAR AO LOBBY");
+    btnLobby.onclick = () => { if (window.UI && typeof UI.voltarLobby === "function") UI.voltarLobby(); };
+    actions.appendChild(btnLobby);
 
-      const card = el("div", "");
-      card.style.background = "rgba(10,10,10,0.82)";
-      card.style.border = "1px solid rgba(255,255,255,0.08)";
-      card.style.borderRadius = "16px";
-      card.style.padding = "10px";
-      card.style.display = "grid";
-      card.style.gridTemplateColumns = "58px 1fr";
-      card.style.gap = "10px";
-      card.style.alignItems = "center";
-      card.style.boxShadow = "0 0 18px rgba(0,0,0,0.55)";
-
-      const img = document.createElement("img");
-      img.style.width = "58px";
-      img.style.height = "58px";
-      img.style.objectFit = "cover";
-      img.style.borderRadius = "12px";
-      img.style.background = "rgba(255,255,255,0.05)";
-      img.style.border = "1px solid rgba(255,255,255,0.06)";
-      img.src = getFacePath(p, teamId);
-      img.onerror = () => { img.style.display = "none"; };
-
-      const right = el("div", "");
-
-      const top = el("div", "");
-      top.style.display = "flex";
-      top.style.justifyContent = "space-between";
-      top.style.alignItems = "center";
-      top.style.gap = "10px";
-
-      const name = el("div", "");
-      name.style.fontWeight = "900";
-      name.style.fontSize = "14px";
-      name.style.whiteSpace = "nowrap";
-      name.style.overflow = "hidden";
-      name.style.textOverflow = "ellipsis";
-      name.textContent = p.name || p.nome || "Jogador";
-
-      const ovr = el("div", "");
-      ovr.style.fontWeight = "900";
-      ovr.style.padding = "6px 8px";
-      ovr.style.borderRadius = "999px";
-      ovr.style.background = "rgba(34,197,94,0.12)";
-      ovr.style.border = "1px solid rgba(34,197,94,0.35)";
-      ovr.style.fontSize = "12px";
-      ovr.textContent = `OVR ${Number(p.ovr || p.overall || 0)}`;
-
-      top.appendChild(name);
-      top.appendChild(ovr);
-
-      const mid = el("div", "");
-      mid.style.display = "flex";
-      mid.style.justifyContent = "space-between";
-      mid.style.opacity = "0.85";
-      mid.style.fontSize = "12px";
-      mid.style.marginTop = "4px";
-      mid.textContent = `${(p.pos || p.position || "POS")} • ${p.age ? (p.age + " anos") : ""}`.trim();
-
-      const bars = el("div", "");
-      bars.style.display = "grid";
-      bars.style.gridTemplateColumns = "1fr 1fr 1fr";
-      bars.style.gap = "6px";
-      bars.style.marginTop = "8px";
-
-      function mini(label, value, kind) {
-        const box = el("div", "");
-        box.style.padding = "6px 8px";
-        box.style.borderRadius = "12px";
-        box.style.background = "rgba(255,255,255,0.04)";
-        box.style.border = "1px solid rgba(255,255,255,0.06)";
-
-        const a = el("div", "", label);
-        a.style.fontSize = "10px";
-        a.style.fontWeight = "900";
-        a.style.opacity = "0.75";
-
-        const b = el("div", "", String(value));
-        b.style.fontSize = "12px";
-        b.style.fontWeight = "900";
-
-        // destaque por condição
-        if (kind === "fatigue" && value >= 78) b.style.color = "#ffb020";
-        if (kind === "morale" && value <= 35) b.style.color = "#ff5a5a";
-        if (kind === "form" && value >= 75) b.style.color = "#22c55e";
-
-        box.appendChild(a);
-        box.appendChild(b);
-        return box;
-      }
-
-      bars.appendChild(mini("MORAL", Math.round(st.morale ?? 55), "morale"));
-      bars.appendChild(mini("FORMA", Math.round(st.form ?? 55), "form"));
-      bars.appendChild(mini("FADIGA", Math.round(st.fatigue ?? 10), "fatigue"));
-
-      right.appendChild(top);
-      right.appendChild(mid);
-      right.appendChild(bars);
-
-      card.appendChild(img);
-      card.appendChild(right);
-
-      container.appendChild(card);
-    });
+    list.appendChild(actions);
   }
 
-  // compat (se algum módulo chamar renderSquad)
-  function renderSquad() { renderTeamSquad(); }
-
+  // Expor API
   window.TeamUI = {
     renderTeamSelection,
-    renderTeamSquad,
-    renderSquad
+    renderTeamSquad
   };
 })();
