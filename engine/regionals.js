@@ -1,430 +1,513 @@
 /* =======================================================
    VALE FUTEBOL MANAGER 2026
-   engine/regionals.js – Campeonato Estadual (fase inicial)
+   engine/regionals.js — Estaduais AAA (Tabela + Rodadas)
+   -------------------------------------------------------
+   Objetivo:
+   - Simular um Estadual principal para o time do usuário:
+     • 12 rodadas (Jan–Mar)
+     • Tabela com pontos, saldo, etc.
+     • Simula jogos restantes da rodada quando usuário joga
+     • Campeão ao fim (rodada 12)
 
-   - Implementa Estaduais principais (SP, RJ, MG, RS, BA)
-   - Formato v1: pontos corridos (turno único) por estado
-   - Integração: usa gameState.phase === "ESTADUAIS"
-   - Sem mexer em database.js (mapeamento aqui)
+   Persistência:
+   - gameState.regionals = {
+       year,
+       stateByTeam: { [teamId]: { divisionTag, round, standings, fixtures } }
+     }
+
+   API exposta:
+   - Regionals.ensure(force?)
+   - Regionals.resetSeason(year?)
+   - Regionals.getStatus(teamId)
+   - Regionals.getStandings(teamId)
+   - Regionals.getCurrentRound(teamId)
+   - Regionals.getNextFixture(teamId)
+   - Regionals.consumeNextFixture(teamId)
+   - Regionals.applyUserMatchResult(reportOrArgs)
+   - Regionals.applyResult(homeId, awayId, goalsHome, goalsAway, meta?)
+   - Regionals.getAnnualEvents(teamId, year?) // opcional para calendário futuro
+
+   Observações:
+   - “Estado” do clube é inferido por:
+     team.state / team.uf / team.region
+     senão fallback: usa um “Grupo” genérico.
    =======================================================*/
 
 (function () {
-  console.log("%c[REGIONAIS] regionals.js carregado", "color:#06b6d4; font-weight:bold;");
+  console.log("%c[Regionals] regionals.js carregado", "color:#a78bfa; font-weight:bold;");
 
   // -----------------------------
-  // UTIL
+  // Utils
   // -----------------------------
-  function deepClone(obj) {
-    return JSON.parse(JSON.stringify(obj));
+  function n(v, d = 0) { const x = Number(v); return isNaN(x) ? d : x; }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function rnd() { return Math.random(); }
+  function pick(arr) { return arr[Math.floor(rnd() * arr.length)]; }
+  function iso(y, m, d) {
+    const pad2 = (x) => String(x).padStart(2, "0");
+    return `${y}-${pad2(m)}-${pad2(d)}`;
   }
 
-  function getTeamById(teamId) {
-    const list = (window.Database && Array.isArray(Database.teams)) ? Database.teams : [];
-    return list.find(t => t.id === teamId) || null;
-  }
-
-  function ensureGameState() {
+  function ensureGS() {
     if (!window.gameState) window.gameState = {};
-    if (!gameState.regionals) gameState.regionals = {};
-    if (typeof gameState.regionalsWeek !== "number") gameState.regionalsWeek = 1;
-    if (!gameState.phase) gameState.phase = "ESTADUAIS";
+    const gs = window.gameState;
+    if (!gs.seasonYear) gs.seasonYear = 2026;
+
+    if (!gs.regionals || typeof gs.regionals !== "object") gs.regionals = {};
+    const rg = gs.regionals;
+    if (rg.year == null) rg.year = gs.seasonYear;
+    if (!rg.stateByTeam || typeof rg.stateByTeam !== "object") rg.stateByTeam = {};
+    return gs;
   }
 
-  function getOrCreateStandingsTable(teamIds) {
-    const table = {};
-    teamIds.forEach(id => {
-      table[id] = {
-        teamId: id,
-        P: 0,
-        J: 0,
-        V: 0,
-        E: 0,
-        D: 0,
-        GP: 0,
-        GC: 0,
-        SG: 0
-      };
-    });
-    return table;
+  function getTeams() {
+    return (window.Database && Array.isArray(Database.teams)) ? Database.teams : [];
+  }
+  function getTeamById(id) {
+    return getTeams().find(t => String(t.id) === String(id)) || null;
   }
 
-  function sortStandingsArray(arr) {
-    // P, V, SG, GP
-    arr.sort((a, b) => {
-      if (b.P !== a.P) return b.P - a.P;
-      if (b.V !== a.V) return b.V - a.V;
-      if (b.SG !== a.SG) return b.SG - a.SG;
-      if (b.GP !== a.GP) return b.GP - a.GP;
-      return 0;
-    });
-    return arr;
+  function getUserTeamId() {
+    const gs = ensureGS();
+    return gs.currentTeamId || gs.selectedTeamId || (window.Game ? Game.teamId : null);
+  }
+
+  function save() {
+    try { if (window.Save && typeof Save.salvar === "function") Save.salvar(); } catch (e) {}
+  }
+
+  function news(title, body) {
+    try { if (window.News && typeof News.pushNews === "function") News.pushNews(title, body, "REGIONAL"); } catch (e) {}
   }
 
   // -----------------------------
-  // CONFIG: ESTADUAIS PRINCIPAIS
-  // (sem mexer na base: mapeamento aqui)
+  // Inferir “estado/UF” do time
   // -----------------------------
-  const REGIONAL_CONFIG = [
-    {
-      id: "SP",
-      name: "Campeonato Paulista",
-      teams: ["PAL", "COR", "SAO", "SAN", "RBB", "MIR", "FER", "NOV"]
-    },
-    {
-      id: "RJ",
-      name: "Campeonato Carioca",
-      teams: ["FLA", "FLU", "VAS", "BOT"]
-    },
-    {
-      id: "MG",
-      name: "Campeonato Mineiro",
-      teams: ["AMG", "CRU", "AME", "ATC"]
-    },
-    {
-      id: "RS",
-      name: "Campeonato Gaúcho",
-      teams: ["GRE", "INT", "JUV"]
-    },
-    {
-      id: "BA",
-      name: "Campeonato Baiano",
-      teams: ["BAH", "VIT"]
+  function inferUF(team) {
+    if (!team) return "BR";
+    const uf = team.uf || team.state || team.estado || team.region || team.regiao;
+    if (!uf) return "BR";
+    return String(uf).toUpperCase().slice(0, 3);
+  }
+
+  // -----------------------------
+  // Standings
+  // -----------------------------
+  function makeRow(team) {
+    return {
+      id: team.id,
+      name: team.name,
+      pld: 0,
+      w: 0,
+      d: 0,
+      l: 0,
+      gf: 0,
+      ga: 0,
+      gd: 0,
+      pts: 0
+    };
+  }
+
+  function sortStandings(standings) {
+    standings.forEach(r => { r.gd = n(r.gf, 0) - n(r.ga, 0); });
+    standings.sort((a, b) => {
+      if (b.pts !== a.pts) return b.pts - a.pts;
+      if (b.gd !== a.gd) return b.gd - a.gd;
+      if (b.gf !== a.gf) return b.gf - a.gf;
+      return String(a.name).localeCompare(String(b.name));
+    });
+    return standings;
+  }
+
+  function applyResultToStandings(standings, homeId, awayId, gh, ga) {
+    const h = standings.find(r => String(r.id) === String(homeId));
+    const a = standings.find(r => String(r.id) === String(awayId));
+    if (!h || !a) return;
+
+    h.pld += 1; a.pld += 1;
+    h.gf += gh; h.ga += ga;
+    a.gf += ga; a.ga += gh;
+
+    if (gh > ga) { h.w += 1; a.l += 1; h.pts += 3; }
+    else if (gh < ga) { a.w += 1; h.l += 1; a.pts += 3; }
+    else { h.d += 1; a.d += 1; h.pts += 1; a.pts += 1; }
+
+    sortStandings(standings);
+  }
+
+  // -----------------------------
+  // Fixtures (12 rodadas)
+  // -----------------------------
+  function generateFixtures(teamIds, year) {
+    const rounds = 12;
+    const fixtures = {};
+    const pairCount = {};
+
+    const keyPair = (a, b) => {
+      const x = String(a), y = String(b);
+      return x < y ? `${x}_${y}` : `${y}_${x}`;
+    };
+
+    // datas Jan–Mar (sábado alternado)
+    function dateForRound(r) {
+      const month = (r <= 4) ? 1 : (r <= 8) ? 2 : 3;
+      const day = clamp(6 + ((r - 1) * 2) % 22, 1, 28);
+      return iso(year, month, day);
     }
-  ];
 
-  // -----------------------------
-  // GERAÇÃO DE FIXTURES
-  // Round-robin (turno único)
-  // -----------------------------
-  function generateRoundRobin(teamIds) {
-    const ids = teamIds.slice().filter(Boolean);
-    const BYE = "BYE";
+    for (let r = 1; r <= rounds; r++) {
+      const remaining = teamIds.slice();
 
-    // se ímpar, adiciona BYE
-    if (ids.length % 2 === 1) ids.push(BYE);
-
-    const n = ids.length;
-    const rounds = n - 1;
-    const half = n / 2;
-
-    const arr = ids.slice();
-
-    const fixtures = [];
-    for (let r = 0; r < rounds; r++) {
-      const matches = [];
-      for (let i = 0; i < half; i++) {
-        const home = arr[i];
-        const away = arr[n - 1 - i];
-        if (home !== BYE && away !== BYE) {
-          matches.push({
-            homeId: home,
-            awayId: away,
-            golsHome: null,
-            golsAway: null,
-            played: false
-          });
-        }
+      // shuffle leve
+      for (let i = remaining.length - 1; i > 0; i--) {
+        const j = Math.floor(rnd() * (i + 1));
+        [remaining[i], remaining[j]] = [remaining[j], remaining[i]];
       }
 
-      // alterna mando levemente
-      if (r % 2 === 1) {
-        matches.forEach(m => {
-          const tmp = m.homeId;
-          m.homeId = m.awayId;
-          m.awayId = tmp;
+      const matches = [];
+
+      while (remaining.length >= 2) {
+        const a = remaining.shift();
+        let bestIdx = 0;
+        let bestScore = 999;
+
+        for (let i = 0; i < remaining.length; i++) {
+          const b = remaining[i];
+          const k = keyPair(a, b);
+          const sc = pairCount[k] || 0;
+          if (sc < bestScore) {
+            bestScore = sc;
+            bestIdx = i;
+          }
+        }
+
+        const b = remaining.splice(bestIdx, 1)[0];
+        const k = keyPair(a, b);
+        pairCount[k] = (pairCount[k] || 0) + 1;
+
+        // mando alternado simples
+        const homeId = (r % 2 === 1) ? a : b;
+        const awayId = (r % 2 === 1) ? b : a;
+
+        matches.push({
+          date: dateForRound(r),
+          comp: "REGIONAL",
+          competitionName: "Estadual",
+          roundNumber: r,
+          homeId,
+          awayId,
+          played: false,
+          goalsHome: null,
+          goalsAway: null
         });
       }
 
-      fixtures.push({
-        round: r + 1,
-        matches
-      });
-
-      // rotação (circle method)
-      const fixed = arr[0];
-      const rest = arr.slice(1);
-      rest.unshift(rest.pop());
-      arr.splice(0, arr.length, fixed, ...rest);
+      fixtures[r] = matches;
     }
 
     return fixtures;
   }
 
+  function simulateScore() {
+    const gh = Math.max(0, Math.round((rnd() + rnd()) * 0.85));
+    const ga = Math.max(0, Math.round((rnd() + rnd()) * 0.70));
+    if (rnd() < 0.06) return { gh: gh + Math.floor(rnd() * 3), ga };
+    if (rnd() < 0.05) return { gh, ga: ga + Math.floor(rnd() * 3) };
+    return { gh, ga };
+  }
+
   // -----------------------------
-  // INIT / RESET REGIONAIS
+  // Estado do time no Estadual
   // -----------------------------
-  function initRegionalsForSeason(seasonYear) {
-    ensureGameState();
+  function ensureRegionalState(teamId, year) {
+    const gs = ensureGS();
+    const rg = gs.regionals;
+    const tid = String(teamId);
 
-    const season = seasonYear || gameState.seasonYear || new Date().getFullYear();
+    if (!rg.stateByTeam[tid] || rg.stateByTeam[tid].year !== year) {
+      const team = getTeamById(teamId);
+      const uf = inferUF(team);
 
-    const comps = [];
-    for (const cfg of REGIONAL_CONFIG) {
-      // filtra só times que existem na Database
-      const validTeams = cfg.teams.filter(tid => !!getTeamById(tid));
-      if (validTeams.length < 2) continue;
+      // seleciona participantes: tenta pegar times com mesma UF
+      const teams = getTeams();
+      let participants = teams.filter(t => inferUF(t) === uf);
 
-      const fixtures = generateRoundRobin(validTeams);
-      comps.push({
-        id: cfg.id,
-        name: cfg.name,
-        seasonYear: season,
-        teamIds: validTeams,
-        fixtures,
-        standings: getOrCreateStandingsTable(validTeams),
-        finished: false,
-        championId: null
+      // fallback: se UF não encontrar suficiente, pega alguns da divisão do usuário
+      if (participants.length < 8) {
+        const div = String(team?.division || team?.serie || "A").toUpperCase();
+        const sameDiv = teams.filter(t => String(t.division || t.serie || "A").toUpperCase() === div);
+        participants = sameDiv.length ? sameDiv : teams.slice();
+      }
+
+      // garante que o usuário está incluído
+      if (!participants.find(t => String(t.id) === tid)) participants.unshift(team || { id: tid, name: tid });
+
+      // limita para performance e consistência (12 clubes)
+      participants = participants.slice(0, 12);
+
+      const standings = participants.map(makeRow);
+      const fixture = generateFixtures(participants.map(t => t.id), year);
+
+      rg.stateByTeam[tid] = {
+        year,
+        uf,
+        round: 1,
+        championId: null,
+        standings,
+        fixtures: fixture
+      };
+    }
+
+    return rg.stateByTeam[tid];
+  }
+
+  function getStatus(teamId) {
+    const gs = ensureGS();
+    const year = n(gs.regionals.year, gs.seasonYear);
+    const tid = String(teamId);
+    const st = ensureRegionalState(tid, year);
+
+    if (st.championId) {
+      return {
+        active: false,
+        finished: true,
+        championId: st.championId,
+        championName: getTeamById(st.championId)?.name || String(st.championId),
+        uf: st.uf
+      };
+    }
+
+    return {
+      active: true,
+      finished: false,
+      round: n(st.round, 1),
+      uf: st.uf
+    };
+  }
+
+  function getNextFixture(teamId) {
+    const gs = ensureGS();
+    const year = n(gs.regionals.year, gs.seasonYear);
+    const tid = String(teamId);
+
+    const st = ensureRegionalState(tid, year);
+    if (st.championId) return null;
+
+    const round = clamp(n(st.round, 1), 1, 12);
+    const arr = st.fixtures[String(round)] || st.fixtures[round] || [];
+    const fx = arr.find(m => String(m.homeId) === tid || String(m.awayId) === tid) || null;
+    return fx ? Object.assign({}, fx) : null;
+  }
+
+  function consumeNextFixture(teamId) {
+    return getNextFixture(teamId);
+  }
+
+  function applyResult(homeId, awayId, goalsHome, goalsAway, meta) {
+    const gs = ensureGS();
+    const year = n(gs.regionals.year, gs.seasonYear);
+
+    const tid = String(meta?.teamId || getUserTeamId() || "");
+    if (!tid) return { ok: false, msg: "Sem time para processar." };
+
+    const st = ensureRegionalState(tid, year);
+    if (st.championId) return { ok: false, msg: "Estadual já finalizado." };
+
+    const round = clamp(n(st.round, 1), 1, 12);
+    const fixturesRound = st.fixtures[String(round)] || st.fixtures[round] || [];
+
+    // marca jogo do usuário
+    let found = false;
+    for (const m of fixturesRound) {
+      const same =
+        (String(m.homeId) === String(homeId) && String(m.awayId) === String(awayId)) ||
+        (String(m.homeId) === String(awayId) && String(m.awayId) === String(homeId));
+
+      if (!same) continue;
+
+      // respeita mando do fixture
+      let gh = n(goalsHome, 0);
+      let ga = n(goalsAway, 0);
+      if (String(m.homeId) !== String(homeId)) {
+        const tmp = gh; gh = ga; ga = tmp;
+      }
+
+      m.played = true;
+      m.goalsHome = gh;
+      m.goalsAway = ga;
+
+      applyResultToStandings(st.standings, m.homeId, m.awayId, gh, ga);
+      found = true;
+      break;
+    }
+
+    // se não achou, aplica mesmo assim (tolerante)
+    if (!found) {
+      applyResultToStandings(st.standings, homeId, awayId, n(goalsHome, 0), n(goalsAway, 0));
+    }
+
+    // simula os demais
+    const results = [];
+    for (const m of fixturesRound) {
+      if (m.played) {
+        results.push({ homeId: m.homeId, awayId: m.awayId, golsHome: n(m.goalsHome, 0), golsAway: n(m.goalsAway, 0) });
+        continue;
+      }
+      const s = simulateScore();
+      m.played = true;
+      m.goalsHome = s.gh;
+      m.goalsAway = s.ga;
+
+      applyResultToStandings(st.standings, m.homeId, m.awayId, s.gh, s.ga);
+      results.push({ homeId: m.homeId, awayId: m.awayId, golsHome: s.gh, golsAway: s.ga });
+    }
+
+    // avança rodada
+    st.round = round + 1;
+
+    // terminou?
+    if (round >= 12) {
+      // campeão = 1º da tabela
+      const champ = sortStandings(st.standings)[0];
+      st.championId = champ?.id || null;
+      const champName = champ?.name || "—";
+      news("Campeão Estadual!", `Você concluiu o Estadual (${st.uf}). Campeão: ${champName}.`);
+    } else {
+      news("Estadual", `Rodada ${round} concluída no Estadual (${st.uf}).`);
+    }
+
+    save();
+    return { ok: true, roundResults: results, round, finished: !!st.championId, championId: st.championId || null };
+  }
+
+  function applyUserMatchResult(reportOrArgs) {
+    const tid = String(reportOrArgs?.teamId || getUserTeamId() || "");
+    if (!tid) return { ok: false, msg: "Time do usuário não encontrado." };
+
+    const homeId = reportOrArgs?.homeId;
+    const awayId = reportOrArgs?.awayId;
+    const gh = reportOrArgs?.goalsHome ?? reportOrArgs?.gh;
+    const ga = reportOrArgs?.goalsAway ?? reportOrArgs?.ga;
+
+    if (homeId == null || awayId == null) return { ok: false, msg: "Dados de partida insuficientes." };
+    return applyResult(homeId, awayId, gh, ga, { teamId: tid });
+  }
+
+  function getStandings(teamId) {
+    const gs = ensureGS();
+    const year = n(gs.regionals.year, gs.seasonYear);
+    const tid = String(teamId || getUserTeamId() || "");
+    if (!tid) return [];
+
+    const st = ensureRegionalState(tid, year);
+    return sortStandings(st.standings).map(r => Object.assign({}, r));
+  }
+
+  function getCurrentRound(teamId) {
+    const gs = ensureGS();
+    const year = n(gs.regionals.year, gs.seasonYear);
+    const tid = String(teamId || getUserTeamId() || "");
+    if (!tid) return 1;
+
+    const st = ensureRegionalState(tid, year);
+    return clamp(n(st.round, 1), 1, 12);
+  }
+
+  function getAnnualEvents(teamId, year) {
+    const gs = ensureGS();
+    const y = n(year, gs.seasonYear);
+    const tid = String(teamId || getUserTeamId() || "");
+    if (!tid) return [];
+
+    gs.regionals.year = y;
+    const st = ensureRegionalState(tid, y);
+
+    const events = [];
+    for (let r = 1; r <= 12; r++) {
+      const arr = st.fixtures[String(r)] || st.fixtures[r] || [];
+      const fx = arr.find(m => String(m.homeId) === tid || String(m.awayId) === tid) || null;
+      if (!fx) continue;
+      events.push({
+        date: fx.date,
+        comp: "REGIONAL",
+        competitionName: "Estadual",
+        homeId: fx.homeId,
+        awayId: fx.awayId,
+        roundNumber: r,
+        uf: st.uf
       });
     }
 
-    // descobre quantas "semanas" (rodadas) máximas
-    const maxWeeks = comps.reduce((acc, c) => Math.max(acc, c.fixtures.length), 0);
+    events.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    return events;
+  }
 
-    gameState.regionals = {
-      seasonYear: season,
-      week: 1,
-      totalWeeks: maxWeeks,
-      competitions: comps
-    };
-
-    // fase do jogo começa em estaduais
-    gameState.phase = "ESTADUAIS";
-
-    console.log("[REGIONAIS] Estaduais iniciados:", comps.map(c => c.id).join(", "), "Semanas:", maxWeeks);
+  function resetSeason(year) {
+    const gs = ensureGS();
+    const y = n(year, gs.seasonYear);
+    gs.regionals = { year: y, stateByTeam: {} };
+    save();
+    return true;
   }
 
   // -----------------------------
-  // TABELA / RESULTADOS
-  // -----------------------------
-  function applyResultToStandings(competition, homeId, awayId, golsHome, golsAway) {
-    const st = competition.standings;
-    if (!st[homeId] || !st[awayId]) return;
-
-    const H = st[homeId];
-    const A = st[awayId];
-
-    H.J += 1; A.J += 1;
-    H.GP += golsHome; H.GC += golsAway;
-    A.GP += golsAway; A.GC += golsHome;
-    H.SG = H.GP - H.GC;
-    A.SG = A.GP - A.GC;
-
-    if (golsHome > golsAway) {
-      H.V += 1; A.D += 1;
-      H.P += 3;
-    } else if (golsHome < golsAway) {
-      A.V += 1; H.D += 1;
-      A.P += 3;
-    } else {
-      H.E += 1; A.E += 1;
-      H.P += 1; A.P += 1;
-    }
-  }
-
-  function isAllMatchesPlayedInWeek(competition, week) {
-    const round = competition.fixtures.find(r => r.round === week);
-    if (!round) return true; // se não existe, considera "ok"
-    return round.matches.every(m => m.played);
-  }
-
-  function finalizeCompetitionIfDone(competition) {
-    const allDone = competition.fixtures.every(r => r.matches.every(m => m.played));
-    if (!allDone) return;
-
-    // define campeão por tabela
-    const tableArr = Object.values(competition.standings);
-    sortStandingsArray(tableArr);
-    competition.finished = true;
-    competition.championId = tableArr[0]?.teamId || null;
-  }
-
-  function finalizeRegionalsIfDone() {
-    if (!gameState.regionals || !Array.isArray(gameState.regionals.competitions)) return;
-
-    // marca campeões
-    gameState.regionals.competitions.forEach(finalizeCompetitionIfDone);
-
-    // termina fase quando passa da última semana OU todos os campeonatos concluídos
-    const week = gameState.regionals.week || 1;
-    const total = gameState.regionals.totalWeeks || 1;
-
-    const allFinished = gameState.regionals.competitions.every(c => c.finished);
-    if (week > total || allFinished) {
-      gameState.phase = "NACIONAL";
-      console.log("%c[REGIONAIS] Fase de Estaduais concluída. Indo para NACIONAL.", "color:#22c55e; font-weight:bold;");
-    }
-  }
-
-  // -----------------------------
-  // SIMULAÇÃO (usa força simples)
-  // - sem quebrar match.js atual
-  // -----------------------------
-  function estimateTeamStrength(teamId) {
-    // tenta usar jogadores (se existir) – caso não exista, usa fallback
-    const players = (window.Database && Array.isArray(Database.players)) ? Database.players : [];
-    const squad = players.filter(p => p.teamId === teamId);
-    if (!squad.length) return 65;
-
-    let sum = 0;
-    let n = 0;
-    for (const p of squad) {
-      const ovr = Number(p.ovr || p.overall || 0);
-      if (ovr > 0) { sum += ovr; n++; }
-    }
-    return n ? (sum / n) : 65;
-  }
-
-  function simulateScore(homeId, awayId) {
-    // modelo bem simples (vamos evoluir depois no Match v2)
-    const sh = estimateTeamStrength(homeId) + 3; // vantagem casa
-    const sa = estimateTeamStrength(awayId);
-
-    const diff = sh - sa;
-    const baseHome = 1.0 + Math.max(-0.3, Math.min(0.6, diff / 40));
-    const baseAway = 0.9 + Math.max(-0.3, Math.min(0.5, -diff / 45));
-
-    // converte bases em gols 0-4 com ruído
-    const rand = () => Math.random();
-
-    let gh = Math.floor(baseHome + rand() * 2);
-    let ga = Math.floor(baseAway + rand() * 2);
-
-    // limita
-    gh = Math.max(0, Math.min(5, gh));
-    ga = Math.max(0, Math.min(5, ga));
-
-    return { golsHome: gh, golsAway: ga };
-  }
-
-  // -----------------------------
-  // ACHAR PRÓXIMO JOGO DO USUÁRIO
-  // -----------------------------
-  function findUserCompetition(teamId) {
-    ensureGameState();
-    const comps = gameState.regionals?.competitions || [];
-    return comps.find(c => c.teamIds.includes(teamId)) || null;
-  }
-
-  function getMatchForUserInCurrentWeek(teamId) {
-    ensureGameState();
-    const comp = findUserCompetition(teamId);
-    if (!comp) return null;
-
-    const week = gameState.regionals.week || 1;
-    const round = comp.fixtures.find(r => r.round === week);
-    if (!round) return null;
-
-    const m = round.matches.find(mm => !mm.played && (mm.homeId === teamId || mm.awayId === teamId));
-    if (!m) return null;
-
-    return {
-      competitionId: comp.id,
-      competitionName: comp.name,
-      week,
-      match: m
-    };
-  }
-
-  // -----------------------------
-  // PROCESSAR RESULTADO DO USUÁRIO
-  // - Marca resultado do jogo do usuário
-  // - Simula o resto da "semana" dos estaduais
-  // -----------------------------
-  function processUserRegionalResult(homeId, awayId, golsHome, golsAway) {
-    ensureGameState();
-
-    const week = gameState.regionals.week || 1;
-    const comps = gameState.regionals.competitions || [];
-
-    // 1) acha o jogo do usuário na semana atual (em qualquer competição)
-    let userComp = null;
-    let userRound = null;
-    let userMatch = null;
-
-    for (const c of comps) {
-      const r = c.fixtures.find(rr => rr.round === week);
-      if (!r) continue;
-      const mm = r.matches.find(m => !m.played && m.homeId === homeId && m.awayId === awayId);
-      if (mm) {
-        userComp = c;
-        userRound = r;
-        userMatch = mm;
-        break;
-      }
-    }
-
-    if (!userMatch) {
-      console.warn("[REGIONAIS] Não achei o jogo do usuário na semana atual.");
-      return null;
-    }
-
-    // marca o jogo do usuário
-    userMatch.golsHome = golsHome;
-    userMatch.golsAway = golsAway;
-    userMatch.played = true;
-    applyResultToStandings(userComp, homeId, awayId, golsHome, golsAway);
-
-    // 2) simula o restante da semana para TODOS estaduais
-    for (const c of comps) {
-      const r = c.fixtures.find(rr => rr.round === week);
-      if (!r) continue;
-
-      for (const m of r.matches) {
-        if (!m.played) {
-          const sc = simulateScore(m.homeId, m.awayId);
-          m.golsHome = sc.golsHome;
-          m.golsAway = sc.golsAway;
-          m.played = true;
-          applyResultToStandings(c, m.homeId, m.awayId, m.golsHome, m.golsAway);
-        }
-      }
-    }
-
-    // 3) finaliza competições se concluídas
-    comps.forEach(finalizeCompetitionIfDone);
-
-    // 4) avança semana
-    gameState.regionals.week = week + 1;
-
-    // 5) encerra fase se acabou
-    finalizeRegionalsIfDone();
-
-    // devolve a "rodada" do estadual do usuário pra UI exibir
-    // (mesmo formato básico: lista de jogos)
-    return deepClone(userRound.matches);
-  }
-
-  // -----------------------------
-  // STANDINGS EXPORT (para UI futura)
-  // -----------------------------
-  function getCompetitionStandings(competitionId) {
-    ensureGameState();
-    const comps = gameState.regionals?.competitions || [];
-    const comp = comps.find(c => c.id === competitionId) || null;
-    if (!comp) return [];
-    const arr = Object.values(comp.standings).map(row => ({ ...row }));
-    return sortStandingsArray(arr);
-  }
-
-  function getAllRegionalsSummary() {
-    ensureGameState();
-    const comps = gameState.regionals?.competitions || [];
-    return comps.map(c => ({
-      id: c.id,
-      name: c.name,
-      finished: !!c.finished,
-      championId: c.championId
-    }));
-  }
-
-  // -----------------------------
-  // API GLOBAL
+  // Public API
   // -----------------------------
   window.Regionals = {
-    initRegionalsForSeason,
-    getMatchForUserInCurrentWeek,
-    processUserRegionalResult,
-    getCompetitionStandings,
-    getAllRegionalsSummary
+    ensure(force) {
+      const gs = ensureGS();
+      const tid = getUserTeamId();
+      if (!tid) return;
+
+      gs.regionals.year = n(gs.seasonYear, 2026);
+      ensureRegionalState(tid, gs.regionals.year);
+
+      if (force) {
+        // força regen: reseta só do usuário
+        const y = gs.regionals.year;
+        gs.regionals.stateByTeam[String(tid)] = null;
+        ensureRegionalState(tid, y);
+      }
+    },
+
+    resetSeason,
+
+    getStatus(teamId) {
+      const tid = String(teamId || getUserTeamId() || "");
+      if (!tid) return { active: false, finished: false };
+      return getStatus(tid);
+    },
+
+    getStandings(teamId) {
+      return getStandings(teamId);
+    },
+
+    getCurrentRound(teamId) {
+      return getCurrentRound(teamId);
+    },
+
+    getNextFixture(teamId) {
+      const tid = String(teamId || getUserTeamId() || "");
+      if (!tid) return null;
+      return getNextFixture(tid);
+    },
+
+    consumeNextFixture(teamId) {
+      const tid = String(teamId || getUserTeamId() || "");
+      if (!tid) return null;
+      return consumeNextFixture(tid);
+    },
+
+    applyUserMatchResult(reportOrArgs) {
+      return applyUserMatchResult(reportOrArgs);
+    },
+
+    applyResult(homeId, awayId, goalsHome, goalsAway, meta) {
+      return applyResult(homeId, awayId, goalsHome, goalsAway, meta);
+    },
+
+    getAnnualEvents(teamId, year) {
+      return getAnnualEvents(teamId, year);
+    }
   };
 })();
