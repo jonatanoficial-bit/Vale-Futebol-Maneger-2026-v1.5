@@ -1,475 +1,416 @@
 /* =======================================================
    VALE FUTEBOL MANAGER 2026
-   engine/training.js — Treino Semanal AAA (Engine + UI Modal)
-   -----------------------------------------------------------
-   Objetivo:
-   - Criar um sistema de treino com foco e intensidade
-   - Aplicar efeitos em moral/forma/fadiga (Dynamics)
-   - Gerar notícias no feed (News)
-   - Injetar botão TREINO no lobby sem alterar HTML dos botões
+   engine/training.js — Treino + Progressão (FM-like)
+   -------------------------------------------------------
+   Entrega:
+   - Progressão semanal baseada em:
+     • idade, potencial (pot), overall (ovr)
+     • minutos jogados (match exposure)
+     • plano de treino (intensidade e foco)
+     • fadiga e lesões (Fitness)
+     • moral e forma (Training cria se não existir)
+   - Declínio gradual para veteranos
+   - Integração opcional com Save/News/Fitness
 
    Persistência:
    gameState.training = {
-     focus: "EQUILIBRADO" | "FISICO" | "TATICO" | "OFENSIVO" | "DEFENSIVO",
-     intensity: 1|2|3,
-     lastAppliedAt: ISO string
+     year, week, lastAppliedISO,
+     plansByTeam: { [teamId]: { intensity, focus } },
+     playerState: { [playerId]: { morale, form, minutesSeason } },
+     logs: [ ... ]
    }
 
-   Aplicação:
-   - Botão "APLICAR SESSÃO" aplica agora (simula semana de treino)
-   - Modificações por intensidade:
-     Forma: +, Moral: +/-, Fadiga: + (se treino pesado)
+   API:
+   - Training.ensure()
+   - Training.getTeamPlan(teamId)
+   - Training.setTeamPlan(teamId, plan)
+   - Training.getPlayerState(playerId)
+   - Training.applyWeek(teamId)        // aplica uma semana
+   - Training.addMinutes(playerId, min)
+   - Training.getWeeklyReport(teamId)  // último report
    =======================================================*/
 
 (function () {
-  console.log("%c[Training] training.js carregado", "color:#F59E0B; font-weight:bold;");
+  console.log("%c[Training] training.js carregado", "color:#a78bfa; font-weight:bold;");
 
-  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  // -----------------------------
+  // Utils
+  // -----------------------------
   function n(v, d = 0) { const x = Number(v); return isNaN(x) ? d : x; }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function rnd() { return Math.random(); }
+  function nowISO() { return new Date().toISOString(); }
 
   function ensureGS() {
     if (!window.gameState) window.gameState = {};
     const gs = window.gameState;
-    if (!gs.training || typeof gs.training !== "object") {
-      gs.training = {
-        focus: "EQUILIBRADO",
-        intensity: 2,
-        lastAppliedAt: null
-      };
-    }
-    if (!gs.playerStates || typeof gs.playerStates !== "object") gs.playerStates = {};
-    return gs;
-  }
+    if (!gs.seasonYear) gs.seasonYear = 2026;
 
-  function getUserTeamId() {
-    const gs = ensureGS();
-    return gs.currentTeamId || gs.selectedTeamId || (window.Game ? Game.teamId : null);
+    if (!gs.training || typeof gs.training !== "object") gs.training = {};
+    const tr = gs.training;
+
+    if (tr.year == null) tr.year = gs.seasonYear;
+    if (tr.week == null) tr.week = 1;
+    if (!tr.lastAppliedISO) tr.lastAppliedISO = null;
+
+    if (!tr.plansByTeam || typeof tr.plansByTeam !== "object") tr.plansByTeam = {};
+    if (!tr.playerState || typeof tr.playerState !== "object") tr.playerState = {};
+    if (!Array.isArray(tr.logs)) tr.logs = [];
+
+    return gs;
   }
 
   function getPlayers() {
     return (window.Database && Array.isArray(Database.players)) ? Database.players : [];
   }
-
   function getTeams() {
     return (window.Database && Array.isArray(Database.teams)) ? Database.teams : [];
   }
-
-  function getTeamName(teamId) {
-    const t = getTeams().find(x => String(x.id) === String(teamId));
-    return t?.name || teamId;
+  function getPlayerById(id) {
+    return getPlayers().find(p => String(p.id) === String(id)) || null;
   }
-
-  function getElenco(teamId) {
+  function getTeamPlayers(teamId) {
     return getPlayers().filter(p => String(p.teamId) === String(teamId));
   }
 
+  function save() {
+    try { if (window.Save && typeof Save.salvar === "function") Save.salvar(); } catch (e) {}
+  }
+  function news(title, body) {
+    try { if (window.News && typeof News.pushNews === "function") News.pushNews(title, body, "TRAINING"); } catch (e) {}
+  }
+
+  // Fitness helpers (opcional)
+  function fitnessGet(pid) {
+    try {
+      if (window.Fitness && typeof Fitness.ensurePlayer === "function") return Fitness.ensurePlayer(pid);
+      if (window.Fitness && typeof Fitness.getPlayer === "function") return Fitness.getPlayer(pid);
+    } catch (e) {}
+    return { fatigue: 15, injuryWeeks: 0, yellowCards: 0 };
+  }
+
+  function fitnessSet(pid, obj) {
+    try { if (window.Fitness && typeof Fitness.setPlayer === "function") Fitness.setPlayer(pid, obj); } catch (e) {}
+  }
+
+  // -----------------------------
+  // Planos de treino
+  // intensity: 1..5
+  // focus: "BALANCED"|"FITNESS"|"ATTACK"|"DEFENSE"|"MENTAL"|"YOUTH"
+  // -----------------------------
+  const DEFAULT_PLAN = { intensity: 3, focus: "BALANCED" };
+
+  function getTeamPlan(teamId) {
+    const gs = ensureGS();
+    const tr = gs.training;
+    const tid = String(teamId);
+    if (!tr.plansByTeam[tid]) tr.plansByTeam[tid] = Object.assign({}, DEFAULT_PLAN);
+    // normaliza
+    const p = tr.plansByTeam[tid];
+    p.intensity = clamp(n(p.intensity, 3), 1, 5);
+    p.focus = String(p.focus || "BALANCED").toUpperCase();
+    return Object.assign({}, p);
+  }
+
+  function setTeamPlan(teamId, plan) {
+    const gs = ensureGS();
+    const tr = gs.training;
+    const tid = String(teamId);
+    const p = Object.assign({}, DEFAULT_PLAN, plan || {});
+    p.intensity = clamp(n(p.intensity, 3), 1, 5);
+    p.focus = String(p.focus || "BALANCED").toUpperCase();
+    tr.plansByTeam[tid] = p;
+    save();
+    return Object.assign({}, p);
+  }
+
+  // -----------------------------
+  // Estado do jogador (moral/forma/minutos)
+  // -----------------------------
   function ensurePlayerState(pid) {
     const gs = ensureGS();
-    const id = String(pid || "");
-    if (!id) return null;
+    const tr = gs.training;
+    const id = String(pid);
 
-    if (!gs.playerStates[id]) {
-      gs.playerStates[id] = { morale: 55, form: 55, fatigue: 10 };
+    if (!tr.playerState[id]) {
+      tr.playerState[id] = {
+        morale: 60 + Math.floor(rnd() * 21), // 60-80
+        form: 55 + Math.floor(rnd() * 21),   // 55-75
+        minutesSeason: 0
+      };
     }
 
-    const st = gs.playerStates[id];
-    st.morale = clamp(n(st.morale, 55), 0, 100);
-    st.form = clamp(n(st.form, 55), 0, 100);
-    st.fatigue = clamp(n(st.fatigue, 10), 0, 100);
+    // clamp
+    const st = tr.playerState[id];
+    st.morale = clamp(n(st.morale, 70), 0, 100);
+    st.form = clamp(n(st.form, 65), 0, 100);
+    st.minutesSeason = Math.max(0, n(st.minutesSeason, 0));
+
     return st;
   }
 
-  function nowIso() {
-    try { return new Date().toISOString(); } catch (e) { return ""; }
+  function getPlayerState(pid) {
+    const st = ensurePlayerState(pid);
+    return Object.assign({}, st);
   }
 
-  // Regras de impacto (balanceadas para "sentir" no elenco sem quebrar rápido)
-  // Intensity: 1 (leve), 2 (normal), 3 (pesado)
-  function getDeltas(focus, intensity) {
-    const I = clamp(Math.floor(n(intensity, 2)), 1, 3);
+  function addMinutes(playerId, min) {
+    const st = ensurePlayerState(playerId);
+    st.minutesSeason += Math.max(0, n(min, 0));
+  }
 
-    // base por intensidade
-    const baseForm = (I === 1 ? 2 : (I === 2 ? 4 : 6));
-    const baseMorale = (I === 1 ? 1 : (I === 2 ? 2 : 2)); // moral não escala tanto
-    const baseFatigue = (I === 1 ? 2 : (I === 2 ? 5 : 9));
-
-    // foco ajusta
-    // OBS: fadiga sobe mais no físico e no pesado; moral sobe no tático quando time está “alinhado”
-    let dForm = baseForm;
-    let dMorale = baseMorale;
-    let dFat = baseFatigue;
-
-    switch (String(focus || "EQUILIBRADO").toUpperCase()) {
-      case "FISICO":
-        dForm += 1;
-        dFat += 3; // pesado
-        dMorale -= (I === 3 ? 1 : 0); // pode irritar
-        break;
-
-      case "TATICO":
-        dForm += 2;
-        dFat -= 1; // menos exaustivo
-        dMorale += 1;
-        break;
-
-      case "OFENSIVO":
-        dForm += 2;
-        dFat += 1;
-        dMorale += 0;
-        break;
-
-      case "DEFENSIVO":
-        dForm += 2;
-        dFat += 1;
-        dMorale += 0;
-        break;
-
-      default: // EQUILIBRADO
-        dForm += 1;
-        dFat += 0;
-        break;
+  // -----------------------------
+  // Cálculo de progressão
+  // -----------------------------
+  function getAge(p) {
+    // suporta age ou birthYear
+    if (p.age != null) return n(p.age, 24);
+    if (p.birthYear != null) {
+      const y = ensureGS().seasonYear || 2026;
+      return clamp(y - n(p.birthYear, y - 24), 15, 45);
     }
-
-    // limita valores
-    dForm = clamp(dForm, 1, 10);
-    dMorale = clamp(dMorale, -3, 6);
-    dFat = clamp(dFat, 0, 14);
-
-    return { dForm, dMorale, dFat };
+    return 24;
   }
 
-  function applyTrainingSession() {
+  function getOVR(p) { return n(p.ovr ?? p.overall, 60); }
+  function setOVR(p, val) {
+    if (p.ovr != null) p.ovr = val;
+    else p.overall = val;
+  }
+
+  function getPOT(p) { return n(p.pot ?? p.potential, Math.max(getOVR(p), 70)); }
+  function setPOT(p, val) {
+    if (p.pot != null) p.pot = val;
+    else p.potential = val;
+  }
+
+  function focusMultiplier(focus, p) {
+    // se tiver posição, dá um toque
+    const pos = String(p.position || p.posicao || "").toUpperCase();
+    switch (focus) {
+      case "FITNESS": return 1.05;
+      case "ATTACK": return (pos.includes("ST") || pos.includes("FW") || pos.includes("AM") || pos.includes("W")) ? 1.08 : 1.02;
+      case "DEFENSE": return (pos.includes("CB") || pos.includes("LB") || pos.includes("RB") || pos.includes("DM")) ? 1.08 : 1.02;
+      case "MENTAL": return 1.04;
+      case "YOUTH": return getAge(p) <= 21 ? 1.10 : 1.00;
+      default: return 1.00;
+    }
+  }
+
+  function intensityEffects(intensity) {
+    // maior intensidade -> mais evolução potencial, mas aumenta fadiga e risco
+    const i = clamp(n(intensity, 3), 1, 5);
+    return {
+      gain: 0.65 + i * 0.12,   // 0.77 .. 1.25
+      fatigue: 2 + i * 1.7,    // 3.7 .. 10.5
+      injury: 0.004 + i * 0.002 // 0.006 .. 0.014
+    };
+  }
+
+  function computeDelta(p, plan, st, fit) {
+    const age = getAge(p);
+    const ovr = getOVR(p);
+    const pot = getPOT(p);
+
+    // gap para potencial (quanto mais distante, mais cresce)
+    const gap = clamp(pot - ovr, -20, 40);
+
+    // participação (minutos)
+    const mins = clamp(n(st.minutesSeason, 0), 0, 4000);
+    const exposure = clamp(0.55 + (mins / 4000) * 0.55, 0.55, 1.10);
+
+    // moral/forma (0..100)
+    const moraleMul = clamp(0.85 + (n(st.morale, 60) / 100) * 0.35, 0.80, 1.20);
+    const formMul = clamp(0.85 + (n(st.form, 60) / 100) * 0.35, 0.80, 1.20);
+
+    // fadiga penaliza treino
+    const fatigue = clamp(n(fit.fatigue, 15), 0, 100);
+    const fatigueMul = clamp(1.08 - (fatigue / 100) * 0.65, 0.45, 1.08);
+
+    // lesionado não treina direito
+    const inj = n(fit.injuryWeeks, 0);
+    const injuryMul = inj > 0 ? 0.25 : 1.0;
+
+    // idade: jovens crescem, veteranos caem
+    let ageMul = 1.0;
+    if (age <= 18) ageMul = 1.22;
+    else if (age <= 21) ageMul = 1.15;
+    else if (age <= 25) ageMul = 1.05;
+    else if (age <= 29) ageMul = 0.98;
+    else if (age <= 32) ageMul = 0.92;
+    else if (age <= 35) ageMul = 0.84;
+    else ageMul = 0.74;
+
+    // base de ganho semanal
+    // (um valor pequeno, mas constante; depois de 30-40 semanas dá impacto real)
+    const intFx = intensityEffects(plan.intensity);
+    const focusMul = focusMultiplier(plan.focus, p);
+
+    // tendência
+    // - se gap > 0, cresce
+    // - se gap < 0 (já acima do potencial), declina
+    const trend = gap >= 0 ? 1 : -1;
+
+    // magnitude
+    const magnitude =
+      (0.020 + (Math.abs(gap) / 100) * 0.060) *
+      intFx.gain *
+      focusMul *
+      exposure *
+      moraleMul *
+      formMul *
+      fatigueMul *
+      injuryMul *
+      ageMul;
+
+    // introduz leve ruído
+    const noise = (rnd() - 0.5) * 0.02;
+
+    // se veterano, aplica declínio natural adicional
+    let naturalDecline = 0;
+    if (age >= 31) naturalDecline = (age - 30) * 0.0025; // 0.0025..0.02
+
+    // delta final (caps)
+    let delta = (trend * magnitude) - naturalDecline + noise;
+    delta = clamp(delta, -0.12, 0.11);
+
+    return { delta, intFx };
+  }
+
+  // -----------------------------
+  // Aplicar uma semana
+  // -----------------------------
+  function applyWeek(teamId) {
     const gs = ensureGS();
-    const teamId = getUserTeamId();
-    if (!teamId) { alert("Nenhum time selecionado."); return null; }
+    const tr = gs.training;
+    const tid = String(teamId);
 
-    // Garante Dynamics e News se existirem
-    try { if (window.Dynamics && typeof Dynamics.ensure === "function") Dynamics.ensure(); } catch (e) {}
-    try { if (window.News && typeof News.ensure === "function") News.ensure(); } catch (e) {}
+    const plan = getTeamPlan(tid);
 
-    const focus = gs.training.focus || "EQUILIBRADO";
-    const intensity = gs.training.intensity || 2;
+    const players = getTeamPlayers(tid);
+    if (!players.length) return { ok: false, msg: "Sem jogadores no time." };
 
-    const { dForm, dMorale, dFat } = getDeltas(focus, intensity);
+    const changes = [];
+    const intFx = intensityEffects(plan.intensity);
 
-    const elenco = getElenco(teamId);
-    if (!elenco.length) { alert("Elenco vazio."); return null; }
+    for (const p of players) {
+      const st = ensurePlayerState(p.id);
+      const fit = fitnessGet(p.id);
 
-    let highFatigue = 0;
-    let lowMorale = 0;
-
-    for (const p of elenco) {
-      const pid = String(p.id || p.playerId || "");
-      if (!pid) continue;
-
-      const st = ensurePlayerState(pid);
-      if (!st) continue;
-
-      // jogadores já muito cansados sofrem mais fadiga e ganham menos forma
-      const tiredFactor = st.fatigue >= 75 ? 0.6 : (st.fatigue >= 60 ? 0.8 : 1.0);
-
-      const formGain = Math.round(dForm * tiredFactor);
-      const moraleGain = dMorale; // moral não reduz tanto com cansaço
-      const fatigueGain = (st.fatigue >= 80) ? (dFat + 2) : dFat;
-
-      st.form = clamp(st.form + formGain, 0, 100);
-      st.morale = clamp(st.morale + moraleGain, 0, 100);
-      st.fatigue = clamp(st.fatigue + fatigueGain, 0, 100);
-
-      if (st.fatigue >= 78) highFatigue++;
-      if (st.morale <= 35) lowMorale++;
-    }
-
-    gs.training.lastAppliedAt = nowIso();
-
-    // notícia
-    try {
-      if (window.News && typeof News.pushNews === "function") {
-        const tn = getTeamName(teamId);
-        const intensityLabel = (intensity === 1 ? "LEVE" : (intensity === 2 ? "NORMAL" : "PESADO"));
-        News.pushNews(
-          "Sessão de treino concluída",
-          `${tn} treinou (${String(focus).toUpperCase()} • ${intensityLabel}). Efeito: +Forma, ${dMorale >= 0 ? "+" : ""}${dMorale} Moral, +Fadiga. Alertas: ${highFatigue} muito cansados, ${lowMorale} com moral baixa.`,
-          "TRAINING"
-        );
+      // se lesionado, reduz form
+      if (n(fit.injuryWeeks, 0) > 0) {
+        st.form = clamp(n(st.form, 60) - (2 + rnd() * 2), 0, 100);
+        st.morale = clamp(n(st.morale, 60) - (0.8 + rnd() * 1.2), 0, 100);
       }
-    } catch (e) {}
 
-    return { focus, intensity, dForm, dMorale, dFat, highFatigue, lowMorale };
-  }
+      // aplica fadiga do treino (fitness)
+      fit.fatigue = clamp(n(fit.fatigue, 15) + intFx.fatigue * (0.75 + rnd() * 0.45), 0, 100);
 
-  // -----------------------------
-  // UI MODAL (injetado no lobby)
-  // -----------------------------
-  function injectLobbyButton() {
-    // já existe?
-    if (document.getElementById("btn-training-open")) return;
+      // chance de lesão por treino (se já fatigado, aumenta)
+      const fatigue = clamp(n(fit.fatigue, 15), 0, 100);
+      const injChance = intFx.injury + (fatigue > 75 ? 0.012 : 0) + (fatigue > 90 ? 0.015 : 0);
+      if (rnd() < injChance && n(fit.injuryWeeks, 0) <= 0) {
+        fit.injuryWeeks = 1 + Math.floor(rnd() * 4); // 1-4 semanas
+        st.morale = clamp(n(st.morale, 60) - 3 - rnd() * 3, 0, 100);
+        st.form = clamp(n(st.form, 60) - 2 - rnd() * 3, 0, 100);
+      }
 
-    const wrap = document.querySelector(".lobby-botoes");
-    if (!wrap) return;
+      // progressão/declínio
+      const before = getOVR(p);
+      const potBefore = getPOT(p);
 
-    const btn = document.createElement("button");
-    btn.id = "btn-training-open";
-    btn.className = "btn-blue";
-    btn.textContent = "TREINO";
-    btn.onclick = () => openModal();
-    // coloca antes do salvar
-    const buttons = Array.from(wrap.querySelectorAll("button"));
-    const saveBtn = buttons.find(b => (b.textContent || "").toUpperCase().includes("SALVAR"));
-    if (saveBtn && saveBtn.parentElement === wrap) {
-      wrap.insertBefore(btn, saveBtn);
-    } else {
-      wrap.appendChild(btn);
-    }
-  }
+      const { delta } = computeDelta(p, plan, st, fit);
+      let after = clamp(before + delta, 30, 99);
 
-  function injectModal() {
-    if (document.getElementById("training-modal-overlay")) return;
+      // limite suave por potencial (não trava, mas desacelera)
+      const pot = getPOT(p);
+      if (after > pot + 1.5) after = pot + 1.5;
 
-    const overlay = document.createElement("div");
-    overlay.id = "training-modal-overlay";
-    overlay.style.position = "fixed";
-    overlay.style.inset = "0";
-    overlay.style.background = "rgba(0,0,0,0.68)";
-    overlay.style.display = "none";
-    overlay.style.alignItems = "center";
-    overlay.style.justifyContent = "center";
-    overlay.style.zIndex = "9999";
-    overlay.onclick = (e) => {
-      if (e.target === overlay) closeModal();
-    };
+      setOVR(p, Number(after.toFixed(2)));
 
-    const card = document.createElement("div");
-    card.style.width = "min(520px, 92vw)";
-    card.style.background = "rgba(10,10,10,0.92)";
-    card.style.border = "1px solid rgba(255,255,255,0.10)";
-    card.style.borderRadius = "18px";
-    card.style.padding = "14px";
-    card.style.boxShadow = "0 0 28px rgba(0,0,0,0.75)";
-    card.style.fontFamily = "Roboto, Arial, sans-serif";
+      // potencial pode variar pouco (jovem melhora potencial com consistência)
+      const age = getAge(p);
+      if (age <= 22 && delta > 0.03 && n(st.form, 60) > 65 && rnd() < 0.10) {
+        const newPot = clamp(potBefore + 0.05 + rnd() * 0.08, 40, 99);
+        setPOT(p, Number(newPot.toFixed(2)));
+      }
 
-    const header = document.createElement("div");
-    header.style.display = "flex";
-    header.style.justifyContent = "space-between";
-    header.style.alignItems = "center";
-    header.style.gap = "10px";
+      // moral/forma evolução leve
+      st.morale = clamp(n(st.morale, 60) + (delta > 0 ? 0.6 : -0.2) + (rnd() - 0.5) * 1.2, 0, 100);
+      st.form = clamp(n(st.form, 60) + (delta > 0 ? 0.8 : -0.3) + (rnd() - 0.5) * 1.4, 0, 100);
 
-    const title = document.createElement("div");
-    title.textContent = "TREINO SEMANAL";
-    title.style.fontWeight = "900";
-    title.style.letterSpacing = "0.8px";
-    title.style.fontSize = "14px";
+      // reduz minutesSeason levemente (para não explodir pra sempre)
+      st.minutesSeason = Math.max(0, n(st.minutesSeason, 0) - 40);
 
-    const close = document.createElement("button");
-    close.textContent = "X";
-    close.className = "btn-blue";
-    close.style.padding = "6px 10px";
-    close.onclick = () => closeModal();
+      // salva fitness se possível
+      fitnessSet(p.id, fit);
 
-    header.appendChild(title);
-    header.appendChild(close);
-
-    const sub = document.createElement("div");
-    sub.id = "training-sub";
-    sub.style.marginTop = "8px";
-    sub.style.opacity = "0.85";
-    sub.style.fontSize = "12px";
-    sub.textContent = "Configure foco e intensidade. Depois aplique uma sessão (simula uma semana).";
-
-    const grid = document.createElement("div");
-    grid.style.display = "grid";
-    grid.style.gridTemplateColumns = "1fr 1fr";
-    grid.style.gap = "10px";
-    grid.style.marginTop = "12px";
-
-    // Focus
-    const focusWrap = document.createElement("div");
-    const focusLab = document.createElement("div");
-    focusLab.textContent = "FOCO";
-    focusLab.style.fontWeight = "900";
-    focusLab.style.fontSize = "11px";
-    focusLab.style.opacity = "0.75";
-    focusLab.style.marginBottom = "6px";
-
-    const focusSel = document.createElement("select");
-    focusSel.id = "training-focus";
-    ["EQUILIBRADO","FISICO","TATICO","OFENSIVO","DEFENSIVO"].forEach(v => {
-      const o = document.createElement("option");
-      o.value = v; o.textContent = v;
-      focusSel.appendChild(o);
-    });
-    focusSel.style.width = "100%";
-    focusSel.style.padding = "10px";
-    focusSel.style.borderRadius = "12px";
-    focusSel.style.border = "1px solid rgba(255,255,255,0.10)";
-    focusSel.style.background = "rgba(0,0,0,0.35)";
-    focusSel.style.color = "white";
-    focusSel.style.fontWeight = "900";
-
-    focusWrap.appendChild(focusLab);
-    focusWrap.appendChild(focusSel);
-
-    // Intensity
-    const intWrap = document.createElement("div");
-    const intLab = document.createElement("div");
-    intLab.textContent = "INTENSIDADE";
-    intLab.style.fontWeight = "900";
-    intLab.style.fontSize = "11px";
-    intLab.style.opacity = "0.75";
-    intLab.style.marginBottom = "6px";
-
-    const intSel = document.createElement("select");
-    intSel.id = "training-intensity";
-    [
-      { v: 1, t: "1 • LEVE (menos fadiga)" },
-      { v: 2, t: "2 • NORMAL (balanceado)" },
-      { v: 3, t: "3 • PESADO (mais forma, mais fadiga)" }
-    ].forEach(obj => {
-      const o = document.createElement("option");
-      o.value = String(obj.v);
-      o.textContent = obj.t;
-      intSel.appendChild(o);
-    });
-    intSel.style.width = "100%";
-    intSel.style.padding = "10px";
-    intSel.style.borderRadius = "12px";
-    intSel.style.border = "1px solid rgba(255,255,255,0.10)";
-    intSel.style.background = "rgba(0,0,0,0.35)";
-    intSel.style.color = "white";
-    intSel.style.fontWeight = "900";
-
-    intWrap.appendChild(intLab);
-    intWrap.appendChild(intSel);
-
-    grid.appendChild(focusWrap);
-    grid.appendChild(intWrap);
-
-    const preview = document.createElement("div");
-    preview.id = "training-preview";
-    preview.style.marginTop = "12px";
-    preview.style.padding = "10px";
-    preview.style.borderRadius = "14px";
-    preview.style.border = "1px solid rgba(255,255,255,0.08)";
-    preview.style.background = "rgba(255,255,255,0.04)";
-    preview.style.fontSize = "12px";
-    preview.style.opacity = "0.9";
-    preview.textContent = "Efeito estimado: —";
-
-    const actions = document.createElement("div");
-    actions.style.display = "flex";
-    actions.style.gap = "10px";
-    actions.style.marginTop = "12px";
-
-    const btnSave = document.createElement("button");
-    btnSave.className = "btn-blue";
-    btnSave.textContent = "SALVAR CONFIG";
-    btnSave.onclick = () => {
-      const gs = ensureGS();
-      gs.training.focus = focusSel.value;
-      gs.training.intensity = parseInt(intSel.value, 10) || 2;
-      updatePreview();
-      alert("Configuração de treino salva!");
-    };
-
-    const btnApply = document.createElement("button");
-    btnApply.className = "btn-green";
-    btnApply.textContent = "APLICAR SESSÃO";
-    btnApply.onclick = () => {
-      const gs = ensureGS();
-      gs.training.focus = focusSel.value;
-      gs.training.intensity = parseInt(intSel.value, 10) || 2;
-
-      const res = applyTrainingSession();
-      if (!res) return;
-
-      // feedback
-      alert(
-        `Treino aplicado!\nFoco: ${res.focus}\nIntensidade: ${res.intensity}\n\nEfeitos:\n+Forma: ${res.dForm}\nMoral: ${res.dMorale >= 0 ? "+" : ""}${res.dMorale}\n+Fadiga: ${res.dFat}\n\nAlertas:\nCansados: ${res.highFatigue}\nMoral baixa: ${res.lowMorale}`
-      );
-
-      // volta para lobby já atualizado (se existir)
-      try { if (window.UI && typeof UI.voltarLobby === "function") UI.voltarLobby(); } catch (e) {}
-      closeModal();
-    };
-
-    actions.appendChild(btnSave);
-    actions.appendChild(btnApply);
-
-    const footer = document.createElement("div");
-    footer.id = "training-footer";
-    footer.style.marginTop = "10px";
-    footer.style.fontSize = "11px";
-    footer.style.opacity = "0.75";
-    footer.textContent = "Dica: use PESADO em pré-temporada e LEVE antes de jogos decisivos.";
-
-    card.appendChild(header);
-    card.appendChild(sub);
-    card.appendChild(grid);
-    card.appendChild(preview);
-    card.appendChild(actions);
-    card.appendChild(footer);
-
-    overlay.appendChild(card);
-    document.body.appendChild(overlay);
-
-    function updatePreview() {
-      const focus = focusSel.value;
-      const intensity = parseInt(intSel.value, 10) || 2;
-      const d = getDeltas(focus, intensity);
-
-      const intensityLabel = (intensity === 1 ? "LEVE" : (intensity === 2 ? "NORMAL" : "PESADO"));
-      const m = `${d.dMorale >= 0 ? "+" : ""}${d.dMorale}`;
-      preview.textContent = `Efeito estimado: +Forma ${d.dForm} • Moral ${m} • +Fadiga ${d.dFat}  (${focus} • ${intensityLabel})`;
+      // registra mudanças relevantes
+      const diff = after - before;
+      if (Math.abs(diff) >= 0.02 || (fit.injuryWeeks > 0 && n(fit.injuryWeeks, 0) <= 4)) {
+        changes.push({
+          playerId: p.id,
+          name: p.name || p.nome || `Jogador ${p.id}`,
+          ovrBefore: Number(before.toFixed(2)),
+          ovrAfter: Number(after.toFixed(2)),
+          diff: Number(diff.toFixed(2)),
+          morale: Math.round(st.morale),
+          form: Math.round(st.form),
+          injuryWeeks: n(fit.injuryWeeks, 0),
+          fatigue: Math.round(n(fit.fatigue, 0))
+        });
+      }
     }
 
-    focusSel.onchange = updatePreview;
-    intSel.onchange = updatePreview;
+    // semana avança
+    tr.week = n(tr.week, 1) + 1;
+    tr.lastAppliedISO = nowISO();
 
-    // sincroniza estado atual
+    // log compacto
+    const up = changes.filter(c => c.diff > 0.02).length;
+    const down = changes.filter(c => c.diff < -0.02).length;
+    const injured = changes.filter(c => c.injuryWeeks > 0).length;
+
+    const summary = `Treino aplicado (Int ${plan.intensity} • ${plan.focus}). ↑${up} ↓${down} Lesões:${injured}`;
+    tr.logs.unshift({ iso: tr.lastAppliedISO, teamId: tid, summary, up, down, injured, changes });
+    tr.logs = tr.logs.slice(0, 25);
+
+    news("Treino semanal", summary);
+    save();
+
+    return {
+      ok: true,
+      teamId: tid,
+      plan,
+      week: tr.week,
+      summary,
+      changes
+    };
+  }
+
+  function getWeeklyReport(teamId) {
     const gs = ensureGS();
-    focusSel.value = gs.training.focus || "EQUILIBRADO";
-    intSel.value = String(gs.training.intensity || 2);
-    updatePreview();
+    const tr = gs.training;
+    const tid = String(teamId);
+    const log = (tr.logs || []).find(x => String(x.teamId) === tid) || null;
+    return log ? JSON.parse(JSON.stringify(log)) : null;
   }
 
-  function openModal() {
-    ensureGS();
-    injectModal();
-    const ov = document.getElementById("training-modal-overlay");
-    if (ov) ov.style.display = "flex";
-  }
-
-  function closeModal() {
-    const ov = document.getElementById("training-modal-overlay");
-    if (ov) ov.style.display = "none";
-  }
-
-  function init() {
-    ensureGS();
-
-    // garante contracts/dynamics/news se existirem
-    try { if (window.Contracts && typeof Contracts.ensure === "function") Contracts.ensure(); } catch (e) {}
-    try { if (window.Dynamics && typeof Dynamics.ensure === "function") Dynamics.ensure(); } catch (e) {}
-    try { if (window.News && typeof News.ensure === "function") News.ensure(); } catch (e) {}
-
-    // injeta botão quando lobby existir
-    injectLobbyButton();
-
-    // tenta reinjetar algumas vezes (caso carregue depois)
-    let tries = 0;
-    const t = setInterval(() => {
-      tries++;
-      injectLobbyButton();
-      if (document.getElementById("btn-training-open") || tries > 20) clearInterval(t);
-    }, 500);
-  }
-
-  document.addEventListener("DOMContentLoaded", init);
-
+  // -----------------------------
+  // Public API
+  // -----------------------------
   window.Training = {
-    ensure: ensureGS,
-    applySession: applyTrainingSession,
-    open: openModal,
-    close: closeModal
+    ensure() {
+      ensureGS();
+      // garante plano do usuário
+      const tid = (window.gameState && (window.gameState.currentTeamId || window.gameState.selectedTeamId)) || null;
+      if (tid) getTeamPlan(tid);
+    },
+    getTeamPlan,
+    setTeamPlan,
+    getPlayerState,
+    addMinutes,
+    applyWeek,
+    getWeeklyReport
   };
 })();
