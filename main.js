@@ -1,18 +1,10 @@
 /* =======================================================
    VALE FUTEBOL MANAGER 2026
-   main.js — Inicialização do jogo e navegação de telas
-   + Lobby AAA Dashboard (fase, próximo jogo, mini-tabela,
-     estaduais e notícias)
+   main.js — Inicialização + Lobby AAA + feed de notícias real
    =======================================================*/
 
-console.log(
-  "%c[MAIN] Vale Futebol Manager 2026 carregado",
-  "color:#C7A029; font-size:16px; font-weight:bold"
-);
+console.log("%c[MAIN] Vale Futebol Manager 2026 carregado", "color:#C7A029; font-size:16px; font-weight:bold");
 
-/* =======================================================
-   FUNÇÃO GLOBAL DE TROCA DE TELAS
-   =======================================================*/
 function mostrarTela(id) {
   document.querySelectorAll(".tela").forEach((t) => t.classList.remove("ativa"));
   const alvo = document.getElementById(id);
@@ -20,9 +12,6 @@ function mostrarTela(id) {
   else console.warn("[MAIN] Tela não encontrada:", id);
 }
 
-/* =======================================================
-   HELPERS
-   =======================================================*/
 function getAllTeams() {
   try {
     if (window.Database && Array.isArray(Database.teams)) return Database.teams;
@@ -31,8 +20,7 @@ function getAllTeams() {
 }
 
 function getTeamById(teamId) {
-  const teams = getAllTeams();
-  return teams.find((t) => t.id === teamId) || null;
+  return getAllTeams().find((t) => t.id === teamId) || null;
 }
 
 function getDivisionForTeam(team) {
@@ -63,7 +51,7 @@ function el(tag, className, text) {
 }
 
 /* =======================================================
-   CONFIGURAÇÃO DOS BOTÕES DA CAPA
+   CAPA / BOTÕES
    =======================================================*/
 function configurarBotoes() {
   const btnIniciar = document.getElementById("btn-iniciar");
@@ -71,32 +59,28 @@ function configurarBotoes() {
   const btnCarregarJSON = document.getElementById("btn-carregar-json");
   const inputSaveJSON = document.getElementById("input-save-json");
 
-  // botão continuar começa oculto
   if (btnContinuar) btnContinuar.style.display = "none";
 
-  // se houver save, mostra botão CONTINUAR
   if (window.Save && typeof Save.carregar === "function") {
-    const save = Save.carregar(true); // modo "somente verificar"
+    const save = Save.carregar(true);
     if (save) {
-      console.log("[MAIN] Save encontrado, exibindo CONTINUAR CARREIRA");
       if (btnContinuar) btnContinuar.style.display = "block";
     }
   }
 
-  // Iniciar carreira
   if (btnIniciar) {
     btnIniciar.onclick = () => {
       mostrarTela("tela-escolha-time");
       if (window.TeamUI && typeof TeamUI.renderTeamSelection === "function") {
         TeamUI.renderTeamSelection();
+      } else {
+        alert("TeamUI.renderTeamSelection não encontrado.");
       }
     };
   }
 
-  // Continuar carreira
   if (btnContinuar) {
     btnContinuar.onclick = () => {
-      console.log("[MAIN] Continuar carreira");
       if (window.Save && typeof Save.carregar === "function") {
         const ok = Save.carregar();
         if (!ok) {
@@ -109,7 +93,6 @@ function configurarBotoes() {
     };
   }
 
-  // Botão para carregar carreira via arquivo JSON
   if (btnCarregarJSON && inputSaveJSON) {
     btnCarregarJSON.onclick = () => {
       inputSaveJSON.value = "";
@@ -130,10 +113,7 @@ function configurarBotoes() {
           },
           (err) => {
             console.error("[MAIN] Erro ao importar save JSON:", err);
-            alert(
-              "Não foi possível carregar o arquivo de carreira. " +
-                "Verifique se ele foi gerado pelo próprio jogo."
-            );
+            alert("Não foi possível carregar o arquivo de carreira.");
           }
         );
       } else {
@@ -144,33 +124,27 @@ function configurarBotoes() {
 }
 
 /* =======================================================
-   LOBBY AAA – DADOS (próximo jogo / mini tabela / regionais / news)
+   LOBBY AAA
    =======================================================*/
 function getPhaseLabel() {
   const gs = window.gameState || {};
   if (gs.phase === "ESTADUAIS") return "ESTADUAIS";
   if (gs.phase === "NACIONAL") return "NACIONAL";
-  // fallback (caso antigo)
   return gs.phase ? String(gs.phase).toUpperCase() : "NACIONAL";
 }
 
 function getNextMatchInfo(teamId, division) {
   const gs = window.gameState || {};
-  // 1) Estaduais
+
   if (gs.phase === "ESTADUAIS" && window.Regionals && typeof Regionals.getMatchForUserInCurrentWeek === "function") {
     const next = Regionals.getMatchForUserInCurrentWeek(teamId);
     if (next && next.match) {
       const oppId = next.match.homeId === teamId ? next.match.awayId : next.match.homeId;
       const opp = getTeamById(oppId);
-      return {
-        title: `${getTeamById(teamId)?.name || teamId} vs ${opp?.name || oppId}`,
-        sub: `${next.competitionName} • Semana ${next.week}`,
-        date: "—"
-      };
+      return { title: `${getTeamById(teamId)?.name || teamId} vs ${opp?.name || oppId}`, sub: `${next.competitionName} • Semana ${next.week}`, date: "—" };
     }
   }
 
-  // 2) Liga nacional (Série A/B)
   if (window.League && typeof League.getCalendarForDivision === "function" && typeof League.getCurrentRound === "function") {
     const round = League.getCurrentRound(division);
     const cal = League.getCalendarForDivision(division);
@@ -180,15 +154,10 @@ function getNextMatchInfo(teamId, division) {
     if (m) {
       const home = getTeamById(m.homeId);
       const away = getTeamById(m.awayId);
-      return {
-        title: `${home?.name || m.homeId} vs ${away?.name || m.awayId}`,
-        sub: `Série ${division} • Rodada ${round}`,
-        date: obj?.date ? String(obj.date) : "—"
-      };
+      return { title: `${home?.name || m.homeId} vs ${away?.name || m.awayId}`, sub: `Série ${division} • Rodada ${round}`, date: obj?.date ? String(obj.date) : "—" };
     }
   }
 
-  // 3) fallback
   return { title: "—", sub: "—", date: "—" };
 }
 
@@ -219,11 +188,9 @@ function renderMiniTable(teamId, division) {
     return;
   }
 
-  // header
   const hdr = el("div", "mini-title", title || "Tabela");
   box.appendChild(hdr);
 
-  // show top 5 + highlight user if outside top 5
   const top = rows.slice(0, 5);
   const userRow = rows.find(r => r.teamId === teamId) || null;
   const needUserExtra = userRow && !top.some(r => r.teamId === teamId);
@@ -232,7 +199,6 @@ function renderMiniTable(teamId, division) {
     const t = getTeamById(r.teamId);
     const line = el("div", "mini-row");
     if (r.teamId === teamId) line.classList.add("mini-row-user");
-
     line.appendChild(el("div", "mini-pos", String(idx)));
     line.appendChild(el("div", "mini-team", t?.name || r.teamId));
     line.appendChild(el("div", "mini-pts", String(r.P ?? 0)));
@@ -247,8 +213,7 @@ function renderMiniTable(teamId, division) {
     box.appendChild(rowLine(userRow, idx >= 0 ? idx + 1 : 0));
   }
 
-  const legend = el("div", "mini-legend", "Pts");
-  box.appendChild(legend);
+  box.appendChild(el("div", "mini-legend", "Pts"));
 }
 
 function renderRegionalsSummary() {
@@ -267,7 +232,6 @@ function renderRegionalsSummary() {
     return;
   }
 
-  // mostra 5 principais primeiro (SP, RJ, MG, RS, BA), depois o resto
   const order = ["SP", "RJ", "MG", "RS", "BA"];
   list.sort((a, b) => {
     const ia = order.indexOf(a.id);
@@ -288,46 +252,50 @@ function renderRegionalsSummary() {
 
     if (c.finished && c.championId) {
       const champ = getTeamById(c.championId);
-      const champLine = el("div", "regional-champ", `🏆 Campeão: ${champ?.name || c.championId}`);
-      box.appendChild(champLine);
+      box.appendChild(el("div", "regional-champ", `🏆 Campeão: ${champ?.name || c.championId}`));
     }
   });
 }
 
+/* =======================================================
+   Notícias do Lobby: agora vem do gameState.newsFeed (AAA)
+   =======================================================*/
 function renderNews(teamId, division) {
   const box = document.getElementById("lobby-news");
   if (!box) return;
   clearEl(box);
 
   const gs = window.gameState || {};
-  const team = getTeamById(teamId);
+  const feed = Array.isArray(gs.newsFeed) ? gs.newsFeed : [];
 
+  // Se existir feed real, mostra ele
+  if (feed.length) {
+    const slice = feed.slice().reverse().slice(0, 6);
+    slice.forEach((n) => {
+      const it = el("div", "news-item");
+      it.appendChild(el("div", "news-dot", "•"));
+
+      const text = el("div", "news-text", "");
+      const title = n.title ? `${n.title}` : "Notícia";
+      const body = n.body ? ` — ${n.body}` : "";
+      text.textContent = title + body;
+
+      it.appendChild(text);
+      box.appendChild(it);
+    });
+    return;
+  }
+
+  // Fallback (se ainda não gerou feed)
   const items = [];
-
-  // item 1: fase
   const phase = getPhaseLabel();
-  if (phase === "ESTADUAIS") {
-    items.push(`Estaduais começaram! Foque em desempenho rápido e moral alta.`);
-  } else {
-    items.push(`Fase nacional ativa: Série ${division} + Copa do Brasil no calendário.`);
-  }
+  if (phase === "ESTADUAIS") items.push(`Estaduais começaram! Foque em moral e ritmo.`);
+  else items.push(`Fase nacional ativa: Série ${division} + Copa do Brasil no calendário.`);
 
-  // item 2: próxima partida
   const next = getNextMatchInfo(teamId, division);
-  if (next && next.title && next.title !== "—") {
-    items.push(`Próximo jogo: ${next.title} • ${next.sub}`);
-  }
+  if (next && next.title && next.title !== "—") items.push(`Próximo jogo: ${next.title} • ${next.sub}`);
 
-  // item 3: dica tática
   items.push(`Dica: ajuste táticas no intervalo para influenciar o segundo tempo.`);
-
-  // item 4: finanças
-  const bal = (gs.balance != null ? gs.balance : (window.Game ? Game.saldo : 0));
-  if (Number(bal) < 5) items.push(`Atenção ao caixa: saldo baixo. Considere vender ou reduzir folha.`);
-  else items.push(`Finanças ok: use o mercado para fortalecer posições-chave.`);
-
-  // item 5: identidade
-  if (team?.name) items.push(`Objetivo do clube: colocar ${team.name} no topo e conquistar títulos.`);
 
   items.slice(0, 6).forEach((txt) => {
     const it = el("div", "news-item");
@@ -337,12 +305,7 @@ function renderNews(teamId, division) {
   });
 }
 
-/* =======================================================
-   LOBBY – Função principal (AAA)
-   =======================================================*/
 function carregarLobbyAAA() {
-  console.log("[MAIN] carregarLobbyAAA()");
-
   const gs = window.gameState || {};
 
   if (!gs.selectedTeamId && !(window.Game && Game.teamId)) {
@@ -352,7 +315,6 @@ function carregarLobbyAAA() {
 
   const teamId = gs.selectedTeamId || Game.teamId;
   const team = getTeamById(teamId);
-
   if (!team) {
     console.error("[MAIN] Time inválido no lobby:", teamId);
     return;
@@ -361,67 +323,49 @@ function carregarLobbyAAA() {
   if (window.Game) Game.teamId = teamId;
   if (window.gameState) gameState.currentTeamId = teamId;
 
-  const lobbyNome = document.getElementById("lobby-nome-time");
-  const lobbySaldo = document.getElementById("lobby-saldo");
-  const lobbyTemp = document.getElementById("lobby-temporada");
-  const lobbyLogo = document.getElementById("lobby-logo");
+  // garante estruturas novas
+  if (window.Dynamics && typeof Dynamics.ensure === "function") Dynamics.ensure();
+  if (window.News && typeof News.ensure === "function") News.ensure();
 
-  safeText(lobbyNome, team.name);
+  safeText(document.getElementById("lobby-nome-time"), team.name);
 
   const bal = (gs.balance != null ? gs.balance : (window.Game ? Game.saldo : 0));
-  safeText(lobbySaldo, "Saldo: " + fmtMoneyMi(bal));
-  safeText(lobbyTemp, "Temporada: " + (gs.seasonYear ?? 2025));
+  safeText(document.getElementById("lobby-saldo"), "Saldo: " + fmtMoneyMi(bal));
+  safeText(document.getElementById("lobby-temporada"), "Temporada: " + (gs.seasonYear ?? 2025));
 
+  const lobbyLogo = document.getElementById("lobby-logo");
   if (lobbyLogo) {
     lobbyLogo.style.display = "block";
     lobbyLogo.src = `assets/logos/${team.id}.png`;
     lobbyLogo.alt = team.name;
-    lobbyLogo.onerror = () => {
-      console.warn("[MAIN] Escudo não encontrado para:", team.id);
-      lobbyLogo.src = "assets/logos/default.png";
-    };
+    lobbyLogo.onerror = () => { lobbyLogo.src = "assets/logos/default.png"; };
   }
 
-  // AAA: fase
-  const faseEl = document.getElementById("lobby-fase");
-  safeText(faseEl, `FASE: ${getPhaseLabel()}`);
+  safeText(document.getElementById("lobby-fase"), `FASE: ${getPhaseLabel()}`);
 
-  // AAA: próximo jogo
   const division = getDivisionForTeam(team);
   const next = getNextMatchInfo(teamId, division);
   safeText(document.getElementById("lobby-next-title"), next.title);
   safeText(document.getElementById("lobby-next-sub"), next.sub);
   safeText(document.getElementById("lobby-next-date"), next.date);
 
-  // AAA: mini-tabela
   renderMiniTable(teamId, division);
-
-  // AAA: regionais
   renderRegionalsSummary();
-
-  // AAA: news
   renderNews(teamId, division);
 }
 
 /* =======================================================
-   NAVEGAÇÃO CENTRALIZADA (SOBRESCREVE UI ANTIGO)
+   UI GLOBAL (Navegação)
    =======================================================*/
 window.UI = Object.assign(window.UI || {}, {
-  // -------- Telas básicas --------
-  voltarParaCapa() {
-    console.log("[UI] voltarParaCapa()");
-    mostrarTela("tela-capa");
-  },
+  voltarParaCapa() { mostrarTela("tela-capa"); },
 
   voltarLobby() {
-    console.log("[UI] voltarLobby()");
     carregarLobbyAAA();
     mostrarTela("tela-lobby");
   },
 
-  // -------- Jogo / Partida --------
   abrirProximoJogo() {
-    console.log("[UI] abrirProximoJogo()");
     if (window.League && typeof League.prepararProximoJogo === "function") {
       League.prepararProximoJogo();
     } else if (window.Match && typeof Match.iniciarProximoJogo === "function") {
@@ -430,67 +374,43 @@ window.UI = Object.assign(window.UI || {}, {
     mostrarTela("tela-partida");
   },
 
-  // -------- Tabelas --------
   abrirClassificacao() {
-    console.log("[UI] abrirClassificacao()");
     if (window.LeagueUI && typeof LeagueUI.renderStandings === "function") {
       LeagueUI.renderStandings();
     }
     mostrarTela("tela-classificacao");
   },
 
-  // -------- Elenco --------
   abrirElenco() {
-    console.log("[UI] abrirElenco()");
     if (window.TeamUI && typeof TeamUI.renderTeamSquad === "function") {
       TeamUI.renderTeamSquad();
+    } else if (window.TeamUI && typeof TeamUI.renderSquad === "function") {
+      TeamUI.renderSquad();
     }
     mostrarTela("tela-elenco");
   },
 
-  // -------- Mercado --------
   abrirMercado() {
-    console.log("[UI] abrirMercado()");
-    if (window.MarketUI && typeof MarketUI.renderMarket === "function") {
-      MarketUI.renderMarket();
-    }
+    if (window.MarketUI && typeof MarketUI.renderMarket === "function") MarketUI.renderMarket();
     mostrarTela("tela-mercado");
   },
 
-  // -------- Táticas --------
   abrirTaticas() {
-    console.log("[UI] abrirTaticas()");
-    if (window.TacticsUI && typeof TacticsUI.renderTactics === "function") {
-      TacticsUI.renderTactics();
-    }
+    if (window.TacticsUI && typeof TacticsUI.renderTactics === "function") TacticsUI.renderTactics();
     mostrarTela("tela-taticas");
   },
 
-  // -------- Calendário --------
   abrirCalendarioAnual() {
-    console.log("[UI] abrirCalendarioAnual()");
-    if (window.CalendarUI && typeof CalendarUI.renderCalendar === "function") {
-      CalendarUI.renderCalendar();
-    }
+    if (window.CalendarUI && typeof CalendarUI.renderCalendar === "function") CalendarUI.renderCalendar();
     mostrarTela("tela-calendario");
   },
 
-  // -------- Salvar --------
   salvarCarreira() {
-    console.log("[UI] salvarCarreira()");
-    if (window.Save && typeof Save.exportarJSON === "function") {
-      Save.exportarJSON();
-    } else {
-      alert("Sistema de salvamento JSON não está disponível.");
-    }
+    if (window.Save && typeof Save.exportarJSON === "function") Save.exportarJSON();
+    else alert("Sistema de salvamento JSON não está disponível.");
   },
 });
 
-console.log("[MAIN] Navegação UI sobrescrita com sucesso.");
-
-/* =======================================================
-   INICIALIZAÇÃO
-   =======================================================*/
 document.addEventListener("DOMContentLoaded", () => {
   configurarBotoes();
 });
