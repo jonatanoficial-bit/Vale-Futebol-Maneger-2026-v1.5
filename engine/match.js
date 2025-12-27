@@ -1,18 +1,20 @@
 /* =======================================================
    VALE FUTEBOL MANAGER 2026
-   engine/match.js – Match Engine v4
-   + Relatório Pós-Jogo AAA
-   + Integra Dynamics (moral/forma/fadiga)
-   + Integra News (feed automático)
-
+   engine/match.js – Match Engine v5
+   -------------------------------------------------------
+   - Match Center (stats ao vivo)
+   - Relatório Pós-Jogo AAA
+   - Integra Dynamics (moral/forma/fadiga) + News (feed)
+   - Integra Contracts (salários/contratos): onUserMatchFinished()
    =======================================================*/
 
 (function () {
-  console.log("%c[Match] match.js v4 carregado", "color:#22c55e; font-weight:bold;");
+  console.log("%c[Match] match.js v5 carregado", "color:#22c55e; font-weight:bold;");
 
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
   function rand() { return Math.random(); }
   function pick(arr) { return arr[Math.floor(rand() * arr.length)]; }
+  function n(v, d = 0) { const x = Number(v); return isNaN(x) ? d : x; }
 
   function ensureGameState() { if (!window.gameState) window.gameState = {}; }
 
@@ -26,7 +28,7 @@
   function getTeamPlayers(teamId) { return getPlayers().filter(p => p.teamId === teamId); }
 
   function getCurrentUserTeamId() {
-    return (window.gameState && gameState.currentTeamId) || (window.Game && Game.teamId) || null;
+    return (window.gameState && (gameState.currentTeamId || gameState.selectedTeamId)) || (window.Game && Game.teamId) || null;
   }
 
   function getUserFormation() {
@@ -48,12 +50,14 @@
 
     let sample = [];
 
+    // usa titulares do usuário (se existirem)
     if (preferUserTitulares && window.gameState && Array.isArray(gameState.titulares) && gameState.titulares.length) {
       const ids = gameState.titulares.map(x => x?.playerId || x?.id || x).filter(Boolean);
       const chosen = ids.map(pid => all.find(p => (p.id === pid || p.playerId === pid))).filter(Boolean);
       if (chosen.length >= 8) sample = chosen.slice(0, 11);
     }
 
+    // fallback: top 11 por overall
     if (!sample.length) {
       const sorted = all.slice().sort((a, b) => (Number(b.ovr || b.overall || 0) - Number(a.ovr || a.overall || 0)));
       sample = sorted.slice(0, Math.min(11, sorted.length));
@@ -112,23 +116,17 @@
     return `90+${min - 90}'`;
   }
 
-  function safeNum(n, d = 0) {
-    const v = Number(n);
-    return isNaN(v) ? d : v;
+  function safeNum(v, d = 0) {
+    const x = Number(v);
+    return isNaN(x) ? d : x;
   }
 
-  // -----------------------------
-  // Match Module
-  // -----------------------------
   window.Match = {
     state: null,
     timer: null,
 
     iniciarProximoJogo() {
-      if (!window.Database || !Database.teams) {
-        alert("Banco de dados não carregado.");
-        return;
-      }
+      if (!window.Database || !Database.teams) { alert("Banco de dados não carregado."); return; }
       ensureGameState();
 
       const teamId = getCurrentUserTeamId();
@@ -174,8 +172,11 @@
 
     _startMatch(homeId, awayId, context) {
       ensureGameState();
-      if (window.Dynamics && typeof Dynamics.ensure === "function") Dynamics.ensure();
-      if (window.News && typeof News.ensure === "function") News.ensure();
+
+      // garante sistemas novos
+      try { if (window.Dynamics && typeof Dynamics.ensure === "function") Dynamics.ensure(); } catch (e) {}
+      try { if (window.News && typeof News.ensure === "function") News.ensure(); } catch (e) {}
+      try { if (window.Contracts && typeof Contracts.ensure === "function") Contracts.ensure(); } catch (e) {}
 
       const homeTeam = getTeamById(homeId) || { id: homeId, name: homeId };
       const awayTeam = getTeamById(awayId) || { id: awayId, name: awayId };
@@ -208,7 +209,6 @@
         homeForm, awayForm,
         possBiasHome,
 
-        // quem jogou (usado por Dynamics)
         played: {
           home: homePow.sample.map(p => p.id).filter(Boolean),
           away: awayPow.sample.map(p => p.id).filter(Boolean),
@@ -485,8 +485,6 @@
         },
         moments,
         roundResults: Array.isArray(rodadaResultsOrNull) ? rodadaResultsOrNull : null,
-
-        // novo: quem jogou
         played: this.state.played
       };
     },
@@ -511,23 +509,36 @@
 
       const report = this._buildReport(rodada);
 
-      // ======== NOVO: dinâmica de jogadores + notícias ========
+      // ======== Dinâmica + Notícias ========
       try {
+        let summary = null;
         if (window.Dynamics && typeof Dynamics.applyPostMatch === "function") {
-          const summary = Dynamics.applyPostMatch(report);
-          if (window.News && typeof News.addMatchNews === "function") {
-            News.addMatchNews(report, summary);
-          }
-        } else {
-          if (window.News && typeof News.addMatchNews === "function") {
-            News.addMatchNews(report, null);
-          }
+          summary = Dynamics.applyPostMatch(report);
+        }
+        if (window.News && typeof News.addMatchNews === "function") {
+          News.addMatchNews(report, summary);
         }
       } catch (e) {
         console.warn("[Match] Falha em Dynamics/News:", e);
       }
+
+      // ======== Contratos/Salários: conta jogo do usuário e debita folha a cada 4 jogos ========
+      try {
+        const gs = window.gameState || {};
+        const userTeamId = (gs.currentTeamId || gs.selectedTeamId || (window.Game ? Game.teamId : null));
+        const isUserMatch = userTeamId && (String(userTeamId) === String(report.homeId) || String(userTeamId) === String(report.awayId));
+        if (isUserMatch && window.Contracts && typeof Contracts.onUserMatchFinished === "function") {
+          Contracts.onUserMatchFinished();
+
+          // reconta folha do usuário (para lobby ficar certo)
+          if (typeof Contracts.recalcWageUsed === "function") Contracts.recalcWageUsed(userTeamId);
+        }
+      } catch (e) {
+        console.warn("[Match] Falha em Contracts:", e);
+      }
       // =======================================================
 
+      // abre relatório pós-jogo
       if (window.UI && typeof UI.abrirRelatorioPosJogo === "function") {
         UI.abrirRelatorioPosJogo(report);
       } else if (window.PostMatchUI && typeof PostMatchUI.openReport === "function") {
@@ -537,6 +548,7 @@
         if (window.UI && typeof UI.voltarLobby === "function") UI.voltarLobby();
       }
 
+      // salva
       try { if (window.Save && typeof Save.salvar === "function") Save.salvar(); } catch (e) {}
       try { window.currentMatchContext = null; } catch (e) {}
     },
