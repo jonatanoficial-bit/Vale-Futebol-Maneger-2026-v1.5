@@ -1,437 +1,416 @@
 /* =======================================================
    VALE FUTEBOL MANAGER 2026
-   Ui/contracts-ui.js — Contratos AAA (FM-like)
+   engine/contracts.js — Contratos + Folha + FFP (AAA)
    -------------------------------------------------------
-   - Overlay completo:
-     • resumo FFP (folha vs teto)
-     • lista elenco com busca e ordenação
-     • ações: renovar, rescindir, liberar
-   - Integra com engine/contracts.js
-   - Não quebra se engine não existir
+   O que entrega:
+   - Estrutura robusta para contratos:
+     • salário (mensal), duração (meses), data fim
+     • multa/rescisão (release clause)
+     • bônus (assinatura e por gol/assistência - placeholders)
+     • status: ativo / rescindido / livre
+   - Folha salarial + teto da folha (FFP simplificado)
+   - Renovação, rescindir, liberar (free agent)
+   - Avisos automáticos de FFP
+   - Persistência em gameState.contracts
+
+   Compatível com Database.players existente:
+   - Se jogador não tiver contract, cria automaticamente
+   - Salário padrão baseado em OVR (se existir)
 
    API:
-   - ContractsUI.open()
-   - ContractsUI.render()
-   - ContractsUI.close()
-
-   Integração:
-   - bind automático se existir botão #btn-contratos ou data-action="contratos"
+   - Contracts.ensure()
+   - Contracts.getPlayerContract(playerId)
+   - Contracts.setPlayerContract(playerId, contract)
+   - Contracts.getTeamContracts(teamId)
+   - Contracts.getWageUsed(teamId)   // em milhões (mi) ou unidade local
+   - Contracts.getWageCap(teamId)    // teto
+   - Contracts.getFFPStatus(teamId)  // {cap, used, pct, level}
+   - Contracts.renew(playerId, opts) // meses, salary, clause
+   - Contracts.terminate(playerId, opts) // multa/pagamento
+   - Contracts.release(playerId)     // torna free agent
    =======================================================*/
 
 (function () {
-  console.log("%c[ContractsUI] contracts-ui.js carregado", "color:#60a5fa; font-weight:bold;");
-
-  // -----------------------------
-  // CSS AAA
-  // -----------------------------
-  function injectCssOnce() {
-    if (document.getElementById("vf-contracts-css")) return;
-    const s = document.createElement("style");
-    s.id = "vf-contracts-css";
-    s.textContent = `
-      .vf-ct-overlay{
-        position:fixed; inset:0; z-index:9997;
-        background: radial-gradient(1200px 600px at 25% 10%, rgba(96,165,250,.18), transparent 52%),
-                    radial-gradient(1200px 600px at 85% 0%, rgba(251,191,36,.14), transparent 60%),
-                    rgba(0,0,0,.72);
-        backdrop-filter: blur(8px);
-        display:none;
-      }
-      .vf-ct-overlay.active{display:block}
-      .vf-ct-shell{max-width:1200px;margin:18px auto;padding:14px}
-      .vf-ct-top{
-        display:flex; align-items:center; justify-content:space-between; gap:10px;
-        padding:12px; border-radius:18px;
-        background: rgba(0,0,0,.38);
-        border:1px solid rgba(255,255,255,.10);
-        box-shadow: 0 10px 30px rgba(0,0,0,.28);
-      }
-      .vf-ct-title h2{
-        margin:0; font-weight:1000; letter-spacing:.6px; text-transform:uppercase; font-size:14px
-      }
-      .vf-ct-title .sub{opacity:.75; font-weight:900; font-size:12px}
-
-      .vf-btn{
-        border-radius:14px;
-        border:1px solid rgba(255,255,255,.10);
-        background: rgba(255,255,255,.06);
-        color: rgba(255,255,255,.92);
-        font-weight:1000;
-        padding:10px 12px;
-        cursor:pointer;
-      }
-      .vf-btn.primary{background: rgba(96,165,250,.20)}
-      .vf-btn.warn{background: rgba(251,191,36,.16)}
-      .vf-btn.bad{background: rgba(251,113,133,.14)}
-
-      .vf-grid{display:grid;grid-template-columns: .85fr 1.15fr; gap:12px; margin-top:12px}
-      @media(max-width:980px){.vf-grid{grid-template-columns:1fr}}
-
-      .vf-card{
-        border-radius:18px;
-        background: rgba(0,0,0,.35);
-        border:1px solid rgba(255,255,255,.08);
-        box-shadow: 0 10px 30px rgba(0,0,0,.25);
-        padding:12px;
-      }
-      .vf-card .hd{
-        display:flex; align-items:center; justify-content:space-between; gap:10px;
-        margin-bottom:10px;
-      }
-      .vf-card .hd .t{
-        font-weight:1000;
-        letter-spacing:.6px;
-        text-transform:uppercase;
-        font-size:12px;
-        opacity:.9;
-      }
-      .vf-pill{
-        display:inline-flex; align-items:center; gap:8px;
-        padding:6px 10px; border-radius:999px;
-        border:1px solid rgba(255,255,255,.10);
-        background: rgba(255,255,255,.06);
-        font-weight:1000; font-size:11px; letter-spacing:.2px;
-      }
-      .vf-pill.ok{color:#86efac}
-      .vf-pill.warn{color:#fbbf24}
-      .vf-pill.bad{color:#fb7185}
-      .vf-pill.blue{color:#60a5fa}
-      .vf-muted{opacity:.75}
-
-      .vf-form{display:flex; gap:8px; flex-wrap:wrap}
-      .vf-form input{
-        flex:1;
-        min-width: 210px;
-        background: rgba(0,0,0,.35);
-        color: rgba(255,255,255,.94);
-        border:1px solid rgba(255,255,255,.10);
-        border-radius:14px;
-        padding:10px 12px;
-        font-weight:1000;
-        outline:none;
-      }
-
-      .vf-list{display:grid; gap:6px}
-      .vf-item{
-        display:flex; align-items:center; justify-content:space-between; gap:10px;
-        padding:8px 10px;
-        border-radius:14px;
-        background: rgba(255,255,255,.05);
-        border:1px solid rgba(255,255,255,.07);
-      }
-      .vf-item .l{display:flex; flex-direction:column; gap:2px; min-width:0}
-      .vf-item .l .name{font-weight:1000; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-      .vf-item .l .sub{opacity:.75; font-weight:900; font-size:12px}
-      .vf-item .r{display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end}
-      .vf-kpi{min-width:84px; text-align:right; font-weight:1000}
-
-      .vf-divider{height:1px;background: rgba(255,255,255,.08); margin:10px 0}
-      .vf-note{
-        padding: 10px;
-        border-radius: 16px;
-        border:1px solid rgba(255,255,255,.08);
-        background: rgba(0,0,0,.28);
-        font-weight:900;
-        opacity:.9;
-      }
-    `;
-    document.head.appendChild(s);
-  }
+  console.log("%c[Contracts] contracts.js carregado", "color:#60a5fa; font-weight:bold;");
 
   // -----------------------------
   // Utils
   // -----------------------------
   function n(v, d = 0) { const x = Number(v); return isNaN(x) ? d : x; }
-  function el(tag, cls, txt) {
-    const e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (txt != null) e.textContent = String(txt);
-    return e;
-  }
-  function clear(node) { if (!node) return; node.innerHTML = ""; }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function rnd() { return Math.random(); }
 
   function ensureGS() {
     if (!window.gameState) window.gameState = {};
     const gs = window.gameState;
     if (!gs.seasonYear) gs.seasonYear = 2026;
+
+    if (!gs.contracts || typeof gs.contracts !== "object") gs.contracts = {};
+    const cs = gs.contracts;
+
+    if (!cs.playerContracts || typeof cs.playerContracts !== "object") cs.playerContracts = {};
+    if (!cs.teamCaps || typeof cs.teamCaps !== "object") cs.teamCaps = {}; // cap por time
+    if (!cs.logs || !Array.isArray(cs.logs)) cs.logs = [];
+
     return gs;
   }
-  function getUserTeamId() {
+
+  function getPlayers() {
+    return (window.Database && Array.isArray(Database.players)) ? Database.players : [];
+  }
+  function getTeams() {
+    return (window.Database && Array.isArray(Database.teams)) ? Database.teams : [];
+  }
+  function getPlayerById(id) {
+    return getPlayers().find(p => String(p.id) === String(id)) || null;
+  }
+  function getTeamById(id) {
+    return getTeams().find(t => String(t.id) === String(id)) || null;
+  }
+  function getTeamPlayers(teamId) {
+    return getPlayers().filter(p => String(p.teamId) === String(teamId));
+  }
+
+  function save() {
+    try { if (window.Save && typeof Save.salvar === "function") Save.salvar(); } catch (e) {}
+  }
+  function news(title, body) {
+    try { if (window.News && typeof News.pushNews === "function") News.pushNews(title, body, "CONTRACTS"); } catch (e) {}
+  }
+
+  function nowYearMonth() {
+    // simplificado: usa seasonYear e mês 1..12 baseado em "week" se existir
     const gs = ensureGS();
-    return gs.currentTeamId || gs.selectedTeamId || (window.Game ? Game.teamId : null);
+    const y = n(gs.seasonYear, 2026);
+    let m = 1;
+    if (gs.training && gs.training.week) {
+      // 1..52 -> 1..12
+      m = clamp(1 + Math.floor((n(gs.training.week, 1) - 1) / 4.3), 1, 12);
+    }
+    return { y, m };
   }
 
   // -----------------------------
-  // Overlay
+  // Defaults: salário e contrato
   // -----------------------------
-  let overlay = null;
-  let searchText = "";
+  function getOVR(p) { return n(p.ovr ?? p.overall, 60); }
 
-  function ensureOverlay() {
-    injectCssOnce();
-    if (overlay) return;
-
-    overlay = el("div", "vf-ct-overlay");
-    overlay.id = "vf-contracts-overlay";
-
-    const shell = el("div", "vf-ct-shell");
-    overlay.appendChild(shell);
-
-    const top = el("div", "vf-ct-top");
-    const title = el("div", "vf-ct-title");
-    const h2 = el("h2", "", "Contratos & FFP");
-    const sub = el("div", "sub", "Renovar • Rescindir • Folha e Teto");
-    title.appendChild(h2);
-    title.appendChild(sub);
-
-    const actions = el("div", "");
-    actions.style.display = "flex";
-    actions.style.gap = "8px";
-    actions.style.flexWrap = "wrap";
-
-    const btnClose = el("button", "vf-btn", "Fechar");
-    btnClose.onclick = () => ContractsUI.close();
-
-    actions.appendChild(btnClose);
-
-    top.appendChild(title);
-    top.appendChild(actions);
-
-    const grid = el("div", "vf-grid");
-
-    const cardFFP = el("div", "vf-card");
-    cardFFP.innerHTML = `<div class="hd"><div class="t">FFP / Folha</div><div id="vf-ct-pill" class="vf-pill warn">—</div></div>`;
-    const ffpBody = el("div", "");
-    ffpBody.id = "vf-ct-ffp-body";
-    cardFFP.appendChild(ffpBody);
-
-    const cardList = el("div", "vf-card");
-    cardList.innerHTML = `<div class="hd"><div class="t">Elenco</div><div class="vf-pill blue" id="vf-ct-count">—</div></div>`;
-    const form = el("div", "vf-form");
-    const inp = document.createElement("input");
-    inp.placeholder = "Buscar jogador (nome)…";
-    inp.oninput = () => { searchText = String(inp.value || ""); render(); };
-    form.appendChild(inp);
-
-    const list = el("div", "vf-list");
-    list.id = "vf-ct-list";
-
-    cardList.appendChild(form);
-    cardList.appendChild(el("div", "vf-divider"));
-    cardList.appendChild(list);
-
-    grid.appendChild(cardFFP);
-    grid.appendChild(cardList);
-
-    shell.appendChild(top);
-    shell.appendChild(grid);
-
-    document.body.appendChild(overlay);
+  function baseSalaryFromOVR(ovr) {
+    // em milhões / mês (mi)
+    // 50 -> 0.08 | 60 -> 0.18 | 70 -> 0.45 | 80 -> 0.95 | 90 -> 1.80
+    const x = clamp(n(ovr, 60), 40, 95);
+    const scaled = Math.pow((x - 40) / 55, 2.0); // 0..1
+    return Number((0.06 + scaled * 1.85).toFixed(2));
   }
 
-  function show() { if (overlay) overlay.classList.add("active"); }
-  function hide() { if (overlay) overlay.classList.remove("active"); }
+  function defaultContractForPlayer(p) {
+    const ovr = getOVR(p);
+    const salary = baseSalaryFromOVR(ovr);
 
-  // -----------------------------
-  // Render
-  // -----------------------------
-  function renderFFP(teamId) {
-    const pill = document.getElementById("vf-ct-pill");
-    const body = document.getElementById("vf-ct-ffp-body");
-    if (!body) return;
+    // duração: jovens mais longos
+    const age = n(p.age, 24);
+    const months =
+      age <= 20 ? 48 :
+      age <= 24 ? 36 :
+      age <= 29 ? 30 :
+      age <= 33 ? 24 : 18;
 
-    clear(body);
+    // multa: 8..30x salário (aprox)
+    const clause = Number((salary * (8 + Math.floor(rnd() * 16))).toFixed(2));
 
-    if (!window.Contracts) {
-      body.appendChild(el("div", "vf-muted", "Contracts engine não carregado."));
-      return;
-    }
+    const { y, m } = nowYearMonth();
+    const endMonth = m + months;
+    const endY = y + Math.floor((endMonth - 1) / 12);
+    const endM = ((endMonth - 1) % 12) + 1;
 
-    try { if (Contracts && typeof Contracts.ensure === "function") Contracts.ensure(); } catch (e) {}
-
-    const f = Contracts.getFFPStatus(teamId);
-    const cap = n(f.cap, 0);
-    const used = n(f.used, 0);
-    const pct = n(f.pct, 0);
-
-    if (pill) {
-      pill.className = "vf-pill " + (f.level === "OK" ? "ok" : f.level === "WARN" ? "warn" : "bad");
-      pill.textContent = f.level === "OK" ? "FFP OK" : f.level === "WARN" ? "FFP ATENÇÃO" : "FFP ESTOURADO";
-    }
-
-    const note = el("div", "vf-note");
-    note.innerHTML = `
-      <div style="font-weight:1000;">Folha mensal</div>
-      <div class="vf-muted">${used.toFixed(2)} / ${cap.toFixed(2)} mi (${pct.toFixed(1)}%)</div>
-    `;
-    body.appendChild(note);
-
-    const hint = el("div", "vf-note");
-    hint.style.marginTop = "10px";
-    hint.innerHTML = `
-      <div style="font-weight:1000;">Dicas</div>
-      <div class="vf-muted">
-        • Renovar aumenta a folha.<br/>
-        • Rescindir gera multa, mas alivia folha.<br/>
-        • Liberar coloca o jogador livre no mercado.
-      </div>
-    `;
-    body.appendChild(hint);
+    return {
+      status: "ACTIVE",        // ACTIVE | TERMINATED | FREE
+      salaryMonthly: salary,   // mi/mês
+      monthsTotal: months,
+      startYear: y,
+      startMonth: m,
+      endYear: endY,
+      endMonth: endM,
+      releaseClause: clause,   // mi
+      signingBonus: Number((salary * (1 + rnd() * 2)).toFixed(2)), // mi
+      lastRenewISO: null
+    };
   }
 
-  function renderList(teamId) {
-    const list = document.getElementById("vf-ct-list");
-    const count = document.getElementById("vf-ct-count");
-    if (!list) return;
+  // -----------------------------
+  // Cap da folha por time (FFP)
+  // -----------------------------
+  function defaultCapForTeam(teamId) {
+    const t = getTeamById(teamId);
+    const div = String(t?.division || t?.serie || "A").toUpperCase();
 
-    clear(list);
+    // cap em mi/mês (ajuste conforme seu jogo)
+    // Série A maior, Série B menor
+    const cap =
+      div === "A" ? 14.0 :
+      div === "B" ? 6.5 :
+      4.0;
 
-    if (!window.Contracts) {
-      list.appendChild(el("div", "vf-muted", "Contracts engine não carregado."));
-      return;
+    // clubes grandes podem ter + um pouco (se existir "reputation" / "budget")
+    const rep = n(t?.reputation || t?.prestige || 50, 50);
+    const bonus = clamp((rep - 50) / 100, -0.15, 0.35); // -15%..+35%
+    return Number((cap * (1 + bonus)).toFixed(2));
+  }
+
+  function getWageCap(teamId) {
+    const gs = ensureGS();
+    const cs = gs.contracts;
+    const tid = String(teamId);
+
+    if (cs.teamCaps[tid] == null) cs.teamCaps[tid] = defaultCapForTeam(tid);
+    return n(cs.teamCaps[tid], defaultCapForTeam(tid));
+  }
+
+  function setWageCap(teamId, cap) {
+    const gs = ensureGS();
+    const cs = gs.contracts;
+    const tid = String(teamId);
+    cs.teamCaps[tid] = Number(clamp(n(cap, getWageCap(tid)), 0, 999).toFixed(2));
+    save();
+    return cs.teamCaps[tid];
+  }
+
+  // -----------------------------
+  // Contract CRUD
+  // -----------------------------
+  function ensureContract(playerId) {
+    const gs = ensureGS();
+    const cs = gs.contracts;
+    const pid = String(playerId);
+
+    if (!cs.playerContracts[pid]) {
+      const p = getPlayerById(pid);
+      cs.playerContracts[pid] = p ? defaultContractForPlayer(p) : {
+        status: "ACTIVE",
+        salaryMonthly: 0.10,
+        monthsTotal: 24,
+        startYear: gs.seasonYear,
+        startMonth: 1,
+        endYear: gs.seasonYear + 2,
+        endMonth: 1,
+        releaseClause: 1.0,
+        signingBonus: 0.2,
+        lastRenewISO: null
+      };
     }
 
-    const rows = Contracts.getTeamContracts(teamId) || [];
-    const q = String(searchText || "").trim().toLowerCase();
+    const c = cs.playerContracts[pid];
+    // normaliza
+    c.status = String(c.status || "ACTIVE").toUpperCase();
+    c.salaryMonthly = Number(clamp(n(c.salaryMonthly, 0.1), 0, 50).toFixed(2));
+    c.releaseClause = Number(clamp(n(c.releaseClause, 0.5), 0, 999).toFixed(2));
+    c.monthsTotal = clamp(n(c.monthsTotal, 24), 1, 120);
 
-    const filtered = q
-      ? rows.filter(r => String(r.name || "").toLowerCase().includes(q))
-      : rows;
+    if (!c.startYear) c.startYear = gs.seasonYear;
+    if (!c.startMonth) c.startMonth = 1;
+    if (!c.endYear) c.endYear = gs.seasonYear + 2;
+    if (!c.endMonth) c.endMonth = 1;
 
-    if (count) count.textContent = `${filtered.length} jogadores`;
+    return c;
+  }
 
-    if (!filtered.length) {
-      list.appendChild(el("div", "vf-muted", "Nenhum jogador encontrado."));
-      return;
-    }
+  function getPlayerContract(playerId) {
+    const c = ensureContract(playerId);
+    return JSON.parse(JSON.stringify(c));
+  }
 
-    filtered.forEach(r => {
-      const c = r.contract || {};
-      const item = el("div", "vf-item");
+  function setPlayerContract(playerId, contract) {
+    const gs = ensureGS();
+    const cs = gs.contracts;
+    const pid = String(playerId);
+    cs.playerContracts[pid] = Object.assign(ensureContract(pid), contract || {});
+    save();
+    return getPlayerContract(pid);
+  }
 
-      const left = el("div", "l");
-      left.appendChild(el("div", "name", r.name));
-      const end = `${String(c.endMonth || 1).padStart(2, "0")}/${c.endYear || "—"}`;
-      left.appendChild(el("div", "sub", `OVR ${n(r.ovr,0)} • Idade ${n(r.age,0)} • Fim ${end}`));
-
-      const right = el("div", "r");
-      right.appendChild(el("div", "vf-kpi", `${n(c.salaryMonthly,0).toFixed(2)} mi/mês`));
-
-      const btnRen = el("button", "vf-btn primary", "Renovar");
-      btnRen.onclick = () => openRenewModal(r.playerId, r.name, c);
-
-      const btnTerm = el("button", "vf-btn warn", "Rescindir");
-      btnTerm.onclick = () => doTerminate(r.playerId, r.name);
-
-      const btnRel = el("button", "vf-btn bad", "Liberar");
-      btnRel.onclick = () => doRelease(r.playerId, r.name);
-
-      right.appendChild(btnRen);
-      right.appendChild(btnTerm);
-      right.appendChild(btnRel);
-
-      item.appendChild(left);
-      item.appendChild(right);
-
-      list.appendChild(item);
+  function getTeamContracts(teamId) {
+    const tid = String(teamId);
+    const players = getTeamPlayers(tid);
+    const res = players.map(p => {
+      const c = ensureContract(p.id);
+      return {
+        playerId: p.id,
+        name: p.name || p.nome || `Jogador ${p.id}`,
+        ovr: n(p.ovr ?? p.overall, 60),
+        age: n(p.age, 24),
+        contract: JSON.parse(JSON.stringify(c))
+      };
     });
-  }
 
-  function openRenewModal(playerId, name, c) {
-    // Modal simples via prompt (mobile-friendly)
-    const months = prompt(`Renovar ${name}\n\nMeses (6-60):`, "24");
-    if (months == null) return;
-
-    const salary = prompt(`Novo salário (mi/mês) para ${name}\nAtual: ${n(c.salaryMonthly,0).toFixed(2)}`, String(n(c.salaryMonthly, 0).toFixed(2)));
-    if (salary == null) return;
-
-    const clause = prompt(`Nova multa (mi) para ${name}\nAtual: ${n(c.releaseClause,0).toFixed(2)}`, String(n(c.releaseClause, 0).toFixed(2)));
-    if (clause == null) return;
-
-    try {
-      const res = Contracts.renew(playerId, {
-        months: n(months, 24),
-        salaryMonthly: n(salary, n(c.salaryMonthly, 0)),
-        releaseClause: n(clause, n(c.releaseClause, 0)),
-        signingBonus: n(c.signingBonus, 0)
-      });
-
-      if (!res || !res.ok) {
-        alert(res?.msg || "Falha ao renovar.");
-      }
-    } catch (e) {
-      console.warn("[ContractsUI] renew error:", e);
-      alert("Erro ao renovar.");
-    }
-
-    render();
-  }
-
-  function doTerminate(playerId, name) {
-    const ok = confirm(`Rescindir contrato de ${name}?\n\nVai gerar multa e o jogador fica sem contrato ativo.`);
-    if (!ok) return;
-
-    try {
-      const res = Contracts.terminate(playerId, {});
-      if (!res || !res.ok) alert(res?.msg || "Falha ao rescindir.");
-      else alert(`Rescisão concluída.\nMulta estimada: ${n(res.fee,0).toFixed(2)} mi`);
-    } catch (e) {
-      console.warn("[ContractsUI] terminate error:", e);
-      alert("Erro ao rescindir.");
-    }
-
-    render();
-  }
-
-  function doRelease(playerId, name) {
-    const ok = confirm(`Liberar ${name}?\n\nO jogador vira free agent (sem time).`);
-    if (!ok) return;
-
-    try {
-      const res = Contracts.release(playerId);
-      if (!res || !res.ok) alert(res?.msg || "Falha ao liberar.");
-    } catch (e) {
-      console.warn("[ContractsUI] release error:", e);
-      alert("Erro ao liberar.");
-    }
-
-    render();
-  }
-
-  function render() {
-    ensureOverlay();
-    const teamId = getUserTeamId();
-    if (!teamId) return;
-
-    renderFFP(teamId);
-    renderList(teamId);
+    // ordena por salário desc
+    res.sort((a, b) => n(b.contract.salaryMonthly, 0) - n(a.contract.salaryMonthly, 0));
+    return res;
   }
 
   // -----------------------------
-  // Open/Close + Auto bind
+  // Folha e FFP status
   // -----------------------------
-  function open() {
-    ensureOverlay();
-    render();
-    show();
-  }
-
-  function close() { hide(); }
-
-  function bindAuto() {
-    const btn = document.getElementById("btn-contratos");
-    if (btn && !btn.__vfBound) {
-      btn.__vfBound = true;
-      btn.addEventListener("click", () => open());
+  function getWageUsed(teamId) {
+    const players = getTeamPlayers(teamId);
+    let total = 0;
+    for (const p of players) {
+      const c = ensureContract(p.id);
+      if (String(c.status).toUpperCase() !== "ACTIVE") continue;
+      total += n(c.salaryMonthly, 0);
     }
-    document.querySelectorAll("[data-action='contratos']").forEach(b => {
-      if (b.__vfBound) return;
-      b.__vfBound = true;
-      b.addEventListener("click", () => open());
-    });
+    return Number(total.toFixed(2));
   }
 
-  setInterval(bindAuto, 800);
+  function getFFPStatus(teamId) {
+    const cap = getWageCap(teamId);
+    const used = getWageUsed(teamId);
+    const pct = cap > 0 ? (used / cap) * 100 : 0;
 
-  window.ContractsUI = { open, render, close };
+    let level = "OK";
+    if (pct >= 95) level = "OVER";
+    else if (pct >= 75) level = "WARN";
+
+    return {
+      cap: Number(cap.toFixed(2)),
+      used: Number(used.toFixed(2)),
+      pct: Number(pct.toFixed(1)),
+      level
+    };
+  }
+
+  function pushLog(type, payload) {
+    const gs = ensureGS();
+    const cs = gs.contracts;
+    cs.logs.unshift({ iso: new Date().toISOString(), type, payload });
+    cs.logs = cs.logs.slice(0, 40);
+  }
+
+  // -----------------------------
+  // Ações: renovar / rescindir / liberar
+  // -----------------------------
+  function renew(playerId, opts) {
+    const gs = ensureGS();
+    const pid = String(playerId);
+    const p = getPlayerById(pid);
+    if (!p) return { ok: false, msg: "Jogador não encontrado." };
+
+    const c = ensureContract(pid);
+    if (c.status !== "ACTIVE") return { ok: false, msg: "Contrato não está ativo." };
+
+    const addMonths = clamp(n(opts?.months, 24), 6, 60);
+    const newSalary = Number(clamp(n(opts?.salaryMonthly, c.salaryMonthly), 0.05, 50).toFixed(2));
+    const newClause = Number(clamp(n(opts?.releaseClause, c.releaseClause), 0, 999).toFixed(2));
+    const bonus = Number(clamp(n(opts?.signingBonus, c.signingBonus), 0, 999).toFixed(2));
+
+    // atualiza fim do contrato baseado no mês/ano atual
+    const { y, m } = nowYearMonth();
+    c.startYear = y;
+    c.startMonth = m;
+
+    const endMonth = m + addMonths;
+    c.endYear = y + Math.floor((endMonth - 1) / 12);
+    c.endMonth = ((endMonth - 1) % 12) + 1;
+
+    c.monthsTotal = addMonths;
+    c.salaryMonthly = newSalary;
+    c.releaseClause = newClause;
+    c.signingBonus = bonus;
+    c.lastRenewISO = new Date().toISOString();
+
+    pushLog("RENEW", { playerId: pid, months: addMonths, salaryMonthly: newSalary, releaseClause: newClause });
+
+    const name = p.name || p.nome || `Jogador ${pid}`;
+    news("Renovação", `${name} renovou por ${addMonths} meses. Salário: ${newSalary.toFixed(2)} mi/mês.`);
+    save();
+
+    // alerta FFP
+    const ffp = getFFPStatus(p.teamId);
+    if (ffp.level !== "OK") {
+      news("Aviso FFP", `Folha salarial: ${ffp.used.toFixed(2)} / ${ffp.cap.toFixed(2)} mi (${ffp.pct}%).`);
+    }
+
+    return { ok: true, contract: getPlayerContract(pid), ffp };
+  }
+
+  function terminate(playerId, opts) {
+    const gs = ensureGS();
+    const pid = String(playerId);
+    const p = getPlayerById(pid);
+    if (!p) return { ok: false, msg: "Jogador não encontrado." };
+
+    const c = ensureContract(pid);
+    if (c.status !== "ACTIVE") return { ok: false, msg: "Contrato já não está ativo." };
+
+    // multa: por padrão 2 meses de salário ou 10% da cláusula (o maior)
+    const salary = n(c.salaryMonthly, 0);
+    const fee = Number(Math.max(salary * 2, n(c.releaseClause, 0) * 0.10).toFixed(2));
+
+    c.status = "TERMINATED";
+
+    pushLog("TERMINATE", { playerId: pid, fee });
+
+    const name = p.name || p.nome || `Jogador ${pid}`;
+    news("Rescisão", `${name} teve o contrato rescindido. Multa estimada: ${fee.toFixed(2)} mi.`);
+    save();
+
+    return { ok: true, fee, contract: getPlayerContract(pid) };
+  }
+
+  function release(playerId) {
+    const pid = String(playerId);
+    const p = getPlayerById(pid);
+    if (!p) return { ok: false, msg: "Jogador não encontrado." };
+
+    const c = ensureContract(pid);
+    c.status = "FREE";
+
+    // torna free agent (sem time)
+    p.teamId = null;
+
+    pushLog("RELEASE", { playerId: pid });
+
+    const name = p.name || p.nome || `Jogador ${pid}`;
+    news("Dispensa", `${name} foi liberado e está livre no mercado.`);
+    save();
+
+    return { ok: true, contract: getPlayerContract(pid) };
+  }
+
+  // -----------------------------
+  // Ensure
+  // -----------------------------
+  function ensure() {
+    ensureGS();
+    // cria contratos para todos rapidamente (não pesado)
+    const players = getPlayers();
+    for (let i = 0; i < players.length; i++) {
+      ensureContract(players[i].id);
+    }
+    // cria caps para times
+    const teams = getTeams();
+    const gs = ensureGS();
+    const cs = gs.contracts;
+    for (let i = 0; i < teams.length; i++) {
+      const tid = String(teams[i].id);
+      if (cs.teamCaps[tid] == null) cs.teamCaps[tid] = defaultCapForTeam(tid);
+    }
+    save();
+  }
+
+  // -----------------------------
+  // Public API
+  // -----------------------------
+  window.Contracts = {
+    ensure,
+    getPlayerContract,
+    setPlayerContract,
+    getTeamContracts,
+    getWageUsed,
+    getWageCap,
+    setWageCap,
+    getFFPStatus,
+    renew,
+    terminate,
+    release
+  };
 })();
