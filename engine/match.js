@@ -1,13 +1,12 @@
 /* =======================================================
    VALE FUTEBOL MANAGER 2026
-   engine/match.js – Simulação de partida (com TÁTICAS AAA)
+   engine/match.js – Simulação de partida (TÁTICAS + PÓS-JOGO AAA)
    -------------------------------------------------------
-   Melhorias:
-   - Usa Tactics.getMatchModifiers() quando disponível:
-     • ataque/defesa afetam forcaDoTime e probabilidades
-     • ritmo aumenta volume de chances
-     • riskMul aumenta chances concedidas ao adversário
-   - Mantém compatibilidade com Game.estilo existente.
+   - Usa Tactics.getMatchModifiers() quando disponível
+   - Após o apito final:
+     • processa tabelas (League.processarRodada...)
+     • chama PostMatch.processMatch(...)
+     • abre PostMatchUI.open(report)
    =======================================================*/
 
 window.Match = {
@@ -15,7 +14,7 @@ window.Match = {
   timer: null,
 
   // ---------------------------------------------------
-  // Inicia o próximo jogo da carreira
+  // Inicia o próximo jogo do usuário
   // ---------------------------------------------------
   iniciarProximoJogo() {
     if (!window.Database || !Database.teams) {
@@ -44,12 +43,13 @@ window.Match = {
       goalsHome: 0,
       goalsAway: 0,
       finished: false,
-      halftimeDone: false
+      halftimeDone: false,
+      finishedISO: null
     };
 
     this._setupTelaPartida(jogo.homeId, jogo.awayId);
 
-    // Se existir módulo de táticas, garante elenco/titulares antes do jogo
+    // garante escalação/tática antes do jogo
     try {
       if (window.Tactics && typeof Tactics.ensureElencoETitulares === "function") {
         Tactics.ensureElencoETitulares();
@@ -132,8 +132,6 @@ window.Match = {
   },
 
   // ---------------------------------------------------
-  // Intervalo
-  // ---------------------------------------------------
   _intervalo() {
     this.pausarLoop();
     setTimeout(() => {
@@ -144,7 +142,7 @@ window.Match = {
       } else {
         this.comecarLoop();
       }
-    }, 50);
+    }, 60);
   },
 
   // ---------------------------------------------------
@@ -152,7 +150,7 @@ window.Match = {
   // ---------------------------------------------------
   forcaDoTime(teamId) {
     const elenco = (window.Database && Database.players)
-      ? Database.players.filter(p => p.teamId === teamId)
+      ? Database.players.filter(p => String(p.teamId) === String(teamId))
       : [];
 
     if (!elenco.length) return 70;
@@ -161,7 +159,7 @@ window.Match = {
 
     // bônus legado (compat)
     let bonus = 0;
-    if (window.Game && teamId === Game.teamId) {
+    if (window.Game && String(teamId) === String(Game.teamId)) {
       if (Game.estilo === "ofensivo") bonus += 2;
       if (Game.estilo === "defensivo") bonus -= 1;
     }
@@ -170,11 +168,8 @@ window.Match = {
     try {
       if (window.Tactics && typeof Tactics.getMatchModifiers === "function") {
         const mods = Tactics.getMatchModifiers(teamId);
-        // ataque aumenta força aparente, defesa também (um pouco menor)
         bonus += (mods.attackMul - 1) * 6.0;
         bonus += (mods.defenseMul - 1) * 3.5;
-
-        // risco alto reduz consistência (pequena penalidade)
         bonus -= (mods.riskMul - 1) * 2.5;
       }
     } catch (e) {}
@@ -193,7 +188,6 @@ window.Match = {
 
     const diff = fHome - fAway;
 
-    // base
     let baseProb = 0.10;
 
     // ritmo aumenta volume de chances
@@ -216,15 +210,12 @@ window.Match = {
         const mh = Tactics.getMatchModifiers(this.state.homeId);
         const ma = Tactics.getMatchModifiers(this.state.awayId);
 
-        // Home: ataque próprio e risco adversário
         probHome *= (mh.attackMul || 1);
         probHome *= (ma.riskMul || 1) / (ma.defenseMul || 1);
 
-        // Away: ataque próprio e risco adversário
         probAway *= (ma.attackMul || 1);
         probAway *= (mh.riskMul || 1) / (mh.defenseMul || 1);
 
-        // clamp final com tática (mais ofensivo pode abrir o teto)
         const capHi = 0.30;
         probHome = Math.max(0.02, Math.min(capHi, probHome));
         probAway = Math.max(0.02, Math.min(capHi, probAway));
@@ -248,7 +239,6 @@ window.Match = {
     }
   },
 
-  // ---------------------------------------------------
   _registrarGol(isHome) {
     if (!this.state) return;
 
@@ -268,6 +258,7 @@ window.Match = {
     if (!this.state) return;
 
     this.state.finished = true;
+    this.state.finishedISO = new Date().toISOString();
     this.pausarLoop();
 
     const homeId = this.state.homeId;
@@ -275,16 +266,38 @@ window.Match = {
     const golsHome = this.state.goalsHome;
     const golsAway = this.state.goalsAway;
 
+    // 1) Processa tabela/rodada se existir
     let rodada = null;
     if (window.League && typeof League.processarRodadaComJogoDoUsuario === "function") {
-      rodada = League.processarRodadaComJogoDoUsuario(
-        homeId,
-        awayId,
-        golsHome,
-        golsAway
-      );
+      try {
+        rodada = League.processarRodadaComJogoDoUsuario(homeId, awayId, golsHome, golsAway);
+      } catch (e) {}
     }
 
+    // 2) Pós-jogo (ratings + forma/moral + lesões)
+    let report = null;
+    try {
+      if (window.PostMatch && typeof PostMatch.processMatch === "function") {
+        report = PostMatch.processMatch({
+          homeId,
+          awayId,
+          goalsHome: golsHome,
+          goalsAway: golsAway,
+          minute: this.state.minute,
+          finishedISO: this.state.finishedISO
+        });
+      }
+    } catch (e) {
+      console.warn("[Match] PostMatch falhou:", e);
+    }
+
+    // 3) Mostrar UI pós-jogo (AAA)
+    if (report && window.PostMatchUI && typeof PostMatchUI.open === "function") {
+      PostMatchUI.open(report);
+      return;
+    }
+
+    // fallback antigo
     if (window.UI && typeof UI.mostrarResultadosRodada === "function" && rodada) {
       UI.mostrarResultadosRodada(rodada);
     } else if (window.UI && typeof UI.voltarLobby === "function") {
