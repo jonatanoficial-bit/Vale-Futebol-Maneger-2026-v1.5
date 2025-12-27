@@ -1,0 +1,217 @@
+/* =======================================================
+   VALE FUTEBOL MANAGER 2026
+   post-match.css — Relatório Pós-Jogo AAA
+   ======================================================= */
+
+#tela-pos-jogo {
+  padding: 18px 12px;
+}
+
+.pm-wrap {
+  width: min(1100px, 96vw);
+  margin: 0 auto;
+  background: rgba(10,10,10,0.86);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px;
+  box-shadow: 0 0 28px rgba(0,0,0,0.6);
+  overflow: hidden;
+}
+
+.pm-header {
+  display: grid;
+  grid-template-columns: 240px 1fr 240px;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+@media (max-width: 900px) {
+  .pm-header { grid-template-columns: 1fr; text-align: center; }
+}
+
+.pm-competition {
+  font-weight: 900;
+  letter-spacing: 0.4px;
+  font-size: 13px;
+  opacity: 0.95;
+}
+
+.pm-round {
+  font-size: 12px;
+  opacity: 0.75;
+  margin-top: 4px;
+}
+
+.pm-scoreboard {
+  display: grid;
+  grid-template-columns: 1fr 120px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .pm-scoreboard { grid-template-columns: 1fr; }
+}
+
+.pm-team {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+}
+
+.pm-logo {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(0,0,0,0.6));
+}
+
+.pm-name {
+  font-weight: 900;
+  font-size: 14px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pm-score {
+  text-align: center;
+  font-weight: 900;
+  font-size: 28px;
+}
+
+.pm-goals { font-size: 32px; }
+.pm-x { opacity: 0.55; margin: 0 6px; }
+
+.pm-motm-title {
+  font-size: 11px;
+  font-weight: 900;
+  opacity: 0.7;
+  letter-spacing: 0.4px;
+}
+
+.pm-motm {
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 900;
+  opacity: 0.95;
+}
+
+.pm-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 12px;
+}
+
+@media (max-width: 900px) {
+  .pm-grid { grid-template-columns: 1fr; }
+}
+
+.pm-card {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 16px;
+  padding: 12px;
+}
+
+.pm-card-wide {
+  grid-column: 1 / -1;
+}
+
+.pm-card-title {
+  font-weight: 900;
+  letter-spacing: 0.4px;
+  font-size: 12px;
+  opacity: 0.9;
+  margin-bottom: 10px;
+}
+
+.pm-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pm-stat-row {
+  display: grid;
+  grid-template-columns: 1fr 110px 1fr;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 10px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.03);
+}
+
+.pm-stat-home {
+  text-align: right;
+  font-weight: 900;
+}
+
+.pm-stat-label {
+  text-align: center;
+  opacity: 0.75;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.pm-stat-away {
+  text-align: left;
+  font-weight: 900;
+}
+
+.pm-moments {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pm-moment {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 12px;
+  padding: 8px 10px;
+  font-size: 12px;
+  opacity: 0.92;
+}
+
+.pm-round-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pm-match-line {
+  display: grid;
+  grid-template-columns: 1fr 80px 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.03);
+}
+
+.pm-match-left { text-align: right; font-weight: 900; font-size: 12px; }
+.pm-match-mid { text-align: center; font-weight: 900; }
+.pm-match-right { text-align: left; font-weight: 900; font-size: 12px; }
+
+.pm-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  padding: 14px 14px 18px 14px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+@media (max-width: 500px) {
+  .pm-actions { flex-direction: column; }
+}
+
+.pm-muted {
+  opacity: 0.7;
+  font-size: 12px;
+  padding: 6px 4px;
+}
