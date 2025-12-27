@@ -5,17 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vale Futebol Manager 2026</title>
 
-    <!-- Fonte -->
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700;900&display=swap" rel="stylesheet">
 
-    <!-- CSS base -->
     <link rel="stylesheet" href="style.css">
-
-    <!-- AAA UI (lobby premium) -->
     <link rel="stylesheet" href="aaa.css">
-
-    <!-- Match Center AAA (painel lateral ao vivo) -->
     <link rel="stylesheet" href="match-center.css">
+    <link rel="stylesheet" href="post-match.css">
 </head>
 <body>
 
@@ -47,7 +42,6 @@
          ========================= -->
     <div id="tela-lobby" class="tela">
         <div class="lobby-aaa">
-            <!-- COLUNA ESQUERDA: IDENTIDADE DO CLUBE -->
             <div class="lobby-card">
                 <img id="lobby-logo" class="lobby-logo" alt="Escudo do time">
 
@@ -68,7 +62,6 @@
                 </div>
             </div>
 
-            <!-- COLUNA DIREITA: PAINEL AAA -->
             <div class="lobby-panels">
                 <div class="panel-wide">
                     <div class="panel-header">
@@ -194,7 +187,7 @@
             </div>
         </div>
 
-        <!-- MATCH CENTER AAA (painel lateral ao vivo) -->
+        <!-- MATCH CENTER AAA -->
         <div class="match-center">
             <h3>ESTATÍSTICAS</h3>
 
@@ -254,6 +247,67 @@
         <button class="btn-voltar" onclick="UI.voltarLobby()">VOLTAR</button>
     </section>
 
+    <!-- =========================
+         TELA 10 – RELATÓRIO PÓS-JOGO AAA (NOVA)
+         ========================= -->
+    <section id="tela-pos-jogo" class="tela">
+        <div class="pm-wrap">
+            <div class="pm-header">
+                <div class="pm-left">
+                    <div class="pm-competition" id="pm-competition">—</div>
+                    <div class="pm-round" id="pm-round">—</div>
+                </div>
+
+                <div class="pm-scoreboard">
+                    <div class="pm-team">
+                        <img id="pm-logo-home" class="pm-logo" alt="Home">
+                        <div id="pm-home" class="pm-name">—</div>
+                    </div>
+
+                    <div class="pm-score">
+                        <span id="pm-gh" class="pm-goals">0</span>
+                        <span class="pm-x">x</span>
+                        <span id="pm_ga" class="pm-goals">0</span>
+                    </div>
+
+                    <div class="pm-team">
+                        <img id="pm-logo-away" class="pm-logo" alt="Away">
+                        <div id="pm-away" class="pm-name">—</div>
+                    </div>
+                </div>
+
+                <div class="pm-right">
+                    <div class="pm-motm-title">MELHOR EM CAMPO</div>
+                    <div id="pm-motm" class="pm-motm">—</div>
+                </div>
+            </div>
+
+            <div class="pm-grid">
+                <div class="pm-card">
+                    <div class="pm-card-title">ESTATÍSTICAS</div>
+                    <div id="pm-stats" class="pm-stats"></div>
+                </div>
+
+                <div class="pm-card">
+                    <div class="pm-card-title">MOMENTOS-CHAVE</div>
+                    <div id="pm-moments" class="pm-moments"></div>
+                </div>
+
+                <div class="pm-card pm-card-wide">
+                    <div class="pm-card-title">RESULTADOS DA RODADA</div>
+                    <div id="pm-round-results" class="pm-round-results">
+                        <div class="pm-muted">Sem resultados de rodada para exibir.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pm-actions">
+                <button class="btn-blue" onclick="UI.voltarLobby()">VOLTAR AO LOBBY</button>
+                <button class="btn-green" onclick="UI.abrirProximoJogo()">SEGUIR (PRÓXIMO JOGO)</button>
+            </div>
+        </div>
+    </section>
+
     <!-- ==================================================
          SCRIPTS – ORDEM CORRETA
          ================================================== -->
@@ -275,7 +329,7 @@
     <script defer src="engine/regionals.js"></script>
     <script defer src="engine/regionals_integration.js"></script>
 
-    <!-- UI (pasta Ui com U maiúsculo) -->
+    <!-- UI -->
     <script defer src="Ui/ui.js"></script>
     <script defer src="Ui/league-ui.js"></script>
     <script defer src="Ui/market-ui.js"></script>
@@ -283,10 +337,11 @@
     <script defer src="Ui/tactics-ui.js"></script>
     <script defer src="Ui/calendar-ui.js"></script>
 
-    <!-- Match Center UI -->
+    <!-- Match Center / Pós-jogo -->
     <script defer src="Ui/match-center-ui.js"></script>
+    <script defer src="Ui/post-match-ui.js"></script>
 
-    <!-- MAIN por último -->
+    <!-- MAIN -->
     <script defer src="main.js"></script>
 
 </body>
