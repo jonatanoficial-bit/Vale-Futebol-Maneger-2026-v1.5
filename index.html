@@ -31,9 +31,7 @@
          ========================= -->
     <div id="tela-escolha-time" class="tela">
         <h1 class="titulo">ESCOLHA SEU TIME</h1>
-
         <div class="grid-times" id="lista-times"></div>
-
         <button class="btn-voltar" onclick="UI.voltarParaCapa()">VOLTAR</button>
     </div>
 
@@ -147,7 +145,7 @@
     </section>
 
     <!-- =========================
-         TELA 6 – ELENCO
+         TELA 6 – ELENCO (AAA)
          ========================= -->
     <section id="tela-elenco" class="tela">
         <h1 class="titulo">ELENCO</h1>
@@ -165,7 +163,7 @@
     </section>
 
     <!-- =========================
-         TELA 8 – PARTIDA (COM MATCH CENTER AAA)
+         TELA 8 – PARTIDA (MATCH CENTER AAA)
          ========================= -->
     <section id="tela-partida" class="tela">
         <div class="placar-area">
@@ -187,7 +185,6 @@
             </div>
         </div>
 
-        <!-- MATCH CENTER AAA -->
         <div class="match-center">
             <h3>ESTATÍSTICAS</h3>
 
@@ -248,7 +245,7 @@
     </section>
 
     <!-- =========================
-         TELA 10 – RELATÓRIO PÓS-JOGO AAA (NOVA)
+         TELA 10 – RELATÓRIO PÓS-JOGO AAA
          ========================= -->
     <section id="tela-pos-jogo" class="tela">
         <div class="pm-wrap">
@@ -315,6 +312,11 @@
     <!-- ENGINE -->
     <script defer src="engine/database.js"></script>
     <script defer src="engine/save.js"></script>
+
+    <!-- NOVO: dinâmica de jogadores + notícias -->
+    <script defer src="engine/dynamics.js"></script>
+    <script defer src="engine/news.js"></script>
+
     <script defer src="engine/tactics.js"></script>
     <script defer src="engine/match.js"></script>
     <script defer src="engine/league.js"></script>
