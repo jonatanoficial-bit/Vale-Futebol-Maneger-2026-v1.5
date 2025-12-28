@@ -1,467 +1,377 @@
-/* =======================================================
-   VALE FUTEBOL MANAGER 2026
-   engine/calendar.js — Calendário AAA (Mesclado)
-   -------------------------------------------------------
-   Agora o calendário MESCLA automaticamente:
-   - Estaduais (Regionals.getAnnualEvents)
-   - Copa do Brasil (Cup.getAnnualEvents)
-   - Série A/B (LEAGUE) gerado localmente (38 rodadas)
+// engine/calendar.js
+// Calendário da temporada (eventos por clube, sem simulação de jogo aqui)
+// Regras: determinístico, seguro e com APIs estáveis para UI/Engine.
 
-   APIs:
-   - Calendar.ensure(force?)
-   - Calendar.setSeasonYear(year)
-   - Calendar.resetSeason(teamId?)
-   - Calendar.getAnnualEvents(teamId)
-   - Calendar.getEvents(teamId)              (alias)
-   - Calendar.getNextEvent(teamId)
-   - Calendar.consumeNextEvent(teamId)
-   - Calendar.peekUpcoming(teamId, count?)   (útil para UI)
-   - Calendar.rebuild(teamId)                (força rebuild)
+(function(){
+  const VERSION = 1;
 
-   Persistência:
-   gameState.calendar = {
-     year,
-     eventsByTeam: { [teamId]: [events...] },
-     pointerByTeam: { [teamId]: index },
-     metaByTeam: { [teamId]: { lastBuildAt, sources } }
-   }
+  // Storage principal (por carreira). Por enquanto usamos 1 calendário global simples em memória,
+  // mas a estrutura permite evoluir para múltiplas carreiras/slots com persistência.
+  // IMPORTANTE: Nada aqui pode "quebrar" saves antigos — sempre usar defaults.
+  let built = false;
 
-   Formato de Event:
-   {
-     date:"YYYY-MM-DD",
-     comp:"LEAGUE|CUP|REGIONAL|FRIENDLY",
-     competitionName:"...",
-     homeId, awayId,
-     roundNumber,
-     division,
-     phaseKey?, phaseName?, uf?
-   }
-   =======================================================*/
+  // Calendário global (eventos agregados) e por time
+  let calendarAll = [];
+  let calendarByTeam = {};     // { [teamId]: Event[] }
+  let pointerByTeam = {};      // { [teamId]: number } -> usado por consumeNextEvent()
 
-(function () {
-  console.log("%c[Calendar] calendar.js (MESCLADO) carregado", "color:#10b981; font-weight:bold;");
+  // Formato de evento:
+  // { date: "YYYY-MM-DD", comp: "LEAGUE"|"CUP"|"REGIONAL"|"FRIENDLY"|"BLOCK",
+  //   round: number|null, homeId: number|null, awayId: number|null,
+  //   meta?: {...} }
 
-  // -----------------------------
-  // Utils
-  // -----------------------------
-  function n(v, d = 0) { const x = Number(v); return isNaN(x) ? d : x; }
-  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
-  function rnd() { return Math.random(); }
-  function pick(arr) { return arr[Math.floor(rnd() * arr.length)]; }
-  function pad2(x) { return String(x).padStart(2, "0"); }
-  function iso(y, m, d) { return `${y}-${pad2(m)}-${pad2(d)}`; }
-
-  function ensureGS() {
-    if (!window.gameState) window.gameState = {};
-    const gs = window.gameState;
-
-    if (!gs.seasonYear) gs.seasonYear = 2026;
-
-    if (!gs.calendar || typeof gs.calendar !== "object") gs.calendar = {};
-    const cal = gs.calendar;
-
-    if (!cal.year) cal.year = gs.seasonYear;
-    if (!cal.eventsByTeam || typeof cal.eventsByTeam !== "object") cal.eventsByTeam = {};
-    if (!cal.pointerByTeam || typeof cal.pointerByTeam !== "object") cal.pointerByTeam = {};
-    if (!cal.metaByTeam || typeof cal.metaByTeam !== "object") cal.metaByTeam = {};
-
-    return gs;
+  // ---------- Helpers ----------
+  function sortByDate(a,b){
+    const ta = Date.parse(a.date);
+    const tb = Date.parse(b.date);
+    if (!Number.isFinite(ta) && !Number.isFinite(tb)) return 0;
+    if (!Number.isFinite(ta)) return 1;
+    if (!Number.isFinite(tb)) return -1;
+    return ta - tb;
   }
 
-  function getTeams() {
-    return (window.Database && Array.isArray(Database.teams)) ? Database.teams : [];
-  }
-  function getTeamById(id) {
-    return getTeams().find(t => String(t.id) === String(id)) || null;
-  }
-
-  function getUserTeamId() {
-    const gs = ensureGS();
-    return gs.currentTeamId || gs.selectedTeamId || (window.Game ? Game.teamId : null);
+  function addDaysISO(dateISO, days){
+    const t = Date.parse(dateISO);
+    const d = new Date(t);
+    d.setUTCDate(d.getUTCDate() + days);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth()+1).padStart(2,'0');
+    const da = String(d.getUTCDate()).padStart(2,'0');
+    return `${y}-${m}-${da}`;
   }
 
-  function getTeamDivision(teamId) {
-    const t = getTeamById(teamId);
-    return String(t?.division || t?.serie || "A").toUpperCase();
+  function ensureTeamBucket(teamId){
+    if (!calendarByTeam[teamId]) calendarByTeam[teamId] = [];
+    if (typeof pointerByTeam[teamId] !== "number") pointerByTeam[teamId] = 0;
   }
 
-  function sortEvents(arr) {
-    arr.sort((a, b) => String(a.date).localeCompare(String(b.date)));
-    return arr;
+  function pushTeamEvent(teamId, ev){
+    ensureTeamBucket(teamId);
+    calendarByTeam[teamId].push(ev);
   }
 
-  function normalizeComp(compRaw) {
-    const c = String(compRaw || "").toUpperCase();
-    if (c.includes("CUP") || c.includes("COPA")) return "CUP";
-    if (c.includes("REG") || c.includes("ESTAD")) return "REGIONAL";
-    if (c.includes("FRIEND") || c.includes("AMIST")) return "FRIENDLY";
-    return "LEAGUE";
-  }
+  // ---------- Generators ----------
+  // Gera blocos fixos (estaduais/copa) como "BLOCK" para a timeline geral.
+  // (NÃO são jogos do clube; são “blocos” de calendário.)
+  function generateBlocksForYear(year){
+    const blocks = [];
 
-  function normalizeEvent(e, defaults) {
-    const date = String(e.date || e.data || "").slice(0, 10);
-    const comp = normalizeComp(e.comp || e.type || e.competition || defaults?.comp || "LEAGUE");
-
-    return {
-      date,
-      comp,
-      competitionName:
-        e.competitionName ||
-        e.nomeCompeticao ||
-        e.title ||
-        defaults?.competitionName ||
-        (comp === "LEAGUE" ? "Campeonato Brasileiro" : comp === "CUP" ? "Copa do Brasil" : comp === "REGIONAL" ? "Estadual" : "Amistoso"),
-      homeId: e.homeId || e.home || e.casa || defaults?.homeId || null,
-      awayId: e.awayId || e.away || e.fora || defaults?.awayId || null,
-      roundNumber: e.roundNumber || e.round || e.rodada || null,
-      division: e.division || e.serie || defaults?.division || null,
-      phaseKey: e.phaseKey || null,
-      phaseName: e.phaseName || null,
-      uf: e.uf || null
-    };
-  }
-
-  function eventKey(ev) {
-    // chave para deduplicar
-    return [
-      ev.date,
-      ev.comp,
-      String(ev.homeId || ""),
-      String(ev.awayId || ""),
-      String(ev.roundNumber || ""),
-      String(ev.phaseKey || "")
-    ].join("|");
-  }
-
-  // -----------------------------
-  // Gerador LEAGUE (38 rodadas)
-  // -----------------------------
-  function generateLeagueEvents(teamId, year) {
-    const div = getTeamDivision(teamId);
-    const teams = getTeams();
-
-    const sameDiv = teams.filter(t => String(t.id) !== String(teamId) && String(t.division || t.serie || "A").toUpperCase() === div);
-    const allOpp = sameDiv.length ? sameDiv : teams.filter(t => String(t.id) !== String(teamId));
-
-    const usedCount = {};
-    function pickOpponent() {
-      const candidates = allOpp.slice().sort((a, b) => (usedCount[a.id] || 0) - (usedCount[b.id] || 0));
-      const top = candidates.slice(0, Math.min(8, candidates.length));
-      const o = pick(top.length ? top : candidates);
-      if (!o) return null;
-      usedCount[o.id] = (usedCount[o.id] || 0) + 1;
-      return o;
-    }
-
-    const events = [];
-    for (let r = 1; r <= 38; r++) {
-      // abril a dezembro (aprox)
-      const month = clamp(4 + Math.floor((r - 1) / 6), 4, 12);
-      const day = clamp(2 + ((r - 1) * 2) % 26, 1, 28);
-      const opp = pickOpponent();
-      if (!opp) break;
-
-      const home = (r % 2 === 0) ? String(teamId) : String(opp.id);
-      const away = (r % 2 === 0) ? String(opp.id) : String(teamId);
-
-      events.push({
-        date: iso(year, month, day),
-        comp: "LEAGUE",
-        competitionName: `Campeonato Brasileiro Série ${div}`,
-        homeId: home,
-        awayId: away,
-        roundNumber: r,
-        division: div
+    // Estaduais (ex.: Jan → Mar) - exemplo simples
+    // Rodadas semanais em jan/fev e finais em março.
+    const start = `${year}-01-08`;
+    for (let i = 0; i < 8; i++){
+      blocks.push({
+        date: addDaysISO(start, i*7),
+        comp: "REGIONAL",
+        round: i+1,
+        homeId: null,
+        awayId: null,
+        meta: { label: "Estaduais", stage: "Rodadas" }
       });
     }
+    blocks.push({
+      date: `${year}-03-05`,
+      comp: "REGIONAL",
+      round: 1,
+      homeId: null,
+      awayId: null,
+      meta: { label: "Estaduais", stage: "Finais" }
+    });
+    blocks.push({
+      date: `${year}-03-12`,
+      comp: "REGIONAL",
+      round: 2,
+      homeId: null,
+      awayId: null,
+      meta: { label: "Estaduais", stage: "Finais" }
+    });
 
-    return sortEvents(events.map(e => normalizeEvent(e, { comp: "LEAGUE", division: div })));
+    // Copa do Brasil (exemplo: datas espaçadas)
+    const cdbDates = [`${year}-04-10`, `${year}-05-15`, `${year}-06-19`, `${year}-07-24`, `${year}-08-28`];
+    cdbDates.forEach((d, idx) => {
+      blocks.push({
+        date: d,
+        comp: "CUP",
+        round: idx+1,
+        homeId: null,
+        awayId: null,
+        meta: { label: "Copa do Brasil", stage: "Fase" }
+      });
+    });
+
+    return blocks.sort(sortByDate);
   }
 
-  // -----------------------------
-  // Puxa eventos externos (CUP / REGIONAL)
-  // -----------------------------
-  function getCupEvents(teamId, year) {
-    try {
-      if (window.Cup && typeof Cup.getAnnualEvents === "function") {
-        const arr = Cup.getAnnualEvents(teamId, year);
-        if (Array.isArray(arr) && arr.length) {
-          return arr.map(e => normalizeEvent(e, { comp: "CUP", competitionName: "Copa do Brasil" }));
-        }
-      }
-    } catch (e) {}
-    return [];
-  }
+  // Gera um calendário simples de liga para o time do usuário:
+  // - 1 jogo por semana
+  // - alterna mando de campo
+  // - escolhe adversários do mesmo campeonato (Série A/B) via Database
+  function generateLeagueEventsForUserTeam(career){
+    const events = [];
+    const teamId = career?.clubId;
+    if (!teamId) return events;
 
-  function getRegionalEvents(teamId, year) {
-    try {
-      if (window.Regionals && typeof Regionals.getAnnualEvents === "function") {
-        const arr = Regionals.getAnnualEvents(teamId, year);
-        if (Array.isArray(arr) && arr.length) {
-          return arr.map(e => normalizeEvent(e, { comp: "REGIONAL", competitionName: "Estadual" }));
-        }
-      }
-    } catch (e) {}
-    return [];
-  }
+    const year = Number(String(career?.date || "2026-01-01").slice(0,4)) || 2026;
 
-  // -----------------------------
-  // Merge + Resolve conflitos de data
-  // -----------------------------
-  function resolveDateConflicts(events) {
-    // Se duas partidas caírem no mesmo dia:
-    // prioridade: CUP > LEAGUE > REGIONAL > FRIENDLY
-    // a de menor prioridade é empurrada +1 dia (até achar slot livre)
-    const priority = { CUP: 4, LEAGUE: 3, REGIONAL: 2, FRIENDLY: 1 };
+    const club = window.Database?.getClubById?.(teamId);
+    if (!club) return events;
 
-    // map date -> list
-    const map = {};
-    for (const ev of events) {
-      const d = ev.date || "0000-00-00";
-      if (!map[d]) map[d] = [];
-      map[d].push(ev);
+    // Detecta competição (A/B) pelo campo esperado.
+    // Se não existir, assume Série A como default seguro.
+    const league = club?.league || club?.division || "A";
+    const sameLeagueClubs = (window.Database?.getClubsByLeague?.(league) || [])
+      .filter(c => c && c.id && c.id !== teamId);
+
+    // fallback seguro: se não houver lista, não gera jogos
+    if (!sameLeagueClubs.length) return events;
+
+    // calendário começa em abril (após estaduais), exemplo simples
+    let d = `${year}-04-07`;
+    const rounds = Math.min(38, sameLeagueClubs.length * 2); // algo plausível
+
+    let home = true;
+    for (let r=1; r<=rounds; r++){
+      const opp = sameLeagueClubs[(r-1) % sameLeagueClubs.length];
+      const ev = {
+        date: d,
+        comp: "LEAGUE",
+        round: r,
+        homeId: home ? teamId : opp.id,
+        awayId: home ? opp.id : teamId,
+        meta: { league: league }
+      };
+      events.push(ev);
+      d = addDaysISO(d, 7);
+      home = !home;
     }
 
-    const usedDates = new Set(Object.keys(map));
-    function nextDate(date) {
-      // date "YYYY-MM-DD" (limitado)
-      const y = n(date.slice(0, 4), 2026);
-      const m = n(date.slice(5, 7), 1);
-      const d = n(date.slice(8, 10), 1);
-      const nd = clamp(d + 1, 1, 28);
-      return iso(y, m, nd);
-    }
+    return events.sort(sortByDate);
+  }
 
-    const output = [];
+  // Amistosos esporádicos
+  function generateFriendliesForUserTeam(career){
+    const events = [];
+    const teamId = career?.clubId;
+    if (!teamId) return events;
 
-    const dates = Object.keys(map).sort((a, b) => a.localeCompare(b));
-    for (const d of dates) {
-      const list = map[d];
-      if (!list || list.length <= 1) {
-        if (list && list[0]) output.push(list[0]);
-        continue;
-      }
+    const year = Number(String(career?.date || "2026-01-01").slice(0,4)) || 2026;
+    const all = window.Database?.getAllClubs?.() || [];
+    const others = all.filter(c => c && c.id && c.id !== teamId);
+    if (!others.length) return events;
 
-      // ordena por prioridade desc
-      list.sort((a, b) => (priority[b.comp] || 0) - (priority[a.comp] || 0));
+    const dates = [`${year}-01-27`, `${year}-02-24`, `${year}-03-27`];
+    dates.forEach((dateISO, idx) => {
+      const opp = others[(idx*7) % others.length];
+      events.push({
+        date: dateISO,
+        comp: "FRIENDLY",
+        round: idx+1,
+        homeId: teamId,
+        awayId: opp.id,
+        meta: { label: "Amigável" }
+      });
+    });
 
-      // mantém a primeira no dia original, empurra as demais
-      output.push(list[0]);
+    return events.sort(sortByDate);
+  }
 
-      for (let i = 1; i < list.length; i++) {
-        let ev = list[i];
-        let tryDate = d;
-        let safe = 0;
-        while (safe < 12) {
-          tryDate = nextDate(tryDate);
-          const slotKey = `${tryDate}`;
-          // aceita se ainda não tiver jogo nesse dia para este time
-          const occupied = output.some(x => x.date === tryDate);
-          if (!occupied) {
-            ev.date = tryDate;
-            output.push(ev);
+  // ---------- Build ----------
+  function buildAllIfNeeded(){
+    if (built) return;
+
+    // Observação: aqui não usamos slot/save ainda.
+    // Essa build é segura e determinística: depende apenas do career e do Database.
+    // Se no futuro houver multi-slot, a chave será slotId e guardaremos estados separados.
+    calendarAll = [];
+    calendarByTeam = {};
+    pointerByTeam = {};
+    built = true;
+
+    // Se CareerState existir, usamos a carreira ativa para gerar o calendário do usuário.
+    const career = window.CareerState?.getActiveCareer?.() || null;
+
+    // Blocos do ano
+    const year = Number(String(career?.date || "2026-01-01").slice(0,4)) || 2026;
+    const blocks = generateBlocksForYear(year);
+    calendarAll.push(...blocks);
+
+    // Eventos do usuário (liga + amistosos)
+    const userLeagueEvents = generateLeagueEventsForUserTeam(career);
+    const userFriendlies = generateFriendliesForUserTeam(career);
+
+    const userEvents = [...userLeagueEvents, ...userFriendlies].sort(sortByDate);
+
+    // Indexa por time (para o usuário e seus adversários envolvidos nos jogos)
+    userEvents.forEach(ev => {
+      if (ev.homeId) pushTeamEvent(ev.homeId, ev);
+      if (ev.awayId) pushTeamEvent(ev.awayId, ev);
+      calendarAll.push(ev);
+    });
+
+    // Ordena tudo
+    calendarAll.sort(sortByDate);
+
+    // Ordena por time
+    Object.keys(calendarByTeam).forEach(k => {
+      calendarByTeam[k].sort(sortByDate);
+      // pointer começa no primeiro evento >= data da carreira, se existir
+      const teamId = Number(k);
+      const from = career?.date ? Date.parse(career.date) : NaN;
+      if (Number.isFinite(from)){
+        let p = 0;
+        const list = calendarByTeam[teamId];
+        for (let i=0;i<list.length;i++){
+          const ts = Date.parse(list[i].date);
+          if (Number.isFinite(ts) && ts >= from){
+            p = i;
             break;
           }
-          safe++;
         }
-        if (safe >= 12) {
-          // se falhar, mantém mesmo dia
-          output.push(ev);
-        }
+        pointerByTeam[teamId] = p;
+      } else {
+        pointerByTeam[teamId] = 0;
       }
+    });
+  }
+
+  function rebuildTeamCalendar(teamId){
+    // Hoje o build é global; esta função mantém compatibilidade com chamadas antigas.
+    buildAllIfNeeded();
+    ensureTeamBucket(teamId);
+    calendarByTeam[teamId].sort(sortByDate);
+  }
+
+  // ---------- Queries ----------
+  function getAllEvents(){
+    buildAllIfNeeded();
+    return calendarAll.slice();
+  }
+
+  function getTeamEvents(teamId){
+    buildAllIfNeeded();
+    ensureTeamBucket(teamId);
+    return calendarByTeam[teamId].slice();
+  }
+
+  function getOpponentId(ev, teamId){
+    if (!ev || !teamId) return null;
+    if (ev.homeId === teamId) return ev.awayId;
+    if (ev.awayId === teamId) return ev.homeId;
+    return null;
+  }
+
+  function consumeNextEvent(teamId){
+    buildAllIfNeeded();
+    ensureTeamBucket(teamId);
+
+    const list = calendarByTeam[teamId] || [];
+    const p = pointerByTeam[teamId] || 0;
+
+    if (p >= list.length) return null;
+
+    const ev = list[p];
+    pointerByTeam[teamId] = p + 1;
+    return ev;
+  }
+
+  function peekUpcoming(teamId, count=10){
+    buildAllIfNeeded();
+    ensureTeamBucket(teamId);
+
+    const list = calendarByTeam[teamId] || [];
+    const p = pointerByTeam[teamId] || 0;
+
+    return list.slice(p, p + count);
+  }
+
+  // Retorna o próximo jogo do usuário a partir de uma data (SEM efeitos colaterais).
+  // Usado pelo Lobby/Agenda para mostrar "Próximo jogo" sem consumir o evento.
+  function getProximoJogoDoUsuario(careerDateISO, teamId) {
+    buildAllIfNeeded();
+    const list = calendarByTeam[teamId] || [];
+    if (!careerDateISO) {
+      // Se não houver data de carreira, retorna o primeiro evento do time.
+      return list[0] || null;
     }
-
-    return sortEvents(output);
-  }
-
-  function mergeAllEvents(teamId, year) {
-    const league = generateLeagueEvents(teamId, year);
-    const cup = getCupEvents(teamId, year);
-    const reg = getRegionalEvents(teamId, year);
-
-    // Dedup por chave
-    const all = [];
-    const seen = new Set();
-    for (const ev of [...reg, ...cup, ...league]) {
-      const key = eventKey(ev);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      all.push(ev);
+    const fromTs = Date.parse(careerDateISO);
+    if (!Number.isFinite(fromTs)) return list[0] || null;
+    for (let i = 0; i < list.length; i++) {
+      const ev = list[i];
+      const ts = Date.parse(ev.date);
+      if (!Number.isFinite(ts)) continue;
+      // Próximo evento após (ou no mesmo dia, se ainda não foi consumido).
+      if (ts >= fromTs) return ev;
     }
-
-    // Resolve conflitos de data
-    const merged = resolveDateConflicts(all);
-
-    // Reordena por data
-    return sortEvents(merged);
+    return null;
   }
 
-  // -----------------------------
-  // Build / Cache por time
-  // -----------------------------
-  function rebuildTeamCalendar(teamId, force) {
-    const gs = ensureGS();
-    const cal = gs.calendar;
-    const tid = String(teamId || "");
-    if (!tid) return [];
-
-    const year = n(gs.seasonYear, 2026);
-
-    const meta = cal.metaByTeam[tid] || {};
-    const stale = !Array.isArray(cal.eventsByTeam[tid]) || cal.eventsByTeam[tid].length === 0 || cal.year !== year;
-
-    if (!force && !stale) {
-      return cal.eventsByTeam[tid];
+  // Lista eventos futuros do time, a partir de uma data (SEM consumir).
+  function peekUpcomingFromDate(teamId, fromDateISO, limit = 12) {
+    buildAllIfNeeded();
+    const list = calendarByTeam[teamId] || [];
+    const out = [];
+    const fromTs = Date.parse(fromDateISO || '');
+    for (let i = 0; i < list.length && out.length < limit; i++) {
+      const ev = list[i];
+      const ts = Date.parse(ev.date);
+      if (Number.isFinite(fromTs) && Number.isFinite(ts) && ts < fromTs) continue;
+      out.push(ev);
     }
-
-    cal.year = year;
-
-    // garante engines existirem (não obrigatório)
-    try { if (window.Cup && typeof Cup.ensure === "function") Cup.ensure(false); } catch (e) {}
-    try { if (window.Regionals && typeof Regionals.ensure === "function") Regionals.ensure(false); } catch (e) {}
-
-    const events = mergeAllEvents(tid, year);
-
-    cal.eventsByTeam[tid] = events;
-    if (cal.pointerByTeam[tid] == null) cal.pointerByTeam[tid] = 0;
-
-    cal.metaByTeam[tid] = {
-      lastBuildAt: new Date().toISOString(),
-      sources: {
-        league: true,
-        cup: !!(window.Cup && typeof Cup.getAnnualEvents === "function"),
-        regionals: !!(window.Regionals && typeof Regionals.getAnnualEvents === "function")
-      }
-    };
-
-    return events;
+    return out;
   }
 
-  function getEventsForTeam(teamId) {
-    const gs = ensureGS();
-    const tid = String(teamId || "");
-    if (!tid) return [];
-
-    const events = rebuildTeamCalendar(tid, false);
-    // filtra para participação do time (defensivo)
-    return sortEvents((events || []).filter(e => String(e.homeId) === tid || String(e.awayId) === tid));
-  }
-
-  function getNextEvent(teamId) {
-    const gs = ensureGS();
-    const tid = String(teamId || "");
-    if (!tid) return null;
-
-    const list = getEventsForTeam(tid);
-    if (!list.length) return null;
-
-    const idx = clamp(n(gs.calendar.pointerByTeam[tid], 0), 0, list.length - 1);
-    return list[idx] || null;
-  }
-
-  function consumeNextEvent(teamId) {
-    const gs = ensureGS();
-    const tid = String(teamId || "");
-    if (!tid) return null;
-
-    const list = getEventsForTeam(tid);
-    if (!list.length) return null;
-
-    let idx = clamp(n(gs.calendar.pointerByTeam[tid], 0), 0, list.length);
-    const next = list[idx] || null;
-
-    if (idx < list.length) gs.calendar.pointerByTeam[tid] = idx + 1;
-
-    return next;
-  }
-
-  function peekUpcoming(teamId, count) {
-    const gs = ensureGS();
-    const tid = String(teamId || "");
-    if (!tid) return [];
-
-    const list = getEventsForTeam(tid);
-    if (!list.length) return [];
-
-    const idx = clamp(n(gs.calendar.pointerByTeam[tid], 0), 0, list.length);
-    const c = clamp(n(count, 8), 1, 30);
-    return list.slice(idx, idx + c);
-  }
-
-  // -----------------------------
-  // Public API
-  // -----------------------------
+  // ---------- Public API ----------
   window.Calendar = {
-    ensure(force) {
-      const gs = ensureGS();
-      const teamId = getUserTeamId();
-      if (!teamId) return;
-      rebuildTeamCalendar(String(teamId), !!force);
+    VERSION,
+
+    buildAllIfNeeded(){
+      buildAllIfNeeded();
     },
 
-    rebuild(teamId) {
-      const tid = String(teamId || getUserTeamId() || "");
-      if (!tid) return [];
-      return rebuildTeamCalendar(tid, true);
+    rebuildTeamCalendar(teamId){
+      rebuildTeamCalendar(teamId);
     },
 
-    setSeasonYear(year) {
-      const gs = ensureGS();
-      gs.seasonYear = n(year, 2026);
-      gs.calendar.year = gs.seasonYear;
-
-      // reseta caches para rebuild limpo
-      gs.calendar.eventsByTeam = {};
-      gs.calendar.metaByTeam = {};
-      gs.calendar.pointerByTeam = {};
-
-      this.ensure(true);
-      return gs.seasonYear;
+    getAllEvents(){
+      return getAllEvents();
     },
 
-    resetSeason(teamId) {
-      const gs = ensureGS();
-      const tid = String(teamId || getUserTeamId() || "");
-      if (!tid) return false;
-
-      gs.calendar.pointerByTeam[tid] = 0;
-      rebuildTeamCalendar(tid, true);
-      return true;
+    getTeamEvents(teamId){
+      return getTeamEvents(teamId);
     },
 
-    getAnnualEvents(teamId) {
-      const tid = String(teamId || getUserTeamId() || "");
-      if (!tid) return [];
-      return getEventsForTeam(tid);
+    getOpponentId(ev, teamId){
+      return getOpponentId(ev, teamId);
     },
 
-    getEvents(teamId) {
-      return this.getAnnualEvents(teamId);
+    consumeNextEvent(teamId){
+      return consumeNextEvent(teamId);
     },
 
-    getNextEvent(teamId) {
-      const tid = String(teamId || getUserTeamId() || "");
-      if (!tid) return null;
-      return getNextEvent(tid);
+    peekUpcoming(teamId, count=10){
+      return peekUpcoming(teamId, count);
     },
 
-    consumeNextEvent(teamId) {
-      const tid = String(teamId || getUserTeamId() || "");
-      if (!tid) return null;
-      return consumeNextEvent(tid);
+    // Próximo jogo do usuário (sem consumir evento).
+    getProximoJogoDoUsuario(careerDateISO, teamId){
+      return getProximoJogoDoUsuario(careerDateISO, teamId);
     },
 
-    peekUpcoming(teamId, count) {
-      const tid = String(teamId || getUserTeamId() || "");
-      if (!tid) return [];
-      return peekUpcoming(tid, count);
+    // Eventos futuros a partir de uma data (sem consumir).
+    peekUpcomingFromDate(teamId, fromDateISO, limit=12){
+      return peekUpcomingFromDate(teamId, fromDateISO, limit);
     },
 
-    debugMeta(teamId) {
-      const gs = ensureGS();
-      const tid = String(teamId || getUserTeamId() || "");
-      if (!tid) return null;
-      return gs.calendar.metaByTeam[tid] || null;
+    debugMeta(teamId){
+      buildAllIfNeeded();
+      ensureTeamBucket(teamId);
+      return {
+        built,
+        totalAll: calendarAll.length,
+        totalTeam: (calendarByTeam[teamId]||[]).length,
+        pointer: pointerByTeam[teamId] || 0
+      };
     }
   };
+
 })();
