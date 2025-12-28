@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "name": "Brasil 2026 (Base)",
+  "teams": [
+    { "id": "FLA", "name": "Flamengo", "league": "Série A" },
+    { "id": "PAL", "name": "Palmeiras", "league": "Série A" },
+    { "id": "COR", "name": "Corinthians", "league": "Série A" },
+    { "id": "SAO", "name": "São Paulo", "league": "Série A" },
+    { "id": "GRE", "name": "Grêmio", "league": "Série A" },
+    { "id": "INT", "name": "Internacional", "league": "Série A" },
+
+    { "id": "SAN", "name": "Santos", "league": "Série B" },
+    { "id": "SPT", "name": "Sport", "league": "Série B" },
+    { "id": "CEA", "name": "Ceará", "league": "Série B" },
+    { "id": "CRB", "name": "CRB", "league": "Série B" }
+  ],
+  "playersByTeamId": {
+    "FLA": [
+      { "name": "Arrascaeta", "pos": "MEI", "ovr": 86, "face": "assets/face/FLA_ARRASCA.png" },
+      { "name": "Gabigol", "pos": "ATA", "ovr": 84, "face": "assets/face/FLA_GABIGOL.png" },
+      { "name": "Pedro", "pos": "ATA", "ovr": 85, "face": "assets/face/FLA_PEDRO.png" }
+    ],
+    "INT": [
+      { "name": "Mercado", "pos": "ZAG", "ovr": 78, "face": "assets/face/INT_MERCADO.png" }
+    ]
+  }
+}
