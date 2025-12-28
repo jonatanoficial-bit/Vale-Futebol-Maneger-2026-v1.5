@@ -1,32 +1,41 @@
 /* =======================================================
-   Ui/team-ui.js – Vale Futebol Manager 2026 (AAA Fix)
-   - Corrige escudos quebrados (detecta caminho correto no Vercel)
-   - Implementa TeamUi.renderTeamSelection (compat)
-   - Implementa TeamUI.renderTeamSelection (compat)
-   - Mantém TeamUI.renderSquad para Elenco
+   Ui/team-ui.js – Vale Futebol Manager 2026 (AAA Fix v2)
+   - Logos: detecta caminho correto (case-sensitive Vercel)
+   - Seleção: NÃO depende de prompt() (evita travar no mobile)
+   - Clique robusto: tenta main.js -> fallback próprio
+   - Mantém TeamUI/TeamUi compatíveis
    ======================================================= */
 
 (function () {
   "use strict";
 
-  // Compat global (alguns lugares usam TeamUI, outros TeamUi)
   if (!window.TeamUI) window.TeamUI = {};
   if (!window.TeamUi) window.TeamUi = window.TeamUI;
 
-  // flag para debug
   window.__TEAM_UI_REAL__ = true;
-
-  // -----------------------------
-  // Helpers
-  // -----------------------------
 
   function $(id) {
     return document.getElementById(id);
   }
 
+  function getTeamsSource() {
+    const teams =
+      (window.Database && Array.isArray(Database.teams) && Database.teams) ||
+      (window.teams && Array.isArray(window.teams) && window.teams) ||
+      (typeof window.teams !== "undefined" && Array.isArray(window.teams) ? window.teams : []) ||
+      [];
+    // fallback: se engine/database.js usa variável global "teams"
+    if ((!teams || !teams.length) && typeof window.teams === "undefined") {
+      try {
+        // eslint-disable-next-line no-undef
+        if (typeof teams !== "undefined" && Array.isArray(teams)) return teams;
+      } catch (e) {}
+    }
+    return teams;
+  }
+
   function getDivisionLabel(team) {
-    if (!team) return "Série A";
-    const d = (team.division || team.serie || "A").toString().toUpperCase();
+    const d = (team?.division || team?.serie || "A").toString().toUpperCase();
     return d === "B" ? "Série B" : "Série A";
   }
 
@@ -39,7 +48,6 @@
 
   // -----------------------------
   // Detecta caminho correto dos logos
-  // (porque Vercel/Linux é case-sensitive)
   // -----------------------------
   const LOGO_BASE_CANDIDATES = [
     "assets/logos",
@@ -76,7 +84,6 @@
         resolve(false);
       };
 
-      // cache-buster leve para evitar cache antigo do Vercel/navegador
       const sep = url.includes("?") ? "&" : "?";
       img.src = url + sep + "v=" + Date.now();
     });
@@ -87,15 +94,9 @@
     if (__logoBasePromise) return __logoBasePromise;
 
     __logoBasePromise = (async () => {
-      // escolhe um id existente no Database.teams (ex.: FLA)
-      const teams =
-        (window.Database && Array.isArray(Database.teams) && Database.teams) ||
-        window.teams ||
-        [];
-
+      const teams = getTeamsSource();
       const probeId = teams && teams.length ? teams[0].id : "FLA";
 
-      // tenta .png e .PNG
       for (const base of LOGO_BASE_CANDIDATES) {
         const okPng = await testImage(`${base}/${probeId}.png`, 900);
         if (okPng) {
@@ -109,7 +110,6 @@
         }
       }
 
-      // fallback (mesmo que quebre, mantém padrão)
       __logoBaseCache = "assets/logos";
       return __logoBaseCache;
     })();
@@ -117,29 +117,13 @@
     return __logoBasePromise;
   }
 
-  function createLogoImg(teamId, altText) {
-    const img = document.createElement("img");
-    img.className = "time-card-logo";
-    img.alt = altText || "Escudo";
-    img.loading = "lazy";
-
-    // src inicial (será setado depois)
-    img.src = "";
-
-    return img;
-  }
-
   async function setLogoSafe(imgEl, teamId) {
     const base = await detectLogoBase();
-
-    // tenta .png → .PNG → some
     const try1 = `${base}/${teamId}.png`;
     const try2 = `${base}/${teamId}.PNG`;
 
     imgEl.src = try1;
-
     imgEl.onerror = function () {
-      // se já tentou PNG, some
       if (imgEl.__triedPNG) {
         imgEl.style.display = "none";
         return;
@@ -147,6 +131,104 @@
       imgEl.__triedPNG = true;
       imgEl.src = try2;
     };
+  }
+
+  function createLogoImg(teamId, altText) {
+    const img = document.createElement("img");
+    img.className = "time-card-logo";
+    img.alt = altText || "Escudo";
+    img.loading = "lazy";
+    img.src = "";
+    return img;
+  }
+
+  // -----------------------------
+  // SELEÇÃO ROBUSTA (SEM prompt)
+  // -----------------------------
+  function safeCoachName() {
+    // Sem prompt para evitar travas no mobile
+    // Você pode depois criar uma tela modal própria pro nome.
+    return (window.Game && Game.coachName) ? Game.coachName : "Técnico";
+  }
+
+  function setSelectedTeamState(teamId) {
+    // Game (main.js)
+    if (!window.Game) window.Game = {};
+    Game.teamId = teamId;
+    if (!Game.coachName) Game.coachName = safeCoachName();
+
+    // save.js geralmente usa gameState
+    if (!window.gameState) window.gameState = {};
+    gameState.selectedTeamId = teamId;
+    if (!gameState.coachName) gameState.coachName = Game.coachName;
+  }
+
+  function openLobbySafely() {
+    try {
+      if (typeof window.carregarLobby === "function") window.carregarLobby();
+    } catch (e) {
+      console.warn("[TEAM-UI] carregarLobby falhou:", e);
+    }
+
+    try {
+      if (typeof window.mostrarTela === "function") {
+        window.mostrarTela("tela-lobby");
+        return;
+      }
+    } catch (e) {}
+
+    // fallback: usa UI se existir
+    try {
+      if (window.UI && typeof UI.voltarLobby === "function") {
+        UI.voltarLobby();
+        return;
+      }
+    } catch (e) {}
+
+    // último fallback
+    showTela("tela-lobby");
+  }
+
+  function saveAfterSelect() {
+    try {
+      if (window.Save && typeof Save.salvar === "function") Save.salvar();
+    } catch (e) {
+      console.warn("[TEAM-UI] Save.salvar falhou:", e);
+    }
+  }
+
+  function selectTeam(teamId) {
+    // 1) tenta o fluxo oficial do main.js
+    try {
+      if (typeof window.selecionarTimeBasico === "function") {
+        // IMPORTANTÍSSIMO: alguns mobiles travam no prompt do main.js,
+        // então protegemos com try/catch: se travar/der erro, cai no fallback.
+        window.selecionarTimeBasico(teamId);
+        return;
+      }
+    } catch (e) {
+      console.warn("[TEAM-UI] selecionarTimeBasico falhou, usando fallback:", e);
+    }
+
+    // 2) fallback próprio (sem prompt)
+    try {
+      setSelectedTeamState(teamId);
+
+      // se existir resetGameStateForNewCareer, usa
+      try {
+        if (typeof window.resetGameStateForNewCareer === "function") {
+          window.resetGameStateForNewCareer(teamId, Game.coachName || "Técnico");
+        }
+      } catch (e) {
+        console.warn("[TEAM-UI] resetGameStateForNewCareer falhou:", e);
+      }
+
+      openLobbySafely();
+      saveAfterSelect();
+    } catch (e) {
+      alert("Erro ao selecionar time: " + (e?.message || e));
+      console.error(e);
+    }
   }
 
   // -----------------------------
@@ -159,22 +241,16 @@
       return;
     }
 
-    const teams =
-      (window.Database && Array.isArray(Database.teams) && Database.teams) ||
-      window.teams ||
-      [];
-
+    const teams = getTeamsSource();
     if (!teams.length) {
       container.innerHTML = "<p style='color:white'>Nenhum time cadastrado.</p>";
       showTela("tela-escolha-time");
       return;
     }
 
-    // evita “piscar”: renderiza 1 vez só
     container.innerHTML = "";
     showTela("tela-escolha-time");
 
-    // garante base detectado antes de montar (reduz flicker)
     await detectLogoBase();
 
     teams.forEach((team) => {
@@ -185,41 +261,32 @@
       const logo = createLogoImg(team.id, team.name);
       setLogoSafe(logo, team.id);
 
+      // topo (nome curto)
       const nameTop = document.createElement("div");
       nameTop.className = "time-card-name-top";
       nameTop.textContent = team.shortName || team.name;
 
+      // nome grande
       const nameBottom = document.createElement("div");
       nameBottom.className = "time-card-name";
       nameBottom.textContent = team.name;
 
+      // divisão
       const div = document.createElement("div");
       div.className = "time-card-division";
       div.textContent = getDivisionLabel(team);
 
-      // layout (sem innerHTML pra evitar reparse e flicker)
       card.appendChild(logo);
       card.appendChild(nameTop);
       card.appendChild(nameBottom);
       card.appendChild(div);
 
-      card.onclick = () => {
-        // Preferência: usar a função do main.js (mantém toda lógica existente)
-        if (typeof window.selecionarTimeBasico === "function") {
-          window.selecionarTimeBasico(team.id);
-          return;
-        }
-
-        // fallback mínimo (se o main mudar)
-        if (!window.Game) window.Game = {};
-        if (!window.gameState) window.gameState = {};
-
-        window.Game.teamId = team.id;
-        window.gameState.selectedTeamId = team.id;
-
-        if (window.UI && typeof UI.voltarLobby === "function") UI.voltarLobby();
-        else showTela("tela-lobby");
-      };
+      // clique
+      card.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        selectTeam(team.id);
+      });
 
       container.appendChild(card);
     });
@@ -229,39 +296,35 @@
   // Elenco (mantém funcionando)
   // -----------------------------
   function obterElencoAtual() {
-    const gs = window.gameState || {};
-    const teamId = gs.selectedTeamId || (window.Game && Game.teamId);
+    const teamId =
+      (window.gameState && gameState.selectedTeamId) ||
+      (window.Game && Game.teamId) ||
+      null;
 
     if (!teamId) return [];
+
+    if (window.Database && typeof Database.carregarElencoDoTime === "function") {
+      const elenco = Database.carregarElencoDoTime(teamId);
+      if (Array.isArray(elenco)) return elenco;
+    }
 
     if (window.Database && Array.isArray(Database.players)) {
       return Database.players.filter((p) => p.teamId === teamId);
     }
+
     return [];
   }
 
-  function getFacePath(player) {
-    // faces do seu projeto: assets/face/FLA_NOME.png etc.
-    // player.face pode existir; se existir, usa.
-    if (player && player.face) return player.face;
-
-    // fallback por padrão de arquivo: TEAMID_NAME.png
-    try {
-      const teamId = (player.teamId || "").toString().toUpperCase();
-      const nome = (player.name || "PLAYER")
-        .toString()
-        .replace(/\s+/g, "_")
-        .replace(/[^\w\-]/g, "");
-      return `assets/face/${teamId}_${nome}.png`;
-    } catch (e) {
-      return "";
-    }
+  function getFacePath(p) {
+    if (p && p.face) return p.face;
+    if (p && p.id) return `assets/face/${p.id}.png`;
+    return "";
   }
 
   function renderSquad() {
     const container = $("elenco-lista");
     if (!container) {
-      alert("Erro: #elenco-lista não encontrado no index.html");
+      console.warn("[TEAM-UI] #elenco-lista não encontrado.");
       return;
     }
 
@@ -270,45 +333,28 @@
 
     if (!elenco.length) {
       container.innerHTML =
-        "<p style='color:white'>Elenco não encontrado (time não selecionado ou database vazio).</p>";
-      showTela("tela-elenco");
+        "<p style='padding:10px;color:white;'>Nenhum jogador encontrado para este time.</p>";
       return;
     }
 
     elenco.forEach((p) => {
+      const nome = p.name || p.nome || "Jogador";
+      const pos = p.position || p.posicao || p.pos || p.role || "POS";
+      const ovr = p.overall ?? p.ovr ?? p.rating ?? 70;
+
       const card = document.createElement("div");
-      card.className = "player-card";
-
-      const face = document.createElement("img");
-      face.src = getFacePath(p);
-      face.alt = p.name || "Jogador";
-      face.loading = "lazy";
-      face.onerror = () => (face.style.display = "none");
-
-      const h3 = document.createElement("h3");
-      h3.textContent = p.name || "Jogador";
-
-      const pos = document.createElement("p");
-      pos.textContent = p.pos || p.position || "POS";
-
-      const ovr = document.createElement("p");
-      ovr.className = "ovr";
-      ovr.textContent = (p.ovr ?? p.overall ?? "").toString();
-
-      card.appendChild(face);
-      card.appendChild(h3);
-      card.appendChild(pos);
-      card.appendChild(ovr);
-
+      card.className = "card-jogador";
+      card.innerHTML = `
+        <img src="${getFacePath(p)}" alt="${nome}" onerror="this.style.display='none'">
+        <h3>${nome}</h3>
+        <p>${pos}</p>
+        <p class="ovr">${ovr}</p>
+      `;
       container.appendChild(card);
     });
-
-    showTela("tela-elenco");
   }
 
-  // -----------------------------
-  // Export global
-  // -----------------------------
+  // Exports
   window.TeamUI.renderTeamSelection = renderTeamSelection;
   window.TeamUi.renderTeamSelection = renderTeamSelection;
 
