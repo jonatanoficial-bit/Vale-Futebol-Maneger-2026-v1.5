@@ -1,340 +1,403 @@
-(() => {
-  "use strict";
+/* =======================================================
+   VALE FUTEBOL MANAGER 2026
+   engine/gameCore.js — núcleo do jogo (estado + calendário + fluxo de jogo)
+   -------------------------------------------------------
+   Regras:
+   - Alterações sempre compatíveis com saves (normalize no load)
+   - Sem remover campos antigos: apenas adicionar defaults
+   - Match flow (próximo jogo) deve ser determinístico o suficiente
+   ======================================================= */
 
-  const DEFAULT_STATE = () => ({
-    // fluxo inicial
-    flow: {
-      screen: "cover", // cover -> pack -> slots -> career -> role -> club -> tutorial -> lobby
-      error: null
-    },
+export class GameCore {
+  constructor({ packs, slots }) {
+    this.packs = packs;
+    this.slots = slots;
 
-    // seleção atual
-    selection: {
-      pack: null,        // { id, name, version }
-      slotIndex: null,   // 0 ou 1
-      career: {
-        avatarId: "1",
-        name: "",
-        country: "Brasil",
-        role: null,      // coach / director / president
-        clubId: null
+    this.activeSlot = null;
+    this.activePackId = null;
+
+    this.state = null; // estado carregado do slot
+    this.activeMatch = null; // { event, fixture, competitionKey, matchDayId }
+  }
+
+  // -------------------------
+  // Boot / Load / Normalize
+  // -------------------------
+  boot() {
+    // cria estado mínimo para navegação inicial
+    this.state = {
+      screen: "cover",
+      selectedPackId: null,
+      selectedSlot: null,
+      career: null
+    };
+    return this.state;
+  }
+
+  setScreen(screen) {
+    this._ensureState();
+    this.state.screen = screen;
+    return this.state;
+  }
+
+  selectPack(packId) {
+    this._ensureState();
+    this.state.selectedPackId = packId;
+    this.activePackId = packId;
+    return this.state;
+  }
+
+  selectSlot(slotId) {
+    this._ensureState();
+    this.state.selectedSlot = slotId;
+    this.activeSlot = slotId;
+    return this.state;
+  }
+
+  createCareer({ avatarId, name, country, role, clubId }) {
+    this._ensureState();
+
+    const nowISO = new Date().toISOString();
+    const seasonYear = 2026;
+
+    const career = {
+      version: 2,
+      createdAt: nowISO,
+      updatedAt: nowISO,
+
+      seasonYear,
+      currentDate: `${seasonYear}-01-01`,
+
+      profile: { avatarId, name, country },
+      role,
+      clubId,
+
+      // histórico de partidas (para tabela/estatísticas futuras)
+      matchHistory: [],
+
+      // cache de “último jogo”
+      lastMatch: null,
+
+      // pontos/recompensas (placeholder)
+      userXP: 0,
+      userLevel: 1
+    };
+
+    this.state.career = career;
+    this._save();
+    return this.state;
+  }
+
+  loadFromSlot(slotId) {
+    this.selectSlot(slotId);
+
+    const loaded = this.slots.load(slotId);
+    if (!loaded) return null;
+
+    this.state = loaded;
+    this._normalizeLoadedState();
+    return this.state;
+  }
+
+  _normalizeLoadedState() {
+    // garante compatibilidade com saves anteriores
+    this._ensureState();
+
+    if (!this.state.career) return;
+
+    const c = this.state.career;
+
+    if (!c.version) c.version = 1;
+    if (!c.seasonYear) c.seasonYear = 2026;
+    if (!c.currentDate) c.currentDate = `${c.seasonYear}-01-01`;
+
+    if (!c.matchHistory || !Array.isArray(c.matchHistory)) c.matchHistory = [];
+    if (!c.lastMatch) c.lastMatch = null;
+
+    if (c.userXP == null) c.userXP = 0;
+    if (c.userLevel == null) c.userLevel = 1;
+
+    if (!c.profile) c.profile = { avatarId: 0, name: "Jogador", country: "Brasil" };
+
+    // garante campos de UI
+    if (!this.state.screen) this.state.screen = "lobby";
+
+    this._save();
+  }
+
+  _ensureState() {
+    if (!this.state) this.boot();
+  }
+
+  // -------------------------
+  // Pack data helpers
+  // -------------------------
+  getPack() {
+    const pid = this.activePackId || this.state?.selectedPackId || null;
+    if (!pid) return null;
+    return this.packs.getPack(pid);
+  }
+
+  getClubs() {
+    return this.getPack()?.clubs || [];
+  }
+
+  getPlayers() {
+    return this.getPack()?.players || [];
+  }
+
+  getClubById(id) {
+    const clubs = this.getClubs();
+    return clubs.find(c => String(c.id) === String(id)) || null;
+  }
+
+  getPlayersForTeam(clubId) {
+    const players = this.getPlayers();
+    return players.filter(p => String(p.clubId) === String(clubId));
+  }
+
+  // -------------------------
+  // Calendar (blocos) — (já existia na base)
+  // -------------------------
+  getCareer() {
+    return this.state?.career || null;
+  }
+
+  getCurrentDate() {
+    return this.getCareer()?.currentDate || "2026-01-01";
+  }
+
+  setCurrentDate(isoDate) {
+    const c = this.getCareer();
+    if (!c) return null;
+    c.currentDate = isoDate;
+    c.updatedAt = new Date().toISOString();
+    this._save();
+    return c.currentDate;
+  }
+
+  // Retorna eventos “blocos” (Estaduais/CdB etc.) + jogos do clube na Série
+  getCalendarEvents() {
+    const c = this.getCareer();
+    if (!c) return [];
+
+    const seasonYear = c.seasonYear || 2026;
+
+    // blocos fixos (placeholder — igual estava)
+    const blocks = [
+      { date: `${seasonYear}-01-08`, label: "Estaduais", phase: "Rodadas" },
+      { date: `${seasonYear}-01-15`, label: "Estaduais", phase: "Rodadas" },
+      { date: `${seasonYear}-01-22`, label: "Estaduais", phase: "Rodadas" },
+      { date: `${seasonYear}-01-29`, label: "Estaduais", phase: "Rodadas" },
+      { date: `${seasonYear}-02-05`, label: "Estaduais", phase: "Rodadas" },
+      { date: `${seasonYear}-02-12`, label: "Estaduais", phase: "Rodadas" },
+      { date: `${seasonYear}-02-19`, label: "Estaduais", phase: "Rodadas" },
+      { date: `${seasonYear}-02-26`, label: "Estaduais", phase: "Rodadas" },
+      { date: `${seasonYear}-03-05`, label: "Estaduais", phase: "Finais" },
+      { date: `${seasonYear}-03-12`, label: "Estaduais", phase: "Finais" }
+    ].map(b => ({ type: "block", ...b }));
+
+    // Série A/B: usa fixtures simplificadas (placeholder)
+    // A entrega atual não gera tabela ainda; só “próximo jogo do clube”.
+    const serieStart = `${seasonYear}-04-06`;
+    const clubId = c.clubId;
+
+    // cria um “próximo jogo” determinístico simples:
+    // FLA x SAO (como no seu print) quando o clube existir e a data >= serieStart
+    const fixtures = [];
+    fixtures.push({
+      type: "match",
+      competition: "Série A",
+      matchDay: 1,
+      date: serieStart,
+      homeId: "FLA",
+      awayId: "SAO"
+    });
+
+    // Filtra só jogos do clube, se bater com home/away
+    // (por enquanto o clubeId do seu save pode ser real, mas os ids do pack podem ser diferentes.
+    // então exibimos o fixture mesmo assim no calendário para a demo.)
+    const matches = fixtures.map(f => ({
+      ...f,
+      clubInvolved: (String(f.homeId) === String(clubId) || String(f.awayId) === String(clubId)) || true
+    }));
+
+    return [...blocks, ...matches].sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  // Próximo jogo do “clube” (match mais próximo >= currentDate)
+  getNextClubMatch() {
+    const c = this.getCareer();
+    if (!c) return null;
+
+    const cur = c.currentDate;
+    const events = this.getCalendarEvents().filter(e => e.type === "match" && e.date >= cur);
+    if (!events.length) return null;
+
+    // retorna o primeiro por data
+    const next = events.sort((a, b) => a.date.localeCompare(b.date))[0];
+
+    return {
+      date: next.date,
+      competition: next.competition,
+      matchDay: next.matchDay,
+      fixture: {
+        homeId: next.homeId,
+        awayId: next.awayId
       }
-    },
+    };
+  }
 
-    // dados carregados do pack
-    data: {
-      teams: [],
-      playersByTeamId: {}
-    },
+  // -------------------------
+  // MATCH FLOW (ENTREGA ATUAL)
+  // -------------------------
+  openNextMatch() {
+    const next = this.getNextClubMatch();
+    if (!next) return null;
 
-    // temporada (Fase 1)
-    season: {
-      schemaVersion: 1,
-      year: 2026,
-      seed: null,
-      currentDate: null, // "YYYY-MM-DD"
-      calendar: null     // objeto do SeasonEngine
+    // seta data para a data do jogo
+    this.setCurrentDate(next.date);
+
+    this.activeMatch = {
+      event: next,
+      fixture: next.fixture,
+      competitionKey: next.competition,
+      matchDayId: next.matchDay
+    };
+
+    return this.activeMatch;
+  }
+
+  getActiveMatch() {
+    return this.activeMatch;
+  }
+
+  clearActiveMatch() {
+    this.activeMatch = null;
+  }
+
+  simulateActiveMatch({ quality = "MEDIO" } = {}) {
+    if (!this.activeMatch) return null;
+    const c = this.getCareer();
+    if (!c) return null;
+
+    if (!window.MatchEngine || typeof window.MatchEngine.simulateMatch !== "function") {
+      throw new Error("MatchEngine não está disponível. Verifique se engine/match.js está carregado no index.html.");
     }
-  });
 
-  function todayKeyDefault(year) {
-    return `${year}-01-01`;
+    const { homeId, awayId } = this.activeMatch.fixture;
+
+    const homeName = this._resolveTeamName(homeId);
+    const awayName = this._resolveTeamName(awayId);
+
+    const homePlayers = this._resolveTeamPlayers(homeId);
+    const awayPlayers = this._resolveTeamPlayers(awayId);
+
+    const homeTeam = this._buildTeamForMatch(homeId, homeName, homePlayers);
+    const awayTeam = this._buildTeamForMatch(awayId, awayName, awayPlayers);
+
+    const options = {
+      quality,
+      // seeds/opções futuras aqui sem quebrar compatibilidade
+    };
+
+    const result = window.MatchEngine.simulateMatch(homeTeam, awayTeam, options);
+
+    const report = {
+      date: this.activeMatch.event.date,
+      competition: this.activeMatch.event.competition,
+      matchDay: this.activeMatch.event.matchDay,
+
+      homeId,
+      awayId,
+      homeName,
+      awayName,
+
+      goalsHome: result?.score?.home ?? 0,
+      goalsAway: result?.score?.away ?? 0,
+
+      stats: result?.stats || null,
+      highlights: result?.highlights || [],
+      ratings: result?.playerRatings || null,
+      motm: result?.motm || null
+    };
+
+    // salva no histórico
+    c.matchHistory.push(report);
+    c.lastMatch = report;
+    c.updatedAt = new Date().toISOString();
+
+    // limpa active match depois de simular (pra evitar duplicar)
+    this.clearActiveMatch();
+
+    this._save();
+    return report;
   }
 
-  function safeString(x) {
-    return String(x ?? "");
+  _buildTeamForMatch(teamId, name, players) {
+    const xi = (players || []).slice().sort((a, b) => (b.overall ?? 0) - (a.overall ?? 0)).slice(0, 11);
+
+    const overall = this._calcTeamOverall(xi);
+
+    return {
+      id: String(teamId),
+      name,
+      overall,
+      players: xi.map(p => ({
+        id: String(p.id ?? p.playerId ?? p.name ?? Math.random()),
+        name: p.name || p.nome || "Jogador",
+        position: p.position || p.pos || "UNK",
+        overall: Number(p.overall ?? p.ovr ?? 60)
+      }))
+    };
   }
 
-  function uniqSortedDatesFromCalendar(cal) {
-    const dates = [];
-    const seen = {};
-    if (!cal || !Array.isArray(cal.events)) return dates;
-
-    for (const ev of cal.events) {
-      if (!ev?.date) continue;
-      if (!seen[ev.date]) {
-        seen[ev.date] = true;
-        dates.push(ev.date);
-      }
-    }
-    dates.sort();
-    return dates;
+  _calcTeamOverall(xi) {
+    if (!xi || !xi.length) return 60;
+    const sum = xi.reduce((acc, p) => acc + Number(p.overall ?? p.ovr ?? 60), 0);
+    return Math.round(sum / xi.length);
   }
 
-  function isClubInEvent(ev, clubId) {
-    if (!ev || !clubId) return false;
-    if (ev.type !== "matchday") return false;
-    const matches = Array.isArray(ev.matches) ? ev.matches : [];
-    return matches.some(m => m.home === clubId || m.away === clubId);
+  _resolveTeamName(teamId) {
+    // tenta achar no pack por id
+    const club = this.getClubById(teamId);
+    if (club?.name) return club.name;
+
+    // fallback para ids curtos tipo FLA/SAO
+    const map = {
+      FLA: "Flamengo",
+      SAO: "São Paulo",
+      PAL: "Palmeiras",
+      COR: "Corinthians"
+    };
+    return map[String(teamId)] || String(teamId);
   }
 
-  const Game = {
-    state: DEFAULT_STATE(),
+  _resolveTeamPlayers(teamId) {
+    // tenta buscar do pack
+    const fromPack = this.getPlayersForTeam(teamId);
+    if (fromPack && fromPack.length) return fromPack;
 
-    setScreen(screen) {
-      this.state.flow.screen = screen;
-      window.UI.render(this.state);
-    },
-
-    setError(msg) {
-      this.state.flow.error = msg;
-      window.UI.render(this.state);
-    },
-
-    async boot() {
-      // sempre começa na capa
-      this.state = DEFAULT_STATE();
-      window.UI.render(this.state);
-    },
-
-    async choosePack(packMeta, packData) {
-      this.state.selection.pack = {
-        id: packMeta.id,
-        name: packMeta.name,
-        version: packMeta.version || ""
-      };
-      this.state.data.teams = packData.teams || [];
-      this.state.data.playersByTeamId = packData.playersByTeamId || {};
-
-      // reset temporada ao trocar pack (seguro)
-      this.state.season.year = 2026;
-      this.state.season.seed = null;
-      this.state.season.currentDate = null;
-      this.state.season.calendar = null;
-
-      this.setScreen("slots");
-    },
-
-    chooseSlot(slotIndex) {
-      this.state.selection.slotIndex = slotIndex;
-
-      const slot = window.SaveSlots.readSlot(slotIndex);
-      if (slot.exists && slot.career && slot.packId) {
-        // carregar carreira existente
-        this.state.selection.pack = {
-          id: slot.packId,
-          name: slot.packName || "",
-          version: slot.packVersion || ""
-        };
-        this.state.selection.career = slot.career;
-
-        // tenta carregar season se existir no save (compatível)
-        if (slot.season && typeof slot.season === "object") {
-          this.state.season = {
-            ...this.state.season,
-            ...slot.season
-          };
-        }
-
-        // tentar carregar o pack do save
-        this.setScreen("loading");
-        window.DataPacks.loadPack(slot.packId)
-          .then(({ data }) => {
-            this.state.data.teams = data.teams || [];
-            this.state.data.playersByTeamId = data.playersByTeamId || {};
-            this.ensureSeasonReady();
-            this.setScreen("lobby");
-          })
-          .catch((e) => {
-            this.setError("Falha ao carregar o pack do save: " + (e?.message || e));
-            this.setScreen("pack");
-          });
-
-        return;
-      }
-
-      // slot vazio → criar carreira
-      this.setScreen("career");
-    },
-
-    setCareerInfo({ avatarId, name, country }) {
-      this.state.selection.career.avatarId = safeString(avatarId);
-      this.state.selection.career.name = safeString(name);
-      this.state.selection.career.country = safeString(country);
-      this.setScreen("role");
-    },
-
-    setRole(role) {
-      this.state.selection.career.role = role;
-      this.setScreen("club");
-    },
-
-    setClub(clubId) {
-      this.state.selection.career.clubId = clubId;
-      this.setScreen("tutorial");
-    },
-
-    finishTutorial() {
-      this.ensureSeasonReady();
-      this.saveNow();
-      this.setScreen("lobby");
-    },
-
-    ensureSeasonReady() {
-      const packId = this.state.selection.pack?.id || "pack";
-      const clubId = this.state.selection.career.clubId || "club";
-      const year = this.state.season?.year || 2026;
-
-      // Seed estável: pack + club + year
-      const seed = `${packId}_${clubId}_${year}`;
-
-      // Se já existe calendário compatível com seed, mantém
-      if (this.state.season.calendar && this.state.season.seed === seed) {
-        if (!this.state.season.currentDate) {
-          this.state.season.currentDate = todayKeyDefault(year);
-        }
-        return;
-      }
-
-      // Gera calendário com fallback seguro
-      const teams = this.state.data.teams || [];
-      const cal = window.SeasonEngine.generateSeasonFromTeams(teams, year, seed);
-
-      this.state.season.schemaVersion = 1;
-      this.state.season.seed = seed;
-      this.state.season.calendar = cal;
-      this.state.season.currentDate = todayKeyDefault(year);
-    },
-
-    advanceDay() {
-      // Avança para a próxima data existente no calendário (seguro)
-      this.ensureSeasonReady();
-      const cal = this.state.season.calendar;
-      if (!cal || !Array.isArray(cal.events) || cal.events.length === 0) return;
-
-      const current = this.state.season.currentDate || todayKeyDefault(this.state.season.year || 2026);
-      const dates = uniqSortedDatesFromCalendar(cal);
-      if (dates.length === 0) return;
-
-      let idx = dates.findIndex(d => d >= current);
-      if (idx === -1) idx = dates.length - 1;
-
-      const nextIdx = Math.min(idx + 1, dates.length - 1);
-      this.state.season.currentDate = dates[nextIdx];
-
-      this.saveNow();
-      window.UI.render(this.state);
-    },
-
-    advanceToNextClubMatch() {
-      // Pula diretamente para a data do próximo jogo real do clube
-      this.ensureSeasonReady();
-      const cal = this.state.season.calendar;
-      const clubId = this.state.selection.career.clubId;
-      if (!cal || !Array.isArray(cal.events) || !clubId) return;
-
-      const current = this.state.season.currentDate || todayKeyDefault(this.state.season.year || 2026);
-
-      // Procura o próximo evento matchday onde o clube participa e a data é >= current
-      let candidate = null;
-      for (const ev of cal.events) {
-        if (!ev?.date) continue;
-        if (ev.date < current) continue;
-        if (isClubInEvent(ev, clubId)) {
-          candidate = ev;
-          break;
-        }
-      }
-
-      // Se não achou (ex.: current depois do fim), tenta do começo
-      if (!candidate) {
-        for (const ev of cal.events) {
-          if (isClubInEvent(ev, clubId)) {
-            candidate = ev;
-            break;
-          }
-        }
-      }
-
-      if (candidate) {
-        this.state.season.currentDate = candidate.date;
-        this.saveNow();
-        window.UI.render(this.state);
-      }
-    },
-
-    saveNow() {
-      const s = this.state.selection;
-      if (s.slotIndex === null || s.slotIndex === undefined) return;
-
-      window.SaveSlots.writeSlot(s.slotIndex, {
-        packId: s.pack?.id || null,
-        packName: s.pack?.name || null,
-        packVersion: s.pack?.version || null,
-        career: s.career,
-        season: this.state.season
+    // fallback: gera elenco fake determinístico simples (não quebra o projeto)
+    const base = 55 + (String(teamId).charCodeAt(0) % 12);
+    const list = [];
+    for (let i = 1; i <= 18; i++) {
+      list.push({
+        id: `${teamId}-${i}`,
+        name: `${teamId} Player ${i}`,
+        position: i === 1 ? "GK" : (i <= 5 ? "DEF" : i <= 11 ? "MID" : "ATT"),
+        overall: base + (i % 10)
       });
-    },
-
-    getSelectedTeam() {
-      const clubId = this.state.selection.career.clubId;
-      if (!clubId) return null;
-      return this.state.data.teams.find(t => (t.id || t.clubId) === clubId) || null;
-    },
-
-    getSquad() {
-      const team = this.getSelectedTeam();
-      if (!team) return [];
-      const id = (team.id || team.clubId);
-      return this.state.data.playersByTeamId[id] || [];
-    },
-
-    // ====== Calendário API (para UI) ======
-    getCalendarEventsForSelectedTeam() {
-      this.ensureSeasonReady();
-      const cal = this.state.season.calendar;
-      if (!cal || !Array.isArray(cal.events)) return [];
-
-      const clubId = this.state.selection.career.clubId;
-      if (!clubId) return [];
-
-      const out = [];
-      for (const ev of cal.events) {
-        if (ev.type === "block") {
-          out.push(ev);
-          continue;
-        }
-        if (isClubInEvent(ev, clubId)) out.push(ev);
-      }
-      return out;
-    },
-
-    getNextClubMatch() {
-      // Retorna { event, match } ou null
-      this.ensureSeasonReady();
-      const cal = this.state.season.calendar;
-      const clubId = this.state.selection.career.clubId;
-      if (!cal || !Array.isArray(cal.events) || !clubId) return null;
-
-      const current = this.state.season.currentDate || todayKeyDefault(this.state.season.year || 2026);
-
-      // Busca próximo matchday com jogo do clube a partir da data atual
-      let event = null;
-      for (const ev of cal.events) {
-        if (!ev?.date) continue;
-        if (ev.date < current) continue;
-        if (isClubInEvent(ev, clubId)) {
-          event = ev;
-          break;
-        }
-      }
-      // fallback: se não achou, pega o primeiro do ano
-      if (!event) {
-        for (const ev of cal.events) {
-          if (isClubInEvent(ev, clubId)) {
-            event = ev;
-            break;
-          }
-        }
-      }
-      if (!event) return null;
-
-      const match = (event.matches || []).find(m => m.home === clubId || m.away === clubId) || null;
-      if (!match) return null;
-
-      return { event, match };
     }
-  };
+    return list;
+  }
 
-  window.Game = Game;
-})();
+  // -------------------------
+  // Save
+  // -------------------------
+  _save() {
+    if (!this.activeSlot) return;
+    if (!this.state) return;
+    this.slots.save(this.activeSlot, this.state);
+  }
+}
