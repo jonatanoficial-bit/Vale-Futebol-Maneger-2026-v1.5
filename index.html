@@ -2,154 +2,64 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>Vale Futebol Manager 2026</title>
 
-  <!-- CSS -->
-  <link rel="stylesheet" href="style.css?v=2026.1.6">
-  <link rel="stylesheet" href="aaa.css?v=2026.1.6">
-  <link rel="stylesheet" href="match-center.css?v=2026.1.6">
-  <link rel="stylesheet" href="post-match.css?v=2026.1.6">
-
-  <!-- Evita “voltar cacheado” em alguns celulares -->
-  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
-  <meta http-equiv="Pragma" content="no-cache">
+  <link rel="stylesheet" href="./style.css?v=1" />
+  <link rel="stylesheet" href="./aaa.css?v=1" />
+  <link rel="stylesheet" href="./match-center.css?v=1" />
+  <link rel="stylesheet" href="./post-match.css?v=1" />
 </head>
 
 <body>
+  <div id="app"></div>
 
-  <!-- =========================
-       CAPA / MENU INICIAL
-       ========================= -->
-  <section id="tela-capa" class="tela tela-ativa">
-    <div class="capa-bg">
-      <img class="capa-img" src="assets/geral/capa.png" alt="Capa Vale Futebol Manager 2026">
-    </div>
+  <!-- Engine / Data -->
+  <script src="./engine/database.js?v=1"></script>
+  <script src="./engine/finances.js?v=1"></script>
+  <script src="./game.js?v=1"></script>
 
-    <div class="capa-ui">
-      <button id="btn-carregar" class="btn btn-azul">CARREGAR CARREIRA (JSON)</button>
-      <button id="btn-iniciar" class="btn btn-dourado">INICIAR CARREIRA</button>
-    </div>
-  </section>
+  <!-- UI bootstrap robusto: tenta ui/ e Ui/ -->
+  <script>
+    (function () {
+      const bust = Date.now();
+      const candidates = [
+        "./ui/bootstrap-ui.js?v=" + bust,
+        "./Ui/bootstrap-ui.js?v=" + bust
+      ];
 
-  <!-- =========================
-       TELA SELEÇÃO DE TIME
-       ========================= -->
-  <section id="tela-selecao-time" class="tela">
-    <h1 class="titulo">ESCOLHA SEU TIME</h1>
-    <div id="lista-times" class="lista-times"></div>
-    <button class="btn-voltar" onclick="UI.voltarCapa && UI.voltarCapa()">VOLTAR</button>
-  </section>
+      function load(src) {
+        return new Promise((resolve, reject) => {
+          const s = document.createElement("script");
+          s.src = src;
+          s.onload = () => resolve(src);
+          s.onerror = () => reject(new Error("Falhou: " + src));
+          document.head.appendChild(s);
+        });
+      }
 
-  <!-- =========================
-       LOBBY / HUB
-       ========================= -->
-  <section id="tela-lobby" class="tela">
-    <div class="lobby-card">
-      <div class="lobby-header">
-        <img id="lobby-escudo" class="lobby-escudo" src="" alt="Escudo do time">
-        <h2 id="lobby-nome-time">Time</h2>
-      </div>
+      (async () => {
+        let ok = null;
+        for (const src of candidates) {
+          try { ok = await load(src); break; } catch (e) {}
+        }
 
-      <div class="lobby-botoes">
-        <button class="btn btn-verde" onclick="UI.abrirProximoJogo && UI.abrirProximoJogo()">PRÓXIMO JOGO</button>
-        <button class="btn btn-azul" onclick="UI.abrirTabela && UI.abrirTabela()">TABELA</button>
-        <button class="btn btn-azul" onclick="UI.abrirElenco && UI.abrirElenco()">ELENCO</button>
-        <button class="btn btn-azul" onclick="UI.abrirMercado && UI.abrirMercado()">MERCADO</button>
-        <button class="btn btn-azul" onclick="UI.abrirCalendario && UI.abrirCalendario()">CALENDÁRIO</button>
-        <button class="btn btn-dourado" onclick="UI.abrirTaticas && UI.abrirTaticas()">TÁTICAS</button>
-        <button class="btn btn-azul" onclick="UI.salvarCarreira && UI.salvarCarreira()">SALVAR CARREIRA</button>
-        <button class="btn btn-cinza" onclick="UI.sair && UI.sair()">SAIR</button>
-      </div>
-    </div>
-  </section>
+        if (!ok) {
+          alert(
+            "Não consegui carregar o bootstrap da UI.\n\n" +
+            "Tentativas:\n- " + candidates.join("\n- ") + "\n\n" +
+            "Verifique se existe /ui/bootstrap-ui.js ou /Ui/bootstrap-ui.js"
+          );
+          return;
+        }
 
-  <!-- =========================
-       TELA ELENCO
-       ========================= -->
-  <section id="tela-elenco" class="tela">
-    <h1 class="titulo">ELENCO</h1>
-    <div id="lista-elenco" class="elenco-grid"></div>
-    <button class="btn-voltar" onclick="UI.voltarLobby && UI.voltarLobby()">VOLTAR</button>
-  </section>
-
-  <!-- =========================
-       TELA MERCADO / TRANSFERÊNCIAS
-       ========================= -->
-  <section id="tela-mercado" class="tela">
-    <h1 class="titulo">MERCADO DE TRANSFERÊNCIAS</h1>
-    <div id="mercado-ui" class="mercado-ui"></div>
-    <button class="btn-voltar" onclick="UI.voltarLobby && UI.voltarLobby()">VOLTAR</button>
-  </section>
-
-  <!-- =========================
-       TELA TÁTICAS
-       ========================= -->
-  <section id="tela-taticas" class="tela">
-    <h1 class="titulo">TÁTICAS E ESCALAÇÃO</h1>
-    <div id="taticas-ui" class="taticas-ui"></div>
-    <button class="btn-voltar" onclick="UI.voltarLobby && UI.voltarLobby()">VOLTAR AO LOBBY</button>
-  </section>
-
-  <!-- =========================
-       TELA CALENDÁRIO
-       ========================= -->
-  <section id="tela-calendario" class="tela">
-    <h1 class="titulo">CALENDÁRIO DA TEMPORADA</h1>
-    <div id="lista-calendario" class="calendario-lista"></div>
-    <button class="btn-voltar" onclick="UI.voltarLobby && UI.voltarLobby()">VOLTAR AO LOBBY</button>
-  </section>
-
-  <!-- =========================
-       TELA JOGO (MATCH CENTER)
-       ========================= -->
-  <section id="tela-jogo" class="tela">
-    <div id="match-center-root" class="match-center-root"></div>
-  </section>
-
-  <!-- DEBUG BUTTON (se existir no CSS/JS) -->
-  <button id="btn-debug" class="debug-btn" type="button">DEBUG</button>
-
-  <!-- =========================
-       ENGINE (base)
-       ========================= -->
-  <script defer src="engine/database.js?v=2026.1.6"></script>
-  <script defer src="engine/economy.js?v=2026.1.6"></script>
-  <script defer src="engine/fixtures.js?v=2026.1.6"></script>
-  <script defer src="engine/sim.js?v=2026.1.6"></script>
-  <script defer src="engine/save.js?v=2026.1.6"></script>
-
-  <!-- game core -->
-  <script defer src="game.js?v=2026.1.6"></script>
-
-  <!-- =========================
-       UI (IMPORTANTE: pasta ui/ MINÚSCULA)
-       Ordem pensada pra dependências comuns:
-       ui.js -> bootstrap -> debug -> módulos
-       ========================= -->
-  <script defer src="ui/ui.js?v=2026.1.6"></script>
-  <script defer src="ui/bootstrap-ui.js?v=2026.1.6"></script>
-  <script defer src="ui/debug-panel-ui.js?v=2026.1.6"></script>
-
-  <script defer src="ui/team-ui.js?v=2026.1.6"></script>
-  <script defer src="ui/lobby-hub-ui.js?v=2026.1.6"></script>
-
-  <script defer src="ui/competitions-ui.js?v=2026.1.6"></script>
-  <script defer src="ui/season-calendar-ui.js?v=2026.1.6"></script>
-  <script defer src="ui/calendar-ui.js?v=2026.1.6"></script>
-
-  <script defer src="ui/market-ui.js?v=2026.1.6"></script>
-  <script defer src="ui/transfer-market-ui.js?v=2026.1.6"></script>
-
-  <script defer src="ui/tactics-ui.js?v=2026.1.6"></script>
-  <script defer src="ui/training-ui.js?v=2026.1.6"></script>
-  <script defer src="ui/contracts-ui.js?v=2026.1.6"></script>
-
-  <script defer src="ui/match-center-ui.js?v=2026.1.6"></script>
-  <script defer src="ui/post-match-ui.js?v=2026.1.6"></script>
-
-  <!-- MAIN por último -->
-  <script defer src="main.js?v=2026.1.6"></script>
-
+        // Quando o bootstrap terminar, ele chama window.__startApp()
+        if (typeof window.__startApp === "function") window.__startApp();
+      })();
+    })();
+  </script>
 </body>
 </html>
