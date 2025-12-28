@@ -4,10 +4,7 @@
   const $app = () => document.getElementById("app");
 
   function esc(s){ return String(s ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;"); }
-
-  function setHTML(html){
-    $app().innerHTML = html;
-  }
+  function setHTML(html){ $app().innerHTML = html; }
 
   function btn(id, label, cls){
     return `<button id="${id}" class="btn ${cls || ""}">${esc(label)}</button>`;
@@ -23,7 +20,7 @@
         <img src="assets/geral/capa.png" alt="Capa" />
         <div class="coverUI">
           <div class="coverTitle">Vale Futebol Manager 2026</div>
-          <div class="coverSub">Base sólida (rebuild). Mantém seus escudos, faces e fundos.</div>
+          <div class="coverSub">Fluxo sólido + calendário anual (Fase 1).</div>
           <div class="row">
             ${btn("goPack","INICIAR","btnGreen btnFull")}
           </div>
@@ -38,12 +35,12 @@
         <div class="max">
           <div class="topbar">
             <div class="brand"><h1>Pacote de Dados (DLC)</h1></div>
-            <div class="chip">v2 rebuild</div>
+            <div class="chip">Fase 1</div>
           </div>
 
           <div class="panel">
             <div class="title">Escolha um Pacote</div>
-            <div class="note">Você poderá atualizar elencos/competições trocando apenas os arquivos em <b>/packs</b> — sem mexer no código.</div>
+            <div class="note">Atualizações futuras: você muda o pack sem mexer no código.</div>
             <div id="packList" class="grid" style="margin-top:12px;"></div>
             <div class="row" style="margin-top:14px;">
               ${btn("backCover","VOLTAR","btnDark btnFull")}
@@ -137,7 +134,6 @@
 
     slots.forEach((s, i) => {
       document.getElementById(`slot_${i}`).addEventListener("click", (ev) => {
-        // se clicou no botão apagar, não seleciona slot
         if ((ev.target && ev.target.id) && ev.target.id.startsWith("del_")) return;
         window.Game.chooseSlot(i);
       });
@@ -274,7 +270,7 @@
 
           <div class="panel">
             <div class="title">Clubes Disponíveis</div>
-            <div class="note">Inicial: Série A e B (Brasil). Depois adicionaremos mundo todo + seleções via DLC.</div>
+            <div class="note">Inicial: Série A e B. Próximas fases: CdB + Estaduais completos + mundo.</div>
             <div id="clubs" class="grid" style="margin-top:12px;"></div>
 
             <div class="row" style="margin-top:14px;">
@@ -323,9 +319,8 @@
             <div class="title">Bem-vindo!</div>
             <div class="note">
               Olá, <b>${esc(state.selection.career.name)}</b>!<br/>
-              Sou o funcionário do clube e vou te apresentar o sistema.<br/><br/>
-              Você assumirá como <b>${esc(roleName)}</b> do <b>${esc(team?.name || "Clube")}</b>.<br/>
-              No lobby, você terá acesso aos módulos de gestão conforme seu cargo.
+              Você assumirá como <b>${esc(roleName)}</b> do <b>${esc(team?.name || "Clube")}</b>.<br/><br/>
+              ✅ Nesta fase, você já tem um <b>calendário anual real</b> com rodadas da Série A/B e blocos de CdB/Estaduais.
             </div>
 
             <div class="row" style="margin-top:14px;">
@@ -352,9 +347,7 @@
       <div class="screen">
         <div class="max">
           <div class="topbar">
-            <div class="brand">
-              <h1>Lobby</h1>
-            </div>
+            <div class="brand"><h1>Lobby</h1></div>
             <div class="chip">Slot ${((state.selection.slotIndex ?? 0)+1)} • ${esc(roleLabel)}</div>
           </div>
 
@@ -369,15 +362,16 @@
 
             <div class="menu">
               ${btn("goSquad","ELENCO","btnBlue btnFull")}
+              ${btn("goCalendar","CALENDÁRIO (REAL)","btnGreen btnFull")}
               ${btn("goMarket","MERCADO","btnBlue btnFull")}
-              ${btn("goCalendar","CALENDÁRIO","btnBlue btnFull")}
               ${btn("goTactics","TÁTICAS","btnGold btnFull")}
+              ${btn("advanceDay","AVANÇAR DATA","btnDark btnFull")}
               ${btn("save","SALVAR","btnGreen btnFull")}
               ${btn("backStart","SAIR PARA CAPA","btnDark btnFull")}
             </div>
 
             <div class="note" style="margin-top:12px;">
-              Próxima etapa: módulos completos por cargo + campeonatos (A/B, Copa do Brasil, Estaduais) + treinos influenciando resultados.
+              Próximo passo (Fase 1): adicionar <b>próximo jogo</b> e simulação simples + notícias e agenda semanal.
             </div>
           </div>
 
@@ -388,10 +382,11 @@
 
     document.getElementById("save").onclick = () => { window.Game.saveNow(); alert("Salvo."); };
     document.getElementById("backStart").onclick = () => window.Game.setScreen("cover");
+    document.getElementById("advanceDay").onclick = () => window.Game.advanceDay();
 
     document.getElementById("goSquad").onclick = () => renderModuleSquad(state);
     document.getElementById("goMarket").onclick = () => renderModuleMarket(state);
-    document.getElementById("goCalendar").onclick = () => renderModuleCalendar(state);
+    document.getElementById("goCalendar").onclick = () => renderModuleCalendarReal(state);
     document.getElementById("goTactics").onclick = () => renderModuleTactics(state);
   }
 
@@ -429,7 +424,7 @@
     }).join("");
 
     renderModuleWrap("Elenco", `
-      <div class="note">Nesta fase, o elenco vem do pack (playersByTeamId). Depois ligamos treino/moral/lesões.</div>
+      <div class="note">Nesta fase, o elenco vem do pack (playersByTeamId). Próximo: moral/forma/treino.</div>
       <div class="playerList" style="margin-top:12px;">
         ${rows || `<div class="note">Sem jogadores no pack para este clube (ok nesta fase).</div>`}
       </div>
@@ -437,10 +432,8 @@
   }
 
   function renderModuleMarket(state){
-    const role = state.selection.career.role;
-    const locked = (role === "coach") ? "" : ""; // depois vamos limitar por cargo
     renderModuleWrap("Mercado", `
-      <div class="note">Placeholder funcional (próxima fase: salário x limite de folha + FFP + negociação).</div>
+      <div class="note">Placeholder seguro. Próximo: salário x limite de folha + FFP + negociação.</div>
       <div class="field">
         <div class="label">Posição</div>
         <select class="select"><option>Todos</option><option>GOL</option><option>ZAG</option><option>LAT</option><option>MEI</option><option>ATA</option></select>
@@ -448,19 +441,6 @@
       <div class="field">
         <div class="label">Mín OVR</div>
         <input class="input" type="number" value="70" min="40" max="99" />
-      </div>
-      ${locked}
-    `);
-  }
-
-  function renderModuleCalendar(state){
-    renderModuleWrap("Calendário", `
-      <div class="note">Próxima fase: calendário anual real com Estaduais + Série A/B + Copa do Brasil.</div>
-      <div class="list" style="margin-top:12px;">
-        <div class="list-row"><div class="pill">JAN</div><div class="list-text">Estaduais (início) + pré-temporada</div></div>
-        <div class="list-row"><div class="pill">ABR</div><div class="list-text">Série A/B (rodadas iniciais)</div></div>
-        <div class="list-row"><div class="pill">JUN</div><div class="list-text">Copa do Brasil (fases)</div></div>
-        <div class="list-row"><div class="pill">DEZ</div><div class="list-text">Final da temporada</div></div>
       </div>
     `);
   }
@@ -478,6 +458,61 @@
       </div>
       <div style="height:260px;border-radius:16px;border:3px solid var(--gold);background:#0b6a2a;margin-top:12px;"></div>
     `);
+  }
+
+  function renderModuleCalendarReal(state){
+    // Lista apenas eventos onde o clube participa + blocos (Estaduais/CdB)
+    const events = window.Game.getCalendarEventsForSelectedTeam() || [];
+    const team = window.Game.getSelectedTeam();
+    const clubId = team?.id;
+
+    const currentDate = state.season?.currentDate || "—";
+
+    const rows = events.slice(0, 120).map(ev => {
+      if (ev.type === "block") {
+        return `
+          <div class="playerRow" style="grid-template-columns:1fr;">
+            <div>
+              <div class="pName">${esc(ev.date)} • ${esc(ev.title)}</div>
+              <div class="pMeta">${esc(ev.comp)}</div>
+            </div>
+          </div>
+        `;
+      }
+
+      // pega só jogos do clube
+      const matches = (ev.matches || []).filter(m => m.home === clubId || m.away === clubId);
+      const matchLine = matches.map(m => {
+        const home = m.home;
+        const away = m.away;
+        return `${home} x ${away}`;
+      }).join(" | ");
+
+      return `
+        <div class="playerRow" style="grid-template-columns:1fr;">
+          <div>
+            <div class="pName">${esc(ev.date)} • ${esc(ev.title)}</div>
+            <div class="pMeta">${esc(matchLine || "Rodada sem jogo do seu clube (não deveria aparecer).")}</div>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    renderModuleWrap("Calendário Anual (Real)", `
+      <div class="note">
+        Data atual da carreira: <b>${esc(currentDate)}</b><br/>
+        Mostrando: blocos (Estaduais/CdB) + jogos do seu clube (Série A/B).<br/>
+        Próxima entrega: <b>Próximo Jogo</b> + simulação simples usando overall/treino.
+      </div>
+      <div class="row" style="margin-top:12px;">
+        ${btn("advanceInCalendar","AVANÇAR PARA PRÓXIMA DATA","btnGreen btnFull")}
+      </div>
+      <div class="playerList" style="margin-top:12px;">
+        ${rows || `<div class="note">Sem eventos ainda (verifique teams no pack).</div>`}
+      </div>
+    `);
+
+    document.getElementById("advanceInCalendar").onclick = () => window.Game.advanceDay();
   }
 
   const UI = {
