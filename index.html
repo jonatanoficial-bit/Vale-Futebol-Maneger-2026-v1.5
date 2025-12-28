@@ -31,14 +31,14 @@
             border-radius: 10px;
         }
 
-        .btn-iniciar {
+        .btn-principal {
             background: #d4af37;
             color: black;
             font-weight: bold;
             margin-top: 20px;
         }
 
-        .btn-carregar {
+        .btn-secundario {
             background: #1e90ff;
             color: white;
             font-weight: bold;
@@ -50,6 +50,21 @@
             height: auto;
             border-radius: 10px;
         }
+
+        /* Botão debug discreto */
+        #vf-debug-open {
+            position: fixed;
+            right: 10px;
+            bottom: 10px;
+            z-index: 9999;
+            background: rgba(255,255,255,.08);
+            color: rgba(255,255,255,.85);
+            border: 1px solid rgba(255,255,255,.12);
+            padding: 8px 10px;
+            border-radius: 12px;
+            font-weight: 900;
+            font-size: 12px;
+        }
     </style>
 </head>
 
@@ -59,53 +74,47 @@
          TELA 1 – CAPA (INVIOLÁVEL)
          ========================================= -->
     <div id="tela-capa" class="tela ativa">
-        <button class="btn-carregar" onclick="carregarCarreira()">CARREGAR CARREIRA (JSON)</button>
+        <button class="btn-secundario" onclick="carregarCarreira()">CARREGAR CARREIRA (JSON)</button>
 
         <div style="margin-top: 15px;">
-            <img class="capa" src="assets/capa.png" alt="Capa Vale Futebol Manager 2026">
+            <!-- CAPA CORRETA DO PROJETO ORIGINAL -->
+            <img class="capa" src="assets/geral/capa.png" alt="Capa Vale Futebol Manager 2026">
         </div>
 
-        <button class="btn-iniciar" onclick="iniciarCarreira()">INICIAR CARREIRA</button>
+        <button id="btn-iniciar" class="btn-principal" onclick="iniciarCarreira()">INICIAR CARREIRA</button>
     </div>
 
-    <!-- =========================================
-         TELA LOBBY (se existir no seu UI)
-         ========================================= -->
+    <!-- Lobby -->
     <div id="tela-lobby" class="tela"></div>
 
+    <!-- Botão de debug (não mexe na capa, só ajuda diagnosticar) -->
+    <button id="vf-debug-open" type="button">DEBUG</button>
+
     <!-- ==================================================
-         SCRIPTS – ORDEM CORRETA (AAA)
+         SCRIPTS — ORDEM SEGURA
          ================================================== -->
 
     <!-- ENGINE (base) -->
     <script defer src="engine/database.js"></script>
     <script defer src="engine/save.js"></script>
-
-    <!-- ENGINE (jogo) -->
     <script defer src="engine/tactics.js"></script>
 
-    <!-- Pós-jogo AAA (ratings/forma/moral) -->
+    <!-- ENGINE (AAA adicionados) -->
     <script defer src="engine/post-match.js"></script>
+    <script defer src="engine/season-calendar.js"></script>
 
-    <!-- Match (usa táticas + pós-jogo) -->
+    <!-- ENGINE principal -->
     <script defer src="engine/match.js"></script>
-
-    <!-- Ligas / mercado / calendário -->
     <script defer src="engine/league.js"></script>
     <script defer src="engine/market.js"></script>
     <script defer src="engine/calendar.js"></script>
-
-    <!-- Calendário anual AAA -->
-    <script defer src="engine/season-calendar.js"></script>
-
-    <!-- Copa do Brasil -->
     <script defer src="engine/cup.js"></script>
     <script defer src="engine/cup_integration.js"></script>
 
-    <!-- UI (BOOTSTRAP PRIMEIRO para evitar crash) -->
+    <!-- UI (blindagem primeiro) -->
     <script defer src="Ui/bootstrap-ui.js"></script>
 
-    <!-- UI base -->
+    <!-- UI base do projeto -->
     <script defer src="Ui/ui.js"></script>
     <script defer src="Ui/league-ui.js"></script>
     <script defer src="Ui/market-ui.js"></script>
@@ -118,7 +127,10 @@
     <script defer src="Ui/season-calendar-ui.js"></script>
     <script defer src="Ui/lobby-hub-ui.js"></script>
 
-    <!-- MAIN (por último) -->
+    <!-- Painel de diagnóstico -->
+    <script defer src="Ui/debug-panel-ui.js"></script>
+
+    <!-- MAIN por último -->
     <script defer src="main.js"></script>
 
 </body>
