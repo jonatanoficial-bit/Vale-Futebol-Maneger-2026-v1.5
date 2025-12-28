@@ -1,630 +1,494 @@
-/* =======================================================
-   VALE FUTEBOL MANAGER 2026
-   ui/ui.js — UI principal (telas + lobby + calendário + match)
-   -------------------------------------------------------
-   Regras:
-   - Sem remover fluxos já existentes
-   - Adicionar telas novas sem quebrar as anteriores
-   ======================================================= */
+/* ui/ui.js
+   UI router + screens (safe binds)
+   Regra: nunca quebrar por elemento ausente (null) ao setar onclick
+*/
 
-(function () {
-  const root = document.getElementById("app");
+const $ = (sel) => document.querySelector(sel);
 
-  const uiState = {
-    matchQuality: "MEDIO",
-    lastMatchReport: null
+const $id = (id) => document.getElementById(id);
+const onClick = (id, handler) => {
+  const el = $id(id);
+  if (!el) return;
+  el.onclick = handler;
+};
+
+const $app = () => $id("app");
+
+const btn = (id, text, cls = "btn") =>
+  `<button id="${id}" class="${cls}">${text}</button>`;
+
+const card = (title, body) =>
+  `<div class="card"><div class="card-title">${title}</div><div class="card-body">${body}</div></div>`;
+
+const formatDate = (iso) => {
+  try {
+    const [y, m, d] = iso.split("-").map((x) => parseInt(x, 10));
+    if (!y || !m || !d) return iso;
+    return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  } catch {
+    return iso;
+  }
+};
+
+const setHTML = (html) => {
+  const root = $app();
+  if (!root) return;
+  root.innerHTML = html;
+};
+
+const UI = (() => {
+  let engine = null;
+  let getState = null;
+  let actions = null;
+
+  const screen = {
+    name: "cover",
+    params: {},
   };
 
-  function esc(s) {
-    return String(s ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;");
-  }
+  const setEngine = (eng, stateGetter, actionApi) => {
+    engine = eng;
+    getState = stateGetter;
+    actions = actionApi;
+  };
 
-  function render() {
-    const st = window.Game?.getState?.();
-    if (!st) {
-      root.innerHTML = `<div class="screen"><div class="card">Carregando...</div></div>`;
-      return;
-    }
+  const goto = (name, params = {}) => {
+    screen.name = name;
+    screen.params = params || {};
+    render();
+  };
 
-    switch (st.screen) {
-      case "cover":
-        return renderCover(st);
-      case "pack":
-        return renderPack(st);
-      case "slots":
-        return renderSlots(st);
-      case "career":
-        return renderCareer(st);
-      case "role":
-        return renderRole(st);
-      case "club":
-        return renderClub(st);
-      case "tutorial":
-        return renderTutorial(st);
-      case "lobby":
-        return renderLobby(st);
-      case "calendar":
-        return renderCalendar(st);
-      case "match":
-        return renderMatch(st);
-      case "postMatch":
-        return renderPostMatch(st);
-      default:
-        root.innerHTML = `<div class="screen"><div class="card">Tela desconhecida: ${esc(st.screen)}</div></div>`;
-        return;
-    }
-  }
+  const header = (title, right = "") => `
+    <div class="topbar">
+      <div class="topbar-title">${title || ""}</div>
+      <div class="topbar-right">${right || ""}</div>
+    </div>
+  `;
 
-  // -------------------------
-  // COVER
-  // -------------------------
-  function renderCover(st) {
-    root.innerHTML = `
-      <div class="screen cover">
-        <div class="cover-inner">
-          <div class="card">
-            <h1>Vale Futebol Manager 2026</h1>
-            <p>Capa mantida (não alterar).</p>
-            <button id="btn-start" class="btn primary">INICIAR</button>
+  const sectionTitle = (t) => `<div class="section-title">${t}</div>`;
+
+  // -------- COVER --------
+  const renderCover = () => {
+    const s = getState();
+    const coverUrl = (s?.config?.coverUrl) || (s?.ui?.coverUrl) || (s?.assets?.coverUrl) || "";
+    setHTML(`
+      <div class="screen screen-cover">
+        ${header("Vale Futebol Manager 2026")}
+        <div class="cover-wrap">
+          <div class="cover-box">
+            ${coverUrl ? `<img class="cover-img" src="${coverUrl}" alt="Capa" />` : `<div class="cover-fallback">CAPA</div>`}
+          </div>
+          <div class="cover-actions">
+            ${btn("goPack", "INICIAR", "btn btn-primary")}
           </div>
         </div>
       </div>
-    `;
-    document.getElementById("btn-start").onclick = () => {
-      window.Game.setScreen("pack");
-      render();
-    };
-  }
+    `);
 
-  // -------------------------
-  // PACK
-  // -------------------------
-  function renderPack(st) {
-    const packs = window.Game.listPacks();
-    root.innerHTML = `
+    onClick("goPack", () => goto("pack"));
+  };
+
+  // -------- PACK SELECT --------
+  const renderPack = () => {
+    const s = getState();
+    const packs = s?.packs?.available || [];
+    const current = s?.packs?.selectedId || "";
+
+    const options = packs
+      .map((p) => `<option value="${p.id}" ${p.id === current ? "selected" : ""}>${p.name}</option>`)
+      .join("");
+
+    setHTML(`
       <div class="screen">
-        <div class="card">
-          <h2>Escolha um pacote de dados</h2>
-          <p>Pacotes são DLCs/atualizações sem mexer no código.</p>
-          <div class="list">
-            ${packs
-              .map(
-                p => `
-              <button class="btn" data-pack="${esc(p.id)}">
-                ${esc(p.name)} <span class="muted">(${esc(p.id)})</span>
-              </button>`
-              )
-              .join("")}
-          </div>
-        </div>
-      </div>
-    `;
-
-    root.querySelectorAll("[data-pack]").forEach(btn => {
-      btn.onclick = () => {
-        const id = btn.getAttribute("data-pack");
-        window.Game.selectPack(id);
-        window.Game.setScreen("slots");
-        render();
-      };
-    });
-  }
-
-  // -------------------------
-  // SLOTS
-  // -------------------------
-  function renderSlots(st) {
-    const slots = window.Game.listSlots();
-    root.innerHTML = `
-      <div class="screen">
-        <div class="card">
-          <h2>Slots de Salvamento</h2>
-          <p>Você pode manter duas carreiras.</p>
-
-          <div class="list">
-            ${slots
-              .map(s => {
-                const has = s.hasSave;
-                return `
-                  <div class="slot-row">
-                    <button class="btn ${has ? "primary" : ""}" data-slot="${esc(s.id)}">
-                      Slot ${esc(s.id)} ${has ? "• (carreira existente)" : "• (vazio)"}
-                    </button>
-                    ${
-                      has
-                        ? `<button class="btn" data-load="${esc(s.id)}">CARREGAR</button>`
-                        : `<button class="btn" data-new="${esc(s.id)}">NOVO</button>`
-                    }
-                  </div>
-                `;
-              })
-              .join("")}
-          </div>
-
-          <button id="btn-back" class="btn">Voltar</button>
-        </div>
-      </div>
-    `;
-
-    document.getElementById("btn-back").onclick = () => {
-      window.Game.setScreen("pack");
-      render();
-    };
-
-    root.querySelectorAll("[data-load]").forEach(btn => {
-      btn.onclick = () => {
-        const id = btn.getAttribute("data-load");
-        window.Game.loadSlot(id);
-        window.Game.setScreen("lobby");
-        render();
-      };
-    });
-
-    root.querySelectorAll("[data-new]").forEach(btn => {
-      btn.onclick = () => {
-        const id = btn.getAttribute("data-new");
-        window.Game.selectSlot(id);
-        window.Game.setScreen("career");
-        render();
-      };
-    });
-  }
-
-  // -------------------------
-  // CAREER
-  // -------------------------
-  function renderCareer(st) {
-    root.innerHTML = `
-      <div class="screen">
-        <div class="card">
-          <h2>Criar Carreira</h2>
-
-          <label>Avatar</label>
-          <select id="avatar">
-            ${[0, 1, 2, 3, 4, 5].map(a => `<option value="${a}">Avatar ${a}</option>`).join("")}
-          </select>
-
-          <label>Nome</label>
-          <input id="name" placeholder="Seu nome" value="Jonatan Vale"/>
-
-          <label>País</label>
-          <input id="country" placeholder="País" value="Brasil"/>
-
-          <button id="btn-next" class="btn primary">CONTINUAR</button>
-          <button id="btn-back" class="btn">Voltar</button>
-        </div>
-      </div>
-    `;
-
-    document.getElementById("btn-back").onclick = () => {
-      window.Game.setScreen("slots");
-      render();
-    };
-
-    document.getElementById("btn-next").onclick = () => {
-      window.Game.setTmpCareer({
-        avatarId: Number(document.getElementById("avatar").value),
-        name: document.getElementById("name").value,
-        country: document.getElementById("country").value
-      });
-      window.Game.setScreen("role");
-      render();
-    };
-  }
-
-  // -------------------------
-  // ROLE
-  // -------------------------
-  function renderRole(st) {
-    root.innerHTML = `
-      <div class="screen">
-        <div class="card">
-          <h2>Escolha seu cargo</h2>
-          <button class="btn primary" data-role="TREINADOR">Treinador</button>
-          <button class="btn primary" data-role="DIRETOR">Diretor Esportivo</button>
-          <button class="btn primary" data-role="PRESIDENTE">Presidente</button>
-
-          <button id="btn-back" class="btn">Voltar</button>
-        </div>
-      </div>
-    `;
-
-    document.getElementById("btn-back").onclick = () => {
-      window.Game.setScreen("career");
-      render();
-    };
-
-    root.querySelectorAll("[data-role]").forEach(btn => {
-      btn.onclick = () => {
-        window.Game.setTmpRole(btn.getAttribute("data-role"));
-        window.Game.setScreen("club");
-        render();
-      };
-    });
-  }
-
-  // -------------------------
-  // CLUB
-  // -------------------------
-  function renderClub(st) {
-    const clubs = window.Game.getClubs();
-    root.innerHTML = `
-      <div class="screen">
-        <div class="card">
-          <h2>Escolha um clube</h2>
-          <div class="list">
-            ${clubs
-              .slice(0, 50)
-              .map(
-                c => `
-              <button class="btn" data-club="${esc(c.id)}">
-                ${esc(c.name)}
-              </button>`
-              )
-              .join("")}
-          </div>
-          <button id="btn-back" class="btn">Voltar</button>
-        </div>
-      </div>
-    `;
-
-    document.getElementById("btn-back").onclick = () => {
-      window.Game.setScreen("role");
-      render();
-    };
-
-    root.querySelectorAll("[data-club]").forEach(btn => {
-      btn.onclick = () => {
-        window.Game.finishCareer(btn.getAttribute("data-club"));
-        window.Game.setScreen("tutorial");
-        render();
-      };
-    });
-  }
-
-  // -------------------------
-  // TUTORIAL
-  // -------------------------
-  function renderTutorial(st) {
-    const c = window.Game.getCareer();
-    const club = window.Game.getClubById(c.clubId);
-    root.innerHTML = `
-      <div class="screen">
-        <div class="card">
-          <h2>Bem-vindo ao ${esc(club?.name || "Clube")}</h2>
-          <p>Sou um funcionário do clube. Vou te guiar rapidamente.</p>
-          <ul>
-            <li>Use o Lobby para acessar Elenco, Calendário, Mercado, Táticas etc.</li>
-            <li>O Próximo Jogo abre a Central da Partida.</li>
-          </ul>
-          <button id="btn-ok" class="btn primary">OK</button>
-        </div>
-      </div>
-    `;
-    document.getElementById("btn-ok").onclick = () => {
-      window.Game.setScreen("lobby");
-      render();
-    };
-  }
-
-  // -------------------------
-  // LOBBY
-  // -------------------------
-  function renderLobby(st) {
-    const c = window.Game.getCareer();
-    const club = window.Game.getClubById(c.clubId);
-
-    const next = window.Game.getNextClubMatch();
-    const nextLine = next
-      ? `${esc(next.date)} • ${esc(next.competition)} • Rodada ${esc(next.matchDay)} • ${esc(next.fixture.homeId)} x ${esc(
-          next.fixture.awayId
-        )}`
-      : "Sem próximo jogo.";
-
-    root.innerHTML = `
-      <div class="screen">
-        <div class="card">
+        ${header("Pacote de Dados")}
+        ${card(
+          "Escolha o pacote (DLC)",
+          `
           <div class="row">
-            <div class="club">
-              <h3>Lobby</h3>
-              <div class="muted">${esc(club?.name || "Clube")} • ${esc(c.profile?.name || "")} • ${esc(c.profile?.country || "")}</div>
-            </div>
-            <div class="pill">Slot ${esc(st.selectedSlot || "")} • ${esc(c.role || "")}</div>
+            <label>Pacote:</label>
+            <select id="packSelect">${options}</select>
           </div>
-
-          <div class="card inner">
-            <h3>PRÓXIMO JOGO</h3>
-            <div class="muted">${nextLine}</div>
-            <button id="btn-go-next-match" class="btn primary">IR PARA DATA DO PRÓXIMO JOGO</button>
+          <div class="row muted">
+            O pacote pode ser atualizado sem mexer no código (conteúdo/temporadas/clubes).
           </div>
-
-          <button id="btn-roster" class="btn">ELENCO</button>
-          <button id="btn-calendar" class="btn">CALENDÁRIO (REAL)</button>
-          <button id="btn-market" class="btn">MERCADO</button>
-          <button id="btn-tactics" class="btn">TÁTICAS</button>
-
-          <button id="btn-advance" class="btn">AVANÇAR DATA</button>
-          <button id="btn-save" class="btn primary">SALVAR</button>
-          <button id="btn-exit" class="btn">SAIR PARA CAPA</button>
-
-          <div class="muted" style="margin-top:10px">
-            Próximo passo (Entrega seguinte): Simular Partida e salvar resultado em tabela.
+          <div class="row gap">
+            ${btn("packConfirm", "CONFIRMAR", "btn btn-primary")}
+            ${btn("backCover", "VOLTAR", "btn")}
           </div>
-        </div>
+        `
+        )}
       </div>
-    `;
+    `);
 
-    document.getElementById("btn-go-next-match").onclick = () => {
-      const m = window.Game.openNextMatch();
-      if (!m) return alert("Sem próximo jogo.");
-      window.Game.setScreen("match");
-      render();
-    };
-
-    document.getElementById("btn-calendar").onclick = () => {
-      window.Game.setScreen("calendar");
-      render();
-    };
-
-    document.getElementById("btn-save").onclick = () => {
-      window.Game.save();
-      alert("Salvo.");
-    };
-
-    document.getElementById("btn-exit").onclick = () => {
-      window.Game.setScreen("cover");
-      render();
-    };
-
-    // placeholders (não quebrar)
-    document.getElementById("btn-roster").onclick = () => alert("Elenco: em breve (módulo).");
-    document.getElementById("btn-market").onclick = () => alert("Mercado: em breve (módulo).");
-    document.getElementById("btn-tactics").onclick = () => alert("Táticas: em breve (módulo).");
-
-    document.getElementById("btn-advance").onclick = () => {
-      // Avança para o próximo evento (bloco ou jogo)
-      const moved = window.Game.advanceOneEvent();
-      if (!moved) alert("Sem próximos eventos.");
-      render();
-    };
-  }
-
-  // -------------------------
-  // CALENDAR
-  // -------------------------
-  function renderCalendar(st) {
-    const c = window.Game.getCareer();
-    const events = window.Game.getCalendarEvents();
-
-    const next = window.Game.getNextClubMatch();
-    const nextLine = next
-      ? `${esc(next.date)} • ${esc(next.competition)} • Rodada ${esc(next.matchDay)} • ${esc(next.fixture.homeId)} x ${esc(
-          next.fixture.awayId
-        )}`
-      : "Sem próximo jogo.";
-
-    root.innerHTML = `
-      <div class="screen">
-        <div class="card">
-          <h2>CALENDÁRIO ANUAL (REAL)</h2>
-          <div class="muted">Data atual da carreira: ${esc(c.currentDate)}</div>
-          <div class="muted">Próximo jogo: ${nextLine}</div>
-
-          <button id="btn-advance-next-date" class="btn primary">AVANÇAR PARA PRÓXIMA DATA</button>
-          <button id="btn-go-next-match" class="btn">IR PARA PRÓXIMO JOGO</button>
-
-          <div class="list" style="margin-top:10px">
-            ${events
-              .map(e => {
-                if (e.type === "block") {
-                  return `
-                    <div class="list-item">
-                      <div class="title">${esc(e.date)} • ${esc(e.label)} • ${esc(e.phase)}</div>
-                      <div class="muted">${esc(e.label).toUpperCase()}</div>
-                    </div>
-                  `;
-                }
-                return `
-                  <div class="list-item">
-                    <div class="title">${esc(e.date)} • ${esc(e.competition)} • Rodada ${esc(e.matchDay)} • ${esc(e.homeId)} x ${esc(
-                  e.awayId
-                )}</div>
-                    <div class="muted">${esc(e.competition).toUpperCase()}</div>
-                  </div>
-                `;
-              })
-              .join("")}
-          </div>
-
-          <button id="btn-back" class="btn">Voltar</button>
-        </div>
-      </div>
-    `;
-
-    document.getElementById("btn-back").onclick = () => {
-      window.Game.setScreen("lobby");
-      render();
-    };
-
-    document.getElementById("btn-advance-next-date").onclick = () => {
-      const moved = window.Game.advanceOneEvent();
-      if (!moved) alert("Sem próximos eventos.");
-      render();
-    };
-
-    document.getElementById("btn-go-next-match").onclick = () => {
-      const m = window.Game.openNextMatch();
-      if (!m) return alert("Sem próximo jogo.");
-      window.Game.setScreen("match");
-      render();
-    };
-  }
-
-  // -------------------------
-  // MATCH (Central da Partida)
-  // -------------------------
-  function renderMatch(st) {
-    const m = window.Game.getActiveMatch?.();
-    if (!m) {
-      root.innerHTML = `
-        <div class="screen">
-          <div class="card">
-            <h2>Central da Partida</h2>
-            <p class="muted">Nenhuma partida ativa. Volte e abra o Próximo Jogo.</p>
-            <button id="btn-back" class="btn">Voltar</button>
-          </div>
-        </div>
-      `;
-      document.getElementById("btn-back").onclick = () => {
-        window.Game.setScreen("lobby");
-        render();
-      };
-      return;
-    }
-
-    const e = m.event;
-    const home = e.fixture.homeId;
-    const away = e.fixture.awayId;
-
-    root.innerHTML = `
-      <div class="screen">
-        <div class="card">
-          <h2>FCM TV • AMIGÁVEL / PARTIDA</h2>
-          <div class="muted">${esc(e.date)} • ${esc(e.competition)} • Rodada ${esc(e.matchDay)}</div>
-
-          <div class="match-row">
-            <div class="team">
-              <div class="team-name">${esc(home)}</div>
-            </div>
-
-            <div class="vs">VS</div>
-
-            <div class="team">
-              <div class="team-name">${esc(away)}</div>
-            </div>
-          </div>
-
-          <div style="margin-top:14px">
-            <div class="muted">QUALIDADE</div>
-            <div class="quality-row">
-              <button class="btn ${uiState.matchQuality === "BAIXO" ? "primary" : ""}" data-q="BAIXO">BAIXO</button>
-              <button class="btn ${uiState.matchQuality === "MEDIO" ? "primary" : ""}" data-q="MEDIO">MÉDIO</button>
-              <button class="btn ${uiState.matchQuality === "ALTO" ? "primary" : ""}" data-q="ALTO">ALTO</button>
-            </div>
-          </div>
-
-          <div class="row" style="margin-top:14px">
-            <button id="btn-sim" class="btn primary">SIMULAR JOGO</button>
-            <button id="btn-play" class="btn" disabled>JOGAR (EM BREVE)</button>
-          </div>
-
-          <button id="btn-back" class="btn" style="margin-top:12px">Voltar</button>
-        </div>
-      </div>
-    `;
-
-    root.querySelectorAll("[data-q]").forEach(btn => {
-      btn.onclick = () => {
-        uiState.matchQuality = btn.getAttribute("data-q");
-        render();
-      };
+    onClick("backCover", () => goto("cover"));
+    onClick("packConfirm", () => {
+      const sel = $id("packSelect");
+      const packId = sel ? sel.value : "";
+      if (!packId) return;
+      actions?.packs?.select?.(packId);
+      goto("slots");
     });
+  };
 
-    document.getElementById("btn-back").onclick = () => {
-      window.Game.setScreen("lobby");
-      render();
-    };
+  // -------- SLOTS --------
+  const renderSlots = () => {
+    const s = getState();
+    const slots = s?.career?.slots || [null, null];
 
-    document.getElementById("btn-sim").onclick = () => {
-      try {
-        const report = window.Game.simulateActiveMatch({ quality: uiState.matchQuality });
-        uiState.lastMatchReport = report;
-        window.Game.setScreen("postMatch");
-        render();
-      } catch (err) {
-        console.error(err);
-        alert(String(err?.message || err));
-      }
-    };
-  }
-
-  // -------------------------
-  // POST MATCH
-  // -------------------------
-  function renderPostMatch(st) {
-    const r = uiState.lastMatchReport || window.Game.getCareer()?.lastMatch || null;
-    if (!r) {
-      root.innerHTML = `
-        <div class="screen">
-          <div class="card">
-            <h2>Pós-jogo</h2>
-            <p class="muted">Nenhum relatório encontrado.</p>
-            <button id="btn-back" class="btn">Voltar</button>
+    const slotCard = (idx) => {
+      const data = slots[idx] || null;
+      const title = `Slot ${idx + 1}`;
+      const body = data
+        ? `
+          <div><b>${data.clubName || "Clube"}</b></div>
+          <div class="muted">${data.managerName || "Manager"} • ${data.role || "Treinador"}</div>
+          <div class="row gap">
+            ${btn(`slotPlay_${idx}`, "CONTINUAR", "btn btn-primary")}
+            ${btn(`slotDel_${idx}`, "APAGAR", "btn btn-danger")}
           </div>
-        </div>
-      `;
-      document.getElementById("btn-back").onclick = () => {
-        window.Game.setScreen("lobby");
-        render();
-      };
-      return;
-    }
+        `
+        : `
+          <div class="muted">Vazio</div>
+          <div class="row">
+            ${btn(`slotNew_${idx}`, "NOVA CARREIRA", "btn btn-primary")}
+          </div>
+        `;
 
-    const score = `${r.goalsHome} - ${r.goalsAway}`;
-    const motm = r.motm?.name ? `${r.motm.name} (${r.motm.team || ""})` : "—";
+      return card(title, body);
+    };
 
-    root.innerHTML = `
+    setHTML(`
       <div class="screen">
-        <div class="card">
-          <h2>FULL TIME</h2>
-          <div class="muted">${esc(r.competition)} • ${esc(r.date)}</div>
-
-          <div class="match-row">
-            <div class="team">
-              <div class="team-name">${esc(r.homeName || r.homeId)}</div>
-            </div>
-
-            <div class="vs score">${esc(score)}</div>
-
-            <div class="team">
-              <div class="team-name">${esc(r.awayName || r.awayId)}</div>
-            </div>
-          </div>
-
-          <div class="card inner" style="margin-top:12px">
-            <div><b>Jogador Estrela:</b> ${esc(motm)}</div>
-          </div>
-
-          <div class="card inner" style="margin-top:12px">
-            <h3>Resumo</h3>
-            <div class="muted">
-              ${r.highlights?.length ? esc(r.highlights.slice(0, 6).join(" • ")) : "Sem destaques."}
-            </div>
-          </div>
-
-          <button id="btn-continue" class="btn primary" style="margin-top:14px">CONTINUAR</button>
-          <button id="btn-lobby" class="btn" style="margin-top:10px">VOLTAR AO LOBBY</button>
+        ${header("Salvar / Carreiras")}
+        ${slotCard(0)}
+        ${slotCard(1)}
+        <div class="row gap">
+          ${btn("backPack", "VOLTAR", "btn")}
         </div>
       </div>
-    `;
+    `);
 
-    document.getElementById("btn-continue").onclick = () => {
-      window.Game.setScreen("lobby");
-      render();
-    };
-    document.getElementById("btn-lobby").onclick = () => {
-      window.Game.setScreen("lobby");
-      render();
-    };
-  }
+    onClick("backPack", () => goto("pack"));
 
-  // Expor render para debug
-  window.UIRender = render;
+    onClick("slotNew_0", () => actions?.career?.newCareer?.(0));
+    onClick("slotNew_1", () => actions?.career?.newCareer?.(1));
 
-  // Render inicial
-  render();
+    onClick("slotPlay_0", () => actions?.career?.loadSlot?.(0));
+    onClick("slotPlay_1", () => actions?.career?.loadSlot?.(1));
+
+    onClick("slotDel_0", () => actions?.career?.deleteSlot?.(0));
+    onClick("slotDel_1", () => actions?.career?.deleteSlot?.(1));
+  };
+
+  // -------- CREATE CAREER (AVATAR/NAME/COUNTRY) --------
+  const renderCreateCareer = () => {
+    const s = getState();
+    const slot = s?.ui?.creatingSlot ?? 0;
+
+    const countries = (s?.data?.countries || ["Brasil"]).map((c) => `<option value="${c}">${c}</option>`).join("");
+
+    setHTML(`
+      <div class="screen">
+        ${header("Criar Carreira")}
+        ${card(
+          `Slot ${slot + 1}`,
+          `
+          <div class="row">
+            <label>Nome do Manager</label>
+            <input id="mgrName" placeholder="Seu nome" />
+          </div>
+          <div class="row">
+            <label>País</label>
+            <select id="mgrCountry">${countries}</select>
+          </div>
+          <div class="row muted">
+            Avatar: (fase seguinte) — por enquanto usamos placeholder para manter estável.
+          </div>
+          <div class="row gap">
+            ${btn("toRole", "CONTINUAR", "btn btn-primary")}
+            ${btn("backSlots", "VOLTAR", "btn")}
+          </div>
+        `
+        )}
+      </div>
+    `);
+
+    onClick("backSlots", () => goto("slots"));
+    onClick("toRole", () => {
+      const nameEl = $id("mgrName");
+      const countryEl = $id("mgrCountry");
+      const name = (nameEl ? nameEl.value : "").trim();
+      const country = (countryEl ? countryEl.value : "Brasil").trim();
+      if (!name) return;
+      actions?.career?.setManagerProfile?.({ name, country });
+      goto("role");
+    });
+  };
+
+  // -------- ROLE SELECT --------
+  const renderRole = () => {
+    setHTML(`
+      <div class="screen">
+        ${header("Escolha o Cargo")}
+        ${card(
+          "Cargo na Carreira",
+          `
+          <div class="row gap">
+            ${btn("roleCoach", "TREINADOR", "btn btn-primary")}
+            ${btn("roleDoF", "DIRETOR ESPORTIVO", "btn btn-primary")}
+            ${btn("rolePresident", "PRESIDENTE", "btn btn-primary")}
+          </div>
+          <div class="row muted">
+            Cada cargo terá funções diferentes (contratações, staff, finanças, infraestrutura etc).
+          </div>
+          <div class="row gap">
+            ${btn("backCreate", "VOLTAR", "btn")}
+          </div>
+        `
+        )}
+      </div>
+    `);
+
+    onClick("backCreate", () => goto("createCareer"));
+    onClick("roleCoach", () => { actions?.career?.setRole?.("Treinador"); goto("club"); });
+    onClick("roleDoF", () => { actions?.career?.setRole?.("Diretor Esportivo"); goto("club"); });
+    onClick("rolePresident", () => { actions?.career?.setRole?.("Presidente"); goto("club"); });
+  };
+
+  // -------- CLUB SELECT --------
+  const renderClub = () => {
+    const s = getState();
+    const clubs = s?.data?.clubs || [];
+    const options = clubs.map((c) => `<option value="${c.id}">${c.name}</option>`).join("");
+
+    setHTML(`
+      <div class="screen">
+        ${header("Escolha o Clube")}
+        ${card(
+          "Clubes disponíveis",
+          `
+          <div class="row">
+            <label>Clube</label>
+            <select id="clubSelect">${options}</select>
+          </div>
+          <div class="row gap">
+            ${btn("clubConfirm", "CONFIRMAR", "btn btn-primary")}
+            ${btn("backRole", "VOLTAR", "btn")}
+          </div>
+        `
+        )}
+      </div>
+    `);
+
+    onClick("backRole", () => goto("role"));
+    onClick("clubConfirm", () => {
+      const sel = $id("clubSelect");
+      const clubId = sel ? sel.value : "";
+      if (!clubId) return;
+      actions?.career?.setClub?.(clubId);
+      goto("welcome");
+    });
+  };
+
+  // -------- WELCOME / TUTORIAL --------
+  const renderWelcome = () => {
+    const s = getState();
+    const clubName = s?.career?.clubName || "Clube";
+    const role = s?.career?.role || "Treinador";
+    setHTML(`
+      <div class="screen">
+        ${header("Bem-vindo")}
+        ${card(
+          clubName,
+          `
+          <div class="row">
+            <div>Olá! Seja bem-vindo ao ${clubName}.</div>
+            <div class="muted">Cargo: <b>${role}</b></div>
+          </div>
+          <div class="row muted">
+            Este é um tutorial curto. Você poderá gerenciar o clube no Lobby.
+          </div>
+          <div class="row">
+            ${btn("toLobby", "IR PARA O LOBBY", "btn btn-primary")}
+          </div>
+        `
+        )}
+      </div>
+    `);
+
+    onClick("toLobby", () => {
+      actions?.career?.finalizeCreation?.();
+      goto("lobby");
+    });
+  };
+
+  // -------- LOBBY --------
+  const renderLobby = () => {
+    const s = getState();
+    const clubName = s?.career?.clubName || "Clube";
+    const manager = s?.career?.managerName || "Manager";
+    const country = s?.career?.managerCountry || "Brasil";
+    const role = s?.career?.role || "Treinador";
+    const slot = (s?.career?.activeSlot ?? 0) + 1;
+
+    const next = s?.calendar?.nextMatch || null;
+    const nextText = next
+      ? `${formatDate(next.date)} • ${next.competition} • ${next.roundLabel} • ${next.homeShort} x ${next.awayShort}`
+      : "Sem próximo jogo (ainda)";
+
+    setHTML(`
+      <div class="screen">
+        ${header("Lobby", `<span class="pill">Slot ${slot} • ${role}</span>`)}
+        ${card(
+          clubName,
+          `
+          <div class="muted">${manager} • ${country}</div>
+        `
+        )}
+
+        ${card(
+          "PRÓXIMO JOGO",
+          `
+          <div class="muted">${nextText}</div>
+          <div class="row">
+            ${btn("goNextMatchDate", "IR PARA DATA DO PRÓXIMO JOGO", "btn btn-primary")}
+          </div>
+        `
+        )}
+
+        <div class="stack">
+          ${btn("goSquad", "ELENCO", "btn btn-primary")}
+          ${btn("goCalendar", "CALENDÁRIO (REAL)", "btn btn-primary")}
+          ${btn("goMarket", "MERCADO", "btn btn-primary")}
+          ${btn("goTactics", "TÁTICAS", "btn btn-gold")}
+          ${btn("goAdvance", "AVANÇAR DATA", "btn")}
+          ${btn("goSave", "SALVAR", "btn btn-primary")}
+          ${btn("exitToCover", "SAIR PARA CAPA", "btn")}
+        </div>
+
+        <div class="muted footer-note">
+          Próximo passo (Entrega seguinte): Simular Partida e salvar resultado em tabela.
+        </div>
+      </div>
+    `);
+
+    onClick("goSquad", () => goto("squad"));
+    onClick("goCalendar", () => goto("calendar"));
+    onClick("goMarket", () => goto("market"));
+    onClick("goTactics", () => goto("tactics"));
+    onClick("goAdvance", () => actions?.calendar?.advanceDay?.());
+    onClick("goSave", () => actions?.career?.saveNow?.());
+    onClick("exitToCover", () => goto("cover"));
+
+    onClick("goNextMatchDate", () => actions?.calendar?.jumpToNextMatchDate?.());
+  };
+
+  // -------- CALENDAR --------
+  const renderCalendar = () => {
+    const s = getState();
+    const cur = s?.calendar?.currentDate || "2026-01-01";
+    const next = s?.calendar?.nextMatch || null;
+
+    const nextText = next
+      ? `${formatDate(next.date)} • ${next.competition} • ${next.roundLabel} • ${next.homeShort} x ${next.awayShort}`
+      : "—";
+
+    const blocks = s?.calendar?.blocks || [];
+    const items = blocks
+      .map(
+        (b) => `
+        <div class="list-item">
+          <div class="list-title">${formatDate(b.date)} • ${b.competition} • ${b.phase}</div>
+          <div class="list-sub">${b.label || b.competition}</div>
+        </div>`
+      )
+      .join("");
+
+    setHTML(`
+      <div class="screen">
+        ${header("CALENDÁRIO ANUAL (REAL)")}
+        <div class="muted">Data atual da carreira: <b>${formatDate(cur)}</b></div>
+        <div class="muted">Próximo jogo: <b>${nextText}</b></div>
+
+        <div class="row gap">
+          ${btn("advanceInCalendar", "AVANÇAR PARA PRÓXIMA DATA", "btn btn-primary")}
+          ${btn("jumpInCalendar", "IR PARA PRÓXIMO JOGO", "btn")}
+        </div>
+
+        ${sectionTitle("Eventos")}
+        <div class="list">
+          ${items || `<div class="muted">Sem eventos.</div>`}
+        </div>
+
+        <div class="row gap">
+          ${btn("backLobby", "VOLTAR", "btn")}
+        </div>
+      </div>
+    `);
+
+    onClick("backLobby", () => goto("lobby"));
+    onClick("advanceInCalendar", () => actions?.calendar?.advanceDay?.());
+    onClick("jumpInCalendar", () => actions?.calendar?.jumpToNextMatch?.());
+  };
+
+  // -------- PLACEHOLDER SCREENS --------
+  const renderPlaceholder = (title) => {
+    setHTML(`
+      <div class="screen">
+        ${header(title)}
+        ${card(
+          title,
+          `<div class="muted">Tela em construção nesta fase. (Mantida para estabilidade)</div>
+           <div class="row">${btn("backLobby", "VOLTAR", "btn")}</div>`
+        )}
+      </div>
+    `);
+    onClick("backLobby", () => goto("lobby"));
+  };
+
+  const render = () => {
+    const s = getState?.();
+    // roteamento básico
+    switch (screen.name) {
+      case "cover":
+        return renderCover();
+      case "pack":
+        return renderPack();
+      case "slots":
+        return renderSlots();
+      case "createCareer":
+        return renderCreateCareer();
+      case "role":
+        return renderRole();
+      case "club":
+        return renderClub();
+      case "welcome":
+        return renderWelcome();
+      case "lobby":
+        return renderLobby();
+      case "calendar":
+        return renderCalendar();
+      case "squad":
+        return renderPlaceholder("Elenco");
+      case "market":
+        return renderPlaceholder("Mercado");
+      case "tactics":
+        return renderPlaceholder("Táticas");
+      default:
+        return renderCover();
+    }
+  };
+
+  const boot = () => {
+    // tenta ir para lobby se já houver carreira carregada
+    const s = getState?.();
+    const hasCareer = !!s?.career?.isActive;
+    if (hasCareer) goto("lobby");
+    else goto("cover");
+  };
+
+  return { setEngine, goto, render, boot };
 })();
+
+// Export global (compatível com scripts antigos)
+window.UI = UI;
