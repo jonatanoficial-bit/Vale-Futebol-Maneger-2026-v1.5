@@ -320,7 +320,8 @@
             <div class="note">
               Olá, <b>${esc(state.selection.career.name)}</b>!<br/>
               Você assumirá como <b>${esc(roleName)}</b> do <b>${esc(team?.name || "Clube")}</b>.<br/><br/>
-              ✅ Nesta fase, você já tem um <b>calendário anual real</b> com rodadas da Série A/B e blocos de CdB/Estaduais.
+              ✅ Nesta fase, você já tem um <b>calendário anual</b> com rodadas da Série A/B e blocos de CdB/Estaduais.<br/>
+              ✅ Agora também mostramos o <b>Próximo Jogo</b> automaticamente (mesmo que seja em Abril).
             </div>
 
             <div class="row" style="margin-top:14px;">
@@ -343,6 +344,11 @@
       role === "director" ? "Diretor Esportivo" :
       role === "president" ? "Presidente" : "—";
 
+    const next = window.Game.getNextClubMatch();
+    const nextText = next
+      ? `${next.event.date} • ${next.event.title} • ${next.match.home} x ${next.match.away}`
+      : "Ainda não há jogo gerado para o seu clube (verifique os times no pack).";
+
     setHTML(`
       <div class="screen">
         <div class="max">
@@ -360,7 +366,15 @@
               </div>
             </div>
 
-            <div class="menu">
+            <div class="panel" style="margin-top:12px;">
+              <div class="title">Próximo Jogo</div>
+              <div class="note">${esc(nextText)}</div>
+              <div class="row" style="margin-top:12px;">
+                ${btn("jumpNextMatch","IR PARA DATA DO PRÓXIMO JOGO","btnGreen btnFull")}
+              </div>
+            </div>
+
+            <div class="menu" style="margin-top:12px;">
               ${btn("goSquad","ELENCO","btnBlue btnFull")}
               ${btn("goCalendar","CALENDÁRIO (REAL)","btnGreen btnFull")}
               ${btn("goMarket","MERCADO","btnBlue btnFull")}
@@ -371,7 +385,7 @@
             </div>
 
             <div class="note" style="margin-top:12px;">
-              Próximo passo (Fase 1): adicionar <b>próximo jogo</b> e simulação simples + notícias e agenda semanal.
+              Próximo passo (Entrega seguinte): <b>Simular Partida</b> e salvar resultado em tabela.
             </div>
           </div>
 
@@ -383,6 +397,7 @@
     document.getElementById("save").onclick = () => { window.Game.saveNow(); alert("Salvo."); };
     document.getElementById("backStart").onclick = () => window.Game.setScreen("cover");
     document.getElementById("advanceDay").onclick = () => window.Game.advanceDay();
+    document.getElementById("jumpNextMatch").onclick = () => window.Game.advanceToNextClubMatch();
 
     document.getElementById("goSquad").onclick = () => renderModuleSquad(state);
     document.getElementById("goMarket").onclick = () => renderModuleMarket(state);
@@ -433,7 +448,7 @@
 
   function renderModuleMarket(state){
     renderModuleWrap("Mercado", `
-      <div class="note">Placeholder seguro. Próximo: salário x limite de folha + FFP + negociação.</div>
+      <div class="note">Placeholder seguro. Próximo: salário x limite de folha + negociação.</div>
       <div class="field">
         <div class="label">Posição</div>
         <select class="select"><option>Todos</option><option>GOL</option><option>ZAG</option><option>LAT</option><option>MEI</option><option>ATA</option></select>
@@ -461,14 +476,18 @@
   }
 
   function renderModuleCalendarReal(state){
-    // Lista apenas eventos onde o clube participa + blocos (Estaduais/CdB)
     const events = window.Game.getCalendarEventsForSelectedTeam() || [];
     const team = window.Game.getSelectedTeam();
     const clubId = team?.id;
 
     const currentDate = state.season?.currentDate || "—";
+    const next = window.Game.getNextClubMatch();
 
-    const rows = events.slice(0, 120).map(ev => {
+    const nextLine = next
+      ? `${next.event.date} • ${next.event.title} • ${next.match.home} x ${next.match.away}`
+      : "Nenhum jogo encontrado para o seu clube.";
+
+    const rows = events.slice(0, 160).map(ev => {
       if (ev.type === "block") {
         return `
           <div class="playerRow" style="grid-template-columns:1fr;">
@@ -480,19 +499,14 @@
         `;
       }
 
-      // pega só jogos do clube
       const matches = (ev.matches || []).filter(m => m.home === clubId || m.away === clubId);
-      const matchLine = matches.map(m => {
-        const home = m.home;
-        const away = m.away;
-        return `${home} x ${away}`;
-      }).join(" | ");
+      const matchLine = matches.map(m => `${m.home} x ${m.away}`).join(" | ");
 
       return `
         <div class="playerRow" style="grid-template-columns:1fr;">
           <div>
             <div class="pName">${esc(ev.date)} • ${esc(ev.title)}</div>
-            <div class="pMeta">${esc(matchLine || "Rodada sem jogo do seu clube (não deveria aparecer).")}</div>
+            <div class="pMeta">${esc(matchLine || "—")}</div>
           </div>
         </div>
       `;
@@ -501,18 +515,21 @@
     renderModuleWrap("Calendário Anual (Real)", `
       <div class="note">
         Data atual da carreira: <b>${esc(currentDate)}</b><br/>
-        Mostrando: blocos (Estaduais/CdB) + jogos do seu clube (Série A/B).<br/>
-        Próxima entrega: <b>Próximo Jogo</b> + simulação simples usando overall/treino.
+        <b>Próximo jogo:</b> ${esc(nextLine)}
       </div>
+
       <div class="row" style="margin-top:12px;">
         ${btn("advanceInCalendar","AVANÇAR PARA PRÓXIMA DATA","btnGreen btnFull")}
+        ${btn("jumpInCalendar","IR PARA PRÓXIMO JOGO","btnBlue btnFull")}
       </div>
+
       <div class="playerList" style="margin-top:12px;">
         ${rows || `<div class="note">Sem eventos ainda (verifique teams no pack).</div>`}
       </div>
     `);
 
     document.getElementById("advanceInCalendar").onclick = () => window.Game.advanceDay();
+    document.getElementById("jumpInCalendar").onclick = () => window.Game.advanceToNextClubMatch();
   }
 
   const UI = {
