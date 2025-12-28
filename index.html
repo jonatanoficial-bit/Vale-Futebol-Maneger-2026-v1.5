@@ -1,26 +1,28 @@
 <!doctype html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vale Futebol Manager 2026</title>
-    <link rel="stylesheet" href="style.css" />
-    <link rel="stylesheet" href="match-center.css" />
-    <link rel="stylesheet" href="post-match.css" />
-  </head>
-  <body>
-    <div id="app"></div>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Vale Futebol Manager 2026</title>
 
-    <!-- Engine base -->
-    <script type="module" src="engine/index.js"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
 
-    <!-- Match Engine (precisa estar disponível no window.MatchEngine) -->
-    <script src="engine/match.js"></script>
+  <!-- APP ROOT (OBRIGATÓRIO) -->
+  <div id="app"></div>
 
-    <!-- UI -->
-    <script src="ui/ui.js"></script>
+  <!-- DEBUG (OPCIONAL). Se não quiser ver, pode esconder no CSS, mas NÃO precisa apagar -->
+  <button id="btnDebug" class="debug-fab" type="button">DEBUG</button>
 
-    <!-- Main -->
-    <script type="module" src="main.js"></script>
-  </body>
+  <!-- Ordem dos scripts é CRÍTICA -->
+  <script src="engine/datapacks.js" defer></script>
+  <script src="engine/saveslots.js" defer></script>
+  <script src="engine/calendar.js" defer></script>
+
+  <script src="game.js" defer></script>
+  <script src="ui/ui.js" defer></script>
+  <script src="main.js" defer></script>
+
+</body>
 </html>
