@@ -1,32 +1,26 @@
 <!doctype html>
 <html lang="pt-BR">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
-  <title>Vale Futebol Manager 2026</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vale Futebol Manager 2026</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="match-center.css" />
+    <link rel="stylesheet" href="post-match.css" />
+  </head>
+  <body>
+    <div id="app"></div>
 
-  <link rel="stylesheet" href="./style.css" />
-  <link rel="stylesheet" href="./aaa.css" />
-</head>
+    <!-- Engine base -->
+    <script type="module" src="engine/index.js"></script>
 
-<body>
-  <div id="app"></div>
+    <!-- Match Engine (precisa estar disponível no window.MatchEngine) -->
+    <script src="engine/match.js"></script>
 
-  <button id="btnDebug" class="debug-btn" type="button">DEBUG</button>
+    <!-- UI -->
+    <script src="ui/ui.js"></script>
 
-  <script src="./engine/storage.js" defer></script>
-  <script src="./engine/datapacks.js" defer></script>
-  <script src="./engine/saveSlots.js" defer></script>
-
-  <!-- NOVO: gerador de temporada (calendário) -->
-  <script src="./engine/season.js" defer></script>
-
-  <script src="./engine/gameCore.js" defer></script>
-
-  <script src="./ui/ui.js" defer></script>
-  <script src="./main.js" defer></script>
-</body>
+    <!-- Main -->
+    <script type="module" src="main.js"></script>
+  </body>
 </html>
