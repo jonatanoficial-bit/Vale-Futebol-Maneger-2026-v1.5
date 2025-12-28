@@ -8,58 +8,21 @@
   <meta http-equiv="Expires" content="0" />
   <title>Vale Futebol Manager 2026</title>
 
-  <link rel="stylesheet" href="./style.css?v=1" />
-  <link rel="stylesheet" href="./aaa.css?v=1" />
-  <link rel="stylesheet" href="./match-center.css?v=1" />
-  <link rel="stylesheet" href="./post-match.css?v=1" />
+  <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="./aaa.css" />
 </head>
 
 <body>
   <div id="app"></div>
 
-  <!-- Engine / Data -->
-  <script src="./engine/database.js?v=1"></script>
-  <script src="./engine/finances.js?v=1"></script>
-  <script src="./game.js?v=1"></script>
+  <button id="btnDebug" class="debug-btn" type="button">DEBUG</button>
 
-  <!-- UI bootstrap robusto: tenta ui/ e Ui/ -->
-  <script>
-    (function () {
-      const bust = Date.now();
-      const candidates = [
-        "./ui/bootstrap-ui.js?v=" + bust,
-        "./Ui/bootstrap-ui.js?v=" + bust
-      ];
+  <script src="./engine/storage.js" defer></script>
+  <script src="./engine/datapacks.js" defer></script>
+  <script src="./engine/saveSlots.js" defer></script>
+  <script src="./engine/gameCore.js" defer></script>
 
-      function load(src) {
-        return new Promise((resolve, reject) => {
-          const s = document.createElement("script");
-          s.src = src;
-          s.onload = () => resolve(src);
-          s.onerror = () => reject(new Error("Falhou: " + src));
-          document.head.appendChild(s);
-        });
-      }
-
-      (async () => {
-        let ok = null;
-        for (const src of candidates) {
-          try { ok = await load(src); break; } catch (e) {}
-        }
-
-        if (!ok) {
-          alert(
-            "Não consegui carregar o bootstrap da UI.\n\n" +
-            "Tentativas:\n- " + candidates.join("\n- ") + "\n\n" +
-            "Verifique se existe /ui/bootstrap-ui.js ou /Ui/bootstrap-ui.js"
-          );
-          return;
-        }
-
-        // Quando o bootstrap terminar, ele chama window.__startApp()
-        if (typeof window.__startApp === "function") window.__startApp();
-      })();
-    })();
-  </script>
+  <script src="./ui/ui.js" defer></script>
+  <script src="./main.js" defer></script>
 </body>
 </html>
