@@ -38,12 +38,34 @@
   });
 
   function todayKeyDefault(year) {
-    // Começa em 2026-01-01 por padrão (pode ajustar depois)
     return `${year}-01-01`;
   }
 
   function safeString(x) {
     return String(x ?? "");
+  }
+
+  function uniqSortedDatesFromCalendar(cal) {
+    const dates = [];
+    const seen = {};
+    if (!cal || !Array.isArray(cal.events)) return dates;
+
+    for (const ev of cal.events) {
+      if (!ev?.date) continue;
+      if (!seen[ev.date]) {
+        seen[ev.date] = true;
+        dates.push(ev.date);
+      }
+    }
+    dates.sort();
+    return dates;
+  }
+
+  function isClubInEvent(ev, clubId) {
+    if (!ev || !clubId) return false;
+    if (ev.type !== "matchday") return false;
+    const matches = Array.isArray(ev.matches) ? ev.matches : [];
+    return matches.some(m => m.home === clubId || m.away === clubId);
   }
 
   const Game = {
@@ -96,7 +118,7 @@
         };
         this.state.selection.career = slot.career;
 
-        // tenta carregar season se existir no save (compatível: pode não existir)
+        // tenta carregar season se existir no save (compatível)
         if (slot.season && typeof slot.season === "object") {
           this.state.season = {
             ...this.state.season,
@@ -110,7 +132,6 @@
           .then(({ data }) => {
             this.state.data.teams = data.teams || [];
             this.state.data.playersByTeamId = data.playersByTeamId || {};
-            // garante temporada se não existir (safe)
             this.ensureSeasonReady();
             this.setScreen("lobby");
           })
@@ -144,10 +165,7 @@
     },
 
     finishTutorial() {
-      // cria a temporada na primeira entrada (Fase 1)
       this.ensureSeasonReady();
-
-      // salva imediatamente
       this.saveNow();
       this.setScreen("lobby");
     },
@@ -185,28 +203,54 @@
       if (!cal || !Array.isArray(cal.events) || cal.events.length === 0) return;
 
       const current = this.state.season.currentDate || todayKeyDefault(this.state.season.year || 2026);
+      const dates = uniqSortedDatesFromCalendar(cal);
+      if (dates.length === 0) return;
 
-      // Pega todas as datas únicas do calendário
-      const dates = [];
-      const seen = {};
-      for (const ev of cal.events) {
-        if (!seen[ev.date]) {
-          seen[ev.date] = true;
-          dates.push(ev.date);
-        }
-      }
-      dates.sort();
-
-      // encontra a próxima >= current; se current é anterior ao primeiro, pula pro primeiro
       let idx = dates.findIndex(d => d >= current);
       if (idx === -1) idx = dates.length - 1;
 
-      // Avança um passo (ou fica no último)
       const nextIdx = Math.min(idx + 1, dates.length - 1);
       this.state.season.currentDate = dates[nextIdx];
 
       this.saveNow();
       window.UI.render(this.state);
+    },
+
+    advanceToNextClubMatch() {
+      // Pula diretamente para a data do próximo jogo real do clube
+      this.ensureSeasonReady();
+      const cal = this.state.season.calendar;
+      const clubId = this.state.selection.career.clubId;
+      if (!cal || !Array.isArray(cal.events) || !clubId) return;
+
+      const current = this.state.season.currentDate || todayKeyDefault(this.state.season.year || 2026);
+
+      // Procura o próximo evento matchday onde o clube participa e a data é >= current
+      let candidate = null;
+      for (const ev of cal.events) {
+        if (!ev?.date) continue;
+        if (ev.date < current) continue;
+        if (isClubInEvent(ev, clubId)) {
+          candidate = ev;
+          break;
+        }
+      }
+
+      // Se não achou (ex.: current depois do fim), tenta do começo
+      if (!candidate) {
+        for (const ev of cal.events) {
+          if (isClubInEvent(ev, clubId)) {
+            candidate = ev;
+            break;
+          }
+        }
+      }
+
+      if (candidate) {
+        this.state.season.currentDate = candidate.date;
+        this.saveNow();
+        window.UI.render(this.state);
+      }
     },
 
     saveNow() {
@@ -218,7 +262,6 @@
         packName: s.pack?.name || null,
         packVersion: s.pack?.version || null,
         career: s.career,
-        // novo campo: season (compatível: saves antigos não têm)
         season: this.state.season
       });
     },
@@ -245,18 +288,51 @@
       const clubId = this.state.selection.career.clubId;
       if (!clubId) return [];
 
-      // Filtra eventos que tenham jogo do clube OU blocos
       const out = [];
       for (const ev of cal.events) {
         if (ev.type === "block") {
           out.push(ev);
           continue;
         }
-        const matches = Array.isArray(ev.matches) ? ev.matches : [];
-        const hasTeam = matches.some(m => m.home === clubId || m.away === clubId);
-        if (hasTeam) out.push(ev);
+        if (isClubInEvent(ev, clubId)) out.push(ev);
       }
       return out;
+    },
+
+    getNextClubMatch() {
+      // Retorna { event, match } ou null
+      this.ensureSeasonReady();
+      const cal = this.state.season.calendar;
+      const clubId = this.state.selection.career.clubId;
+      if (!cal || !Array.isArray(cal.events) || !clubId) return null;
+
+      const current = this.state.season.currentDate || todayKeyDefault(this.state.season.year || 2026);
+
+      // Busca próximo matchday com jogo do clube a partir da data atual
+      let event = null;
+      for (const ev of cal.events) {
+        if (!ev?.date) continue;
+        if (ev.date < current) continue;
+        if (isClubInEvent(ev, clubId)) {
+          event = ev;
+          break;
+        }
+      }
+      // fallback: se não achou, pega o primeiro do ano
+      if (!event) {
+        for (const ev of cal.events) {
+          if (isClubInEvent(ev, clubId)) {
+            event = ev;
+            break;
+          }
+        }
+      }
+      if (!event) return null;
+
+      const match = (event.matches || []).find(m => m.home === clubId || m.away === clubId) || null;
+      if (!match) return null;
+
+      return { event, match };
     }
   };
 
