@@ -1,60 +1,82 @@
-// main.js
-(() => {
+/* main.js — Bootstrap seguro do VFM26 (NUNCA pode quebrar o boot por DOM null) */
+(function () {
   "use strict";
 
-  function $(id){ return document.getElementById(id); }
+  const byId = (id) => document.getElementById(id);
 
-  function fatal(msg){
-    alert(msg);
-    console.error(msg);
+  function renderFatal(message, error) {
+    console.error("[FATAL]", message, error || "");
+    const app = byId("app");
+    if (app) {
+      app.innerHTML = `
+        <div style="
+          min-height: 100vh; display:flex; align-items:center; justify-content:center;
+          background:#0b0f14; color:#e8eef7; padding:24px; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+        ">
+          <div style="max-width:720px; width:100%; border:1px solid rgba(255,255,255,.12);
+            border-radius:16px; padding:20px; background:rgba(255,255,255,.06)">
+            <div style="font-size:18px; font-weight:800; margin-bottom:10px;">Erro crítico</div>
+            <div style="opacity:.9; line-height:1.4;">
+              ${message}
+            </div>
+            <div style="margin-top:14px; opacity:.75; font-size:12px;">
+              Dica: verifique se <b>index.html</b> está carregando <b>./engine/*</b>, <b>./ui/ui.js</b> e <b>./main.js</b>.
+            </div>
+          </div>
+        </div>
+      `;
+    } else {
+      alert(message);
+    }
   }
 
-  function safeBindClick(id, fn){
-    const el = $(id);
-    if (!el) {
-      console.warn(`[UI] Elemento não encontrado: #${id}`);
+  function safeBindDebugButton() {
+    const btn = byId("btnDebug");
+    if (!btn) {
+      // NÃO PODE quebrar o boot por causa disso
+      console.warn("[BOOT] btnDebug não encontrado. Prosseguindo sem DEBUG.");
       return;
     }
-    el.onclick = fn;
+    btn.onclick = () => {
+      try {
+        if (window.UI && typeof window.UI.toggleDebug === "function") {
+          window.UI.toggleDebug();
+        } else {
+          alert("DEBUG: UI.toggleDebug() não está disponível.");
+        }
+      } catch (e) {
+        console.error("[DEBUG] Erro ao alternar debug:", e);
+        alert("Erro no DEBUG. Veja o console.");
+      }
+    };
   }
 
-  window.addEventListener("error", (ev) => {
-    console.error("[window.error]", ev?.message || ev);
-  });
+  function boot() {
+    // 1) Bind seguro de debug (não pode derrubar o jogo)
+    safeBindDebugButton();
 
-  window.addEventListener("unhandledrejection", (ev) => {
-    console.error("[unhandledrejection]", ev?.reason || ev);
-  });
-
-  window.addEventListener("DOMContentLoaded", () => {
-    // 1) Valida base do HTML
-    const app = $("app");
-    if (!app) {
-      fatal("Erro crítico: #app não existe no index.html (UI não pode iniciar).");
+    // 2) Verificações mínimas (sem throw)
+    if (!window.UI || !window.Game) {
+      renderFatal("Game ou UI não carregaram.", null);
+      return;
+    }
+    if (typeof window.Game.boot !== "function") {
+      renderFatal("window.Game.boot não existe (GameCore não carregou corretamente).", null);
       return;
     }
 
-    // 2) Valida Game/UI
-    if (!window.Game || !window.UI) {
-      fatal("Erro crítico: Game ou UI não carregaram.");
-      return;
+    // 3) Boot oficial
+    try {
+      window.Game.boot({ mountId: "app" });
+    } catch (e) {
+      renderFatal("Falha ao iniciar o jogo (exceção no boot).", e);
     }
+  }
 
-    // 3) Inicializa
-    try{
-      window.Game.init();
-
-      // Debug é opcional: se não existir, NÃO quebra o jogo
-      safeBindClick("btnDebug", () => {
-        const st = window.Game.getState?.();
-        console.log("[DEBUG] state:", st);
-        alert("DEBUG no console (F12).");
-      });
-
-    }catch(e){
-      console.error(e);
-      fatal("Erro crítico ao iniciar: " + (e?.message || e));
-    }
-  });
-
+  // Garantia de DOM pronto (mais seguro no mobile)
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot, { once: true });
+  } else {
+    boot();
+  }
 })();
