@@ -5,113 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vale Futebol Manager 2026</title>
 
+    <!-- Fonte EA Sports Style -->
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700;900&display=swap" rel="stylesheet">
+
+    <!-- CSS -->
     <link rel="stylesheet" href="style.css">
-
-    <script>
-      (function () {
-        if (!window.TeamUi) window.TeamUi = {};
-        if (!window.TeamUI) window.TeamUI = window.TeamUi;
-        if (typeof window.__TEAM_UI_REAL__ === "undefined") window.__TEAM_UI_REAL__ = false;
-
-        function fallbackSelection() {
-          alert(
-            "A seleção de time ainda não carregou.\n\n" +
-            "Clique em DEBUG para ver o relatório."
-          );
-        }
-
-        if (typeof window.TeamUi.renderTeamSelection !== "function") {
-          window.TeamUi.renderTeamSelection = fallbackSelection;
-        }
-        window.TeamUI.renderTeamSelection = window.TeamUi.renderTeamSelection;
-
-        function loadScript(url) {
-          return new Promise((resolve, reject) => {
-            const s = document.createElement("script");
-            const sep = url.includes("?") ? "&" : "?";
-            s.src = url + sep + "v=" + Date.now();
-            s.async = true;
-            s.onload = () => resolve(url);
-            s.onerror = () => reject(new Error("Falha ao carregar: " + url));
-            document.head.appendChild(s);
-          });
-        }
-
-        async function ensureTeamUIRealLoaded() {
-          if (window.__TEAM_UI_REAL__ === true) return { ok: true, loadedFrom: "already-loaded" };
-          const candidates = ["Ui/team-ui.js", "ui/team-ui.js", "UI/team-ui.js"];
-          const tried = [];
-          for (const c of candidates) {
-            tried.push(c);
-            try {
-              await loadScript(c);
-              if (window.__TEAM_UI_REAL__ === true && typeof window.TeamUi.renderTeamSelection === "function") {
-                return { ok: true, loadedFrom: c, tried };
-              }
-            } catch (e) {}
-          }
-          return { ok: false, tried };
-        }
-
-        window.__ensureTeamUIRealLoaded = ensureTeamUIRealLoaded;
-
-        document.addEventListener("DOMContentLoaded", () => {
-          const btn = document.getElementById("btn-iniciar");
-          if (btn && !btn.__vfBound) {
-            btn.__vfBound = true;
-            btn.addEventListener("click", async () => {
-              const res = await ensureTeamUIRealLoaded();
-              if (!res.ok) {
-                alert(
-                  "Não consegui carregar o Team UI real.\n\n" +
-                  "Tentativas:\n- " + res.tried.join("\n- ")
-                );
-                return;
-              }
-              try {
-                if (window.TeamUi && typeof TeamUi.renderTeamSelection === "function") TeamUi.renderTeamSelection();
-                else if (window.TeamUI && typeof TeamUI.renderTeamSelection === "function") TeamUI.renderTeamSelection();
-                else alert("Team UI carregou mas não registrou renderTeamSelection.");
-              } catch (e) {
-                alert("Erro ao abrir seleção: " + (e && e.message ? e.message : e));
-              }
-            });
-          }
-
-          const dbg = document.getElementById("vf-debug-open");
-          if (dbg && !dbg.__vfBound) {
-            dbg.__vfBound = true;
-            dbg.addEventListener("click", async () => {
-              try {
-                if (window.DebugPanelUI && typeof DebugPanelUI.open === "function") {
-                  DebugPanelUI.open();
-                  return;
-                }
-              } catch (e) {}
-
-              const capa = document.querySelector("img.capa-img");
-              const capaOk = !!(capa && capa.complete && capa.naturalWidth > 0);
-              const dbTeamsOk = !!(window.Database && Array.isArray(Database.teams) && Database.teams.length > 0);
-
-              let msg = "DEBUG (rápido)\n\n";
-              msg += "Capa carregada: " + (capaOk ? "SIM" : "NÃO") + "\n";
-              msg += "Database.teams: " + (dbTeamsOk ? ("SIM (" + Database.teams.length + ")") : "NÃO") + "\n";
-              msg += "__TEAM_UI_REAL__: " + window.__TEAM_UI_REAL__ + "\n";
-              msg += "TeamUi.renderTeamSelection: " + (typeof window.TeamUi?.renderTeamSelection) + "\n\n";
-
-              const res = await ensureTeamUIRealLoaded();
-              msg += "Auto-load TeamUI: " + (res.ok ? ("OK (" + res.loadedFrom + ")") : "FALHOU") + "\n";
-              msg += "Tentativas:\n- " + (res.tried ? res.tried.join("\n- ") : "n/a");
-              alert(msg);
-            });
-          }
-        });
-      })();
-    </script>
 </head>
-
 <body>
+
+    <!-- =========================
+         TELA 1 – CAPA
+         ========================= -->
     <div id="tela-capa" class="tela ativa">
         <img src="assets/geral/capa.png" class="capa-img" alt="Capa do jogo">
 
@@ -121,15 +25,26 @@
         <input type="file" id="input-save-json" accept="application/json" style="display:none">
     </div>
 
+    <!-- =========================
+         TELA 2 – ESCOLHA DE TIME
+         ========================= -->
     <div id="tela-escolha-time" class="tela">
         <h1 class="titulo">ESCOLHA SEU TIME</h1>
+
+        <!-- preenchido pelo main.js / UI.init -->
         <div id="lista-times" class="lista-times"></div>
+
+        <!-- usa a mesma navegação de outras telas -->
         <button class="btn-voltar" onclick="UI.voltarParaCapa()">VOLTAR</button>
     </div>
 
+    <!-- =========================
+         TELA 3 – LOBBY
+         ========================= -->
     <div id="tela-lobby" class="tela">
         <div class="lobby-card">
             <img id="lobby-logo" class="lobby-logo" alt="Escudo do time">
+
             <div class="lobby-info-time">
                 <h2 id="lobby-nome-time"></h2>
                 <p id="lobby-temporada"></p>
@@ -141,14 +56,121 @@
                 <button class="btn-blue"  onclick="UI.abrirClassificacao()">TABELA</button>
                 <button class="btn-blue"  onclick="UI.abrirElenco()">ELENCO</button>
                 <button class="btn-blue"  onclick="UI.abrirMercado()">MERCADO</button>
+                <!-- NOVO BOTÃO: CALENDÁRIO ANUAL -->
                 <button class="btn-blue"  onclick="UI.abrirCalendario()">CALENDÁRIO</button>
                 <button class="btn-gold"  onclick="UI.abrirTaticas()">TÁTICAS</button>
                 <button class="btn-secundario" onclick="UI.salvarCarreira()">SALVAR CARREIRA</button>
+
                 <button class="btn-voltar" onclick="UI.voltarParaCapa()">SAIR</button>
             </div>
         </div>
     </div>
 
+    <!-- =========================
+         TELA 4 – ELENCO
+         ========================= -->
+    <div id="tela-elenco" class="tela">
+        <h1 class="titulo">ELENCO</h1>
+
+        <!-- preenchido via UI / engine -->
+        <div id="elenco-lista" class="elenco-lista"></div>
+
+        <button class="btn-voltar" onclick="UI.voltarLobby()">VOLTAR</button>
+    </div>
+
+    <!-- =========================
+         TELA 5 – TÁTICAS
+         ========================= -->
+    <section id="tela-taticas" class="tela">
+        <div class="topo-taticas">
+            <h1 class="titulo">TÁTICAS E ESCALAÇÃO</h1>
+
+            <div class="taticas-controles">
+                <div class="grupo-controle">
+                    <label for="select-formacao">Formação</label>
+                    <select id="select-formacao">
+                        <!-- opções preenchidas por engine/tactics.js -->
+                    </select>
+                </div>
+
+                <div class="grupo-controle">
+                    <label for="select-estilo">Estilo de jogo</label>
+                    <select id="select-estilo">
+                        <option value="ofensivo">Ofensivo</option>
+                        <option value="equilibrado">Equilibrado</option>
+                        <option value="defensivo">Defensivo</option>
+                    </select>
+                </div>
+
+                <!-- IDs usados por ui/tactics-ui.js -->
+                <button id="btn-salvar-tatica" class="btn-gold">
+                    Salvar Escalação
+                </button>
+
+                <button id="btn-voltar-lobby" class="btn-voltar-top" onclick="UI.voltarLobby()">
+                    Voltar ao Lobby
+                </button>
+            </div>
+        </div>
+
+        <div class="painel-tatico">
+            <!-- campo titular -->
+            <div id="campo-tatico" class="campo-tatico"></div>
+
+            <!-- banco de reservas -->
+            <div id="banco-reservas" class="banco-reservas"></div>
+        </div>
+    </section>
+
+    <!-- =========================
+         TELA 6 – PARTIDA
+         ========================= -->
+    <section id="tela-partida" class="tela">
+        <div class="partida-header">
+            <div class="time-bloco">
+                <img id="logo-home" class="partida-logo" src="assets/logos/FLA.png" alt="Time da casa" onerror="this.style.display='none'">
+                <span id="partida-home">Time Casa</span>
+            </div>
+
+            <div class="placar">
+                <span id="gols-home">0</span>
+                <span>x</span>
+                <span id="gols-away">0</span>
+            </div>
+
+            <div class="time-bloco">
+                <span id="partida-away">Time Fora</span>
+                <img id="logo-away" class="partida-logo" src="assets/logos/FLA.png" alt="Time visitante" onerror="this.style.display='none'">
+            </div>
+        </div>
+
+        <div class="cronometro" id="cronometro">0'</div>
+
+        <div id="log-partida" class="log-partida"></div>
+
+        <div class="botoes-partida">
+            <button class="btn-secundario" onclick="Match.substituicoes()">Substituições</button>
+            <button class="btn-voltar" onclick="UI.voltarLobby()">Encerrar / Voltar</button>
+        </div>
+    </section>
+
+    <!-- =========================
+         TELA 7 – CLASSIFICAÇÃO
+         ========================= -->
+    <div id="tela-classificacao" class="tela">
+        <h1 class="titulo">TABELA DO BRASILEIRÃO</h1>
+
+        <div class="classificacao-container">
+            <!-- tabela preenchida via ui/league-ui.js -->
+            <table id="tabela-classificacao"></table>
+        </div>
+
+        <button class="btn-voltar" onclick="UI.voltarLobby()">VOLTAR</button>
+    </div>
+
+    <!-- =========================
+         TELA 8 – MERCADO DE TRANSFERÊNCIAS
+         ========================= -->
     <div id="tela-mercado" class="tela">
         <h1 class="titulo">MERCADO DE TRANSFERÊNCIAS</h1>
 
@@ -183,37 +205,88 @@
             </label>
         </div>
 
+        <!-- lista de jogadores à venda -->
         <div id="lista-mercado" class="lista-mercado"></div>
+
         <button class="btn-voltar" onclick="UI.voltarLobby()">VOLTAR</button>
     </div>
 
-    <button id="vf-debug-open" type="button" style="
-      position:fixed; right:10px; bottom:10px; z-index:9999;
-      background: rgba(255,255,255,.08);
-      color: rgba(255,255,255,.85);
-      border: 1px solid rgba(255,255,255,.12);
-      padding: 8px 10px;
-      border-radius: 12px;
-      font-weight: 900;
-      font-size: 12px;
-    ">DEBUG</button>
+    <!-- =========================
+         TELA 9 – RESULTADOS DA RODADA
+         ========================= -->
+    <section id="tela-resultados-rodada" class="tela">
+        <h1 id="titulo-rodada" class="titulo">RESULTADOS DA RODADA</h1>
 
-    <!-- Engine -->
+        <div id="lista-resultados-rodada" class="lista-resultados-rodada">
+            <!-- preenchido via league/match -->
+        </div>
+
+        <div class="botoes-rodada">
+            <button class="btn-blue"  onclick="UI.abrirClassificacao()">VER TABELA ATUALIZADA</button>
+            <button class="btn-voltar" onclick="UI.voltarLobby()">VOLTAR AO LOBBY</button>
+        </div>
+    </section>
+
+    <!-- =========================
+         TELA 10 – CALENDÁRIO DA TEMPORADA
+         ========================= -->
+    <section id="tela-calendario" class="tela">
+        <h1 id="titulo-calendario" class="titulo">CALENDÁRIO DA TEMPORADA</h1>
+
+        <!-- lista de todos os jogos da temporada -->
+        <!-- classe ajustada para bater com o CSS (.calendario-lista) -->
+        <div id="lista-calendario" class="calendario-lista">
+            <!-- preenchido via CalendarUI.renderCalendario() -->
+        </div>
+
+        <button class="btn-voltar" onclick="UI.voltarLobby()">VOLTAR AO LOBBY</button>
+    </section>
+
+    <!-- =========================
+         TELA 11 – DETALHE DE JOGO DO CALENDÁRIO
+         ========================= -->
+    <section id="tela-calendario-jogo" class="tela">
+        <h1 class="titulo">DETALHES DA PARTIDA</h1>
+
+        <div id="detalhe-calendario" class="detalhe-calendario">
+            <!-- preenchido via CalendarUI.renderDetalhe() -->
+        </div>
+
+        <button class="btn-voltar" onclick="UI.abrirCalendario()">VOLTAR AO CALENDÁRIO</button>
+    </section>
+
+    <!-- =========================
+         MODAL DE CAMPEÃO
+         Exibe mensagem e troféu quando o usuário (ou outro time) vence
+         o campeonato ou a Copa do Brasil. Esta modal é ocultada por padrão.
+         ========================= -->
+    <div id="modal-champion" class="modal hidden">
+        <div class="modal-content">
+            <img id="modal-champion-img" src="" alt="Troféu">
+            <h2 id="modal-champion-title"></h2>
+            <p id="modal-champion-message"></p>
+            <button id="modal-champion-close" class="btn-principal">OK</button>
+        </div>
+    </div>
+
+    <!-- ==================================================
+         SCRIPTS – ORDEM CORRETA
+         ================================================== -->
+
+    <!-- ENGINE -->
     <script defer src="engine/database.js"></script>
     <script defer src="engine/save.js"></script>
     <script defer src="engine/tactics.js"></script>
     <script defer src="engine/match.js"></script>
     <script defer src="engine/league.js"></script>
-
-    <!-- ✅ NOVO: FINANÇAS -->
-    <script defer src="engine/finances.js"></script>
-
     <script defer src="engine/market.js"></script>
     <script defer src="engine/calendar.js"></script>
+
+    <!-- Copa do Brasil -->
     <script defer src="engine/cup.js"></script>
     <script defer src="engine/cup_integration.js"></script>
 
-    <!-- UI -->
+    <!-- UI (ATENÇÃO: a pasta é "Ui" com U MAIÚSCULO) -->
     <script defer src="Ui/ui.js"></script>
     <script defer src="Ui/league-ui.js"></script>
     <script defer src="Ui/market-ui.js"></script>
@@ -221,14 +294,8 @@
     <script defer src="Ui/tactics-ui.js"></script>
     <script defer src="Ui/calendar-ui.js"></script>
 
-    <!-- AAA extras se existirem -->
-    <script defer src="engine/post-match.js"></script>
-    <script defer src="Ui/post-match-ui.js"></script>
-    <script defer src="engine/season-calendar.js"></script>
-    <script defer src="Ui/season-calendar-ui.js"></script>
-    <script defer src="Ui/lobby-hub-ui.js"></script>
-    <script defer src="Ui/debug-panel-ui.js"></script>
-
+    <!-- MAIN (por último) -->
     <script defer src="main.js"></script>
+
 </body>
 </html>
