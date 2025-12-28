@@ -5,39 +5,151 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vale Futebol Manager 2026</title>
 
-    <!-- Fonte EA Sports Style -->
+    <!-- Fonte -->
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700;900&display=swap" rel="stylesheet">
 
     <!-- CSS -->
     <link rel="stylesheet" href="style.css">
 
     <!-- ==================================================
-         FALLBACK IMEDIATO (ANTI-ERRO)
-         - roda antes de qualquer script defer
-         - garante TeamUi.renderTeamSelection sempre exista
+         BOOTSTRAP + AUTO-TEST + AUTO-LOAD (ANTI-VERCEL CACHE)
+         - Garante TeamUi/TeamUI existirem
+         - Tenta carregar team-ui.js em múltiplos caminhos
+         - Cache buster (evita Vercel servir JS velho)
          ================================================== -->
     <script>
       (function () {
-        // Alguns scripts chamam TeamUi, outros TeamUI — garantimos os dois.
+        // Compat total: TeamUi e TeamUI
         if (!window.TeamUi) window.TeamUi = {};
         if (!window.TeamUI) window.TeamUI = window.TeamUi;
 
-        // Se ainda não existir, cria fallback para não estourar erro
-        if (typeof window.TeamUi.renderTeamSelection !== "function") {
-          window.TeamUi.renderTeamSelection = function () {
-            alert(
-              "A seleção de time ainda não carregou.\n\n" +
-              "Possíveis causas:\n" +
-              "- Cache do Vercel/navegador\n" +
-              "- Ui/team-ui.js não foi servido\n\n" +
-              "Dica: Abra em aba anônima e tente novamente."
-            );
-            console.warn("[INDEX FALLBACK] TeamUi.renderTeamSelection executado.");
-          };
+        // marcador: quando o team-ui real carrega, ele seta isso
+        if (typeof window.__TEAM_UI_REAL__ === "undefined") window.__TEAM_UI_REAL__ = false;
+
+        // fallback (não quebra mais)
+        function fallbackSelection() {
+          alert(
+            "A seleção de time ainda não carregou.\n\n" +
+            "Vou tentar carregar automaticamente o Team UI.\n" +
+            "Se falhar, use o botão DEBUG para ver o relatório."
+          );
         }
 
-        // Mantém compatibilidade
+        if (typeof window.TeamUi.renderTeamSelection !== "function") {
+          window.TeamUi.renderTeamSelection = fallbackSelection;
+        }
         window.TeamUI.renderTeamSelection = window.TeamUi.renderTeamSelection;
+
+        // Loader de script com cache-buster
+        function loadScript(url) {
+          return new Promise((resolve, reject) => {
+            const s = document.createElement("script");
+            // cache buster forte (timestamp)
+            const sep = url.includes("?") ? "&" : "?";
+            s.src = url + sep + "v=" + Date.now();
+            s.async = true;
+            s.onload = () => resolve(url);
+            s.onerror = () => reject(new Error("Falha ao carregar: " + url));
+            document.head.appendChild(s);
+          });
+        }
+
+        // TESTE/DIAGNÓSTICO: tenta múltiplos caminhos (case sensitive no Linux/Vercel)
+        async function ensureTeamUIRealLoaded() {
+          if (window.__TEAM_UI_REAL__ === true) return { ok: true, loadedFrom: "already-loaded" };
+
+          const candidates = [
+            "Ui/team-ui.js",
+            "ui/team-ui.js",
+            "UI/team-ui.js"
+          ];
+
+          const tried = [];
+          for (const c of candidates) {
+            tried.push(c);
+            try {
+              await loadScript(c);
+              // se carregou e setou marcador, sucesso
+              if (window.__TEAM_UI_REAL__ === true && typeof window.TeamUi.renderTeamSelection === "function") {
+                return { ok: true, loadedFrom: c, tried };
+              }
+            } catch (e) {
+              // continua tentando
+            }
+          }
+          return { ok: false, tried };
+        }
+
+        // expõe para debug
+        window.__ensureTeamUIRealLoaded = ensureTeamUIRealLoaded;
+
+        // Intercepta iniciar carreira (botão)
+        document.addEventListener("DOMContentLoaded", () => {
+          const btn = document.getElementById("btn-iniciar");
+          if (btn && !btn.__vfBound) {
+            btn.__vfBound = true;
+            btn.addEventListener("click", async () => {
+              // tenta carregar o team-ui real antes de chamar
+              const res = await ensureTeamUIRealLoaded();
+              if (!res.ok) {
+                alert(
+                  "Não consegui carregar o Team UI real.\n\n" +
+                  "Tentativas:\n- " + res.tried.join("\n- ") + "\n\n" +
+                  "Isso indica 404 / caminho errado / arquivo não publicado.\n" +
+                  "Clique em DEBUG para ver status."
+                );
+                return;
+              }
+
+              // agora chama a seleção real
+              try {
+                if (window.TeamUi && typeof TeamUi.renderTeamSelection === "function") {
+                  TeamUi.renderTeamSelection();
+                } else if (window.TeamUI && typeof TeamUI.renderTeamSelection === "function") {
+                  TeamUI.renderTeamSelection();
+                } else {
+                  alert("Team UI carregou mas não registrou renderTeamSelection.");
+                }
+              } catch (e) {
+                alert("Erro ao abrir seleção: " + (e && e.message ? e.message : e));
+                console.error(e);
+              }
+            });
+          }
+
+          // Botão DEBUG abre painel se existir, senão mostra um relatório simples
+          const dbg = document.getElementById("vf-debug-open");
+          if (dbg && !dbg.__vfBound) {
+            dbg.__vfBound = true;
+            dbg.addEventListener("click", async () => {
+              // tenta carregar painel debug se estiver presente
+              try {
+                if (window.DebugPanelUI && typeof DebugPanelUI.open === "function") {
+                  DebugPanelUI.open();
+                  return;
+                }
+              } catch (e) {}
+
+              // fallback de relatório simples
+              const capa = document.querySelector("img.capa-img");
+              const capaOk = !!(capa && capa.complete && capa.naturalWidth > 0);
+              const dbTeamsOk = !!(window.Database && Array.isArray(Database.teams) && Database.teams.length > 0);
+
+              let msg = "DEBUG (rápido)\n\n";
+              msg += "Capa carregada: " + (capaOk ? "SIM" : "NÃO") + "\n";
+              msg += "Database.teams: " + (dbTeamsOk ? ("SIM (" + Database.teams.length + ")") : "NÃO") + "\n";
+              msg += "__TEAM_UI_REAL__: " + window.__TEAM_UI_REAL__ + "\n";
+              msg += "TeamUi.renderTeamSelection: " + (typeof window.TeamUi?.renderTeamSelection) + "\n\n";
+
+              // tenta carregar team-ui agora e reporta
+              const res = await ensureTeamUIRealLoaded();
+              msg += "Auto-load TeamUI: " + (res.ok ? ("OK (" + res.loadedFrom + ")") : "FALHOU") + "\n";
+              msg += "Tentativas:\n- " + (res.tried ? res.tried.join("\n- ") : "n/a");
+
+              alert(msg);
+            });
+          }
+        });
       })();
     </script>
 </head>
@@ -61,9 +173,7 @@
          ========================= -->
     <div id="tela-escolha-time" class="tela">
         <h1 class="titulo">ESCOLHA SEU TIME</h1>
-
         <div id="lista-times" class="lista-times"></div>
-
         <button class="btn-voltar" onclick="UI.voltarParaCapa()">VOLTAR</button>
     </div>
 
@@ -88,141 +198,12 @@
                 <button class="btn-blue"  onclick="UI.abrirCalendario()">CALENDÁRIO</button>
                 <button class="btn-gold"  onclick="UI.abrirTaticas()">TÁTICAS</button>
                 <button class="btn-secundario" onclick="UI.salvarCarreira()">SALVAR CARREIRA</button>
-
                 <button class="btn-voltar" onclick="UI.voltarParaCapa()">SAIR</button>
             </div>
         </div>
     </div>
 
-    <!-- =========================
-         TELA 4 – ELENCO
-         ========================= -->
-    <div id="tela-elenco" class="tela">
-        <h1 class="titulo">ELENCO</h1>
-        <div id="elenco-lista" class="elenco-lista"></div>
-        <button class="btn-voltar" onclick="UI.voltarLobby()">VOLTAR</button>
-    </div>
-
-    <!-- =========================
-         TELA 5 – TÁTICAS
-         ========================= -->
-    <section id="tela-taticas" class="tela">
-        <div class="topo-taticas">
-            <h1 class="titulo">TÁTICAS E ESCALAÇÃO</h1>
-
-            <div class="taticas-controles">
-                <div class="grupo-controle">
-                    <label for="select-formacao">Formação</label>
-                    <select id="select-formacao"></select>
-                </div>
-
-                <div class="grupo-controle">
-                    <label for="select-estilo">Estilo de jogo</label>
-                    <select id="select-estilo">
-                        <option value="ofensivo">Ofensivo</option>
-                        <option value="equilibrado">Equilibrado</option>
-                        <option value="defensivo">Defensivo</option>
-                    </select>
-                </div>
-
-                <button id="btn-salvar-tatica" class="btn-gold">Salvar Escalação</button>
-
-                <button id="btn-voltar-lobby" class="btn-voltar-top" onclick="UI.voltarLobby()">
-                    Voltar ao Lobby
-                </button>
-            </div>
-        </div>
-
-        <div class="painel-tatico">
-            <div id="campo-tatico" class="campo-tatico"></div>
-            <div id="banco-reservas" class="banco-reservas"></div>
-        </div>
-    </section>
-
-    <!-- =========================
-         TELA 6 – PARTIDA
-         ========================= -->
-    <section id="tela-partida" class="tela">
-        <div class="partida-header">
-            <div class="time-bloco">
-                <img id="logo-home" class="partida-logo" src="assets/logos/default.png" alt="Time da casa">
-                <span id="partida-home">Time Casa</span>
-            </div>
-
-            <div class="placar">
-                <span id="gols-home">0</span>
-                <span>x</span>
-                <span id="gols-away">0</span>
-            </div>
-
-            <div class="time-bloco">
-                <span id="partida-away">Time Fora</span>
-                <img id="logo-away" class="partida-logo" src="assets/logos/default.png" alt="Time visitante">
-            </div>
-        </div>
-
-        <div class="cronometro" id="cronometro">0'</div>
-        <div id="log-partida" class="log-partida"></div>
-
-        <div class="botoes-partida">
-            <button class="btn-secundario" onclick="Match.substituicoes()">Substituições</button>
-            <button class="btn-voltar" onclick="UI.voltarLobby()">Encerrar / Voltar</button>
-        </div>
-    </section>
-
-    <!-- =========================
-         TELA 7 – CLASSIFICAÇÃO
-         ========================= -->
-    <div id="tela-classificacao" class="tela">
-        <h1 class="titulo">TABELA DO BRASILEIRÃO</h1>
-        <div class="classificacao-container">
-            <table id="tabela-classificacao"></table>
-        </div>
-        <button class="btn-voltar" onclick="UI.voltarLobby()">VOLTAR</button>
-    </div>
-
-    <!-- =========================
-         TELA 8 – MERCADO
-         ========================= -->
-    <div id="tela-mercado" class="tela">
-        <h1 class="titulo">MERCADO DE TRANSFERÊNCIAS</h1>
-
-        <div class="filtros-mercado">
-            <label>
-                Posição
-                <select id="filtro-posicao">
-                    <option value="todos">Todos</option>
-                    <option value="GOL">Goleiro</option>
-                    <option value="ZAG">Zagueiro</option>
-                    <option value="LD">Lateral Direito</option>
-                    <option value="LE">Lateral Esquerdo</option>
-                    <option value="VOL">Volante</option>
-                    <option value="MEI">Meia</option>
-                    <option value="ATA">Atacante</option>
-                </select>
-            </label>
-
-            <label>
-                Mín. OVR
-                <input id="filtro-min-ovr" type="number" value="70" min="40" max="99">
-            </label>
-
-            <label>
-                Máx. valor (mi)
-                <input id="filtro-max-valor" type="number" value="10" min="0" step="0.5">
-            </label>
-
-            <label>
-                <input id="filtro-premium" type="checkbox">
-                Pacote premium (só craques)
-            </label>
-        </div>
-
-        <div id="lista-mercado" class="lista-mercado"></div>
-        <button class="btn-voltar" onclick="UI.voltarLobby()">VOLTAR</button>
-    </div>
-
-    <!-- Botão debug (pode ficar discreto via CSS/JS) -->
+    <!-- DEBUG -->
     <button id="vf-debug-open" type="button" style="
       position:fixed; right:10px; bottom:10px; z-index:9999;
       background: rgba(255,255,255,.08);
@@ -247,21 +228,21 @@
     <script defer src="engine/cup.js"></script>
     <script defer src="engine/cup_integration.js"></script>
 
-    <!-- AAA -->
-    <script defer src="engine/post-match.js"></script>
-    <script defer src="engine/season-calendar.js"></script>
-
-    <!-- UI -->
-    <script defer src="Ui/bootstrap-ui.js"></script>
+    <!-- UI base -->
     <script defer src="Ui/ui.js"></script>
     <script defer src="Ui/league-ui.js"></script>
     <script defer src="Ui/market-ui.js"></script>
+
+    <!-- Team UI (deixa aqui também; mas o loader do HEAD garante mesmo se falhar) -->
     <script defer src="Ui/team-ui.js"></script>
+
     <script defer src="Ui/tactics-ui.js"></script>
     <script defer src="Ui/calendar-ui.js"></script>
 
-    <!-- AAA UI -->
+    <!-- AAA (se já estiver no repo, mantém) -->
+    <script defer src="engine/post-match.js"></script>
     <script defer src="Ui/post-match-ui.js"></script>
+    <script defer src="engine/season-calendar.js"></script>
     <script defer src="Ui/season-calendar-ui.js"></script>
     <script defer src="Ui/lobby-hub-ui.js"></script>
     <script defer src="Ui/debug-panel-ui.js"></script>
