@@ -1,28 +1,22 @@
 <!doctype html>
 <html lang="pt-BR">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Vale Futebol Manager 2026</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0f14" />
+    <title>VFM 2026</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div id="app"></div>
 
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
+    <!-- Engine (ordem é crítica) -->
+    <script defer src="./engine/utils.js"></script>
+    <script defer src="./engine/state.js"></script>
+    <script defer src="./engine/datapack.js"></script>
+    <script defer src="./engine/save-slots.js"></script>
 
-  <!-- APP ROOT (OBRIGATÓRIO) -->
-  <div id="app"></div>
-
-  <!-- DEBUG (OPCIONAL). Se não quiser ver, pode esconder no CSS, mas NÃO precisa apagar -->
-  <button id="btnDebug" class="debug-fab" type="button">DEBUG</button>
-
-  <!-- Ordem dos scripts é CRÍTICA -->
-  <script src="engine/datapacks.js" defer></script>
-  <script src="engine/saveslots.js" defer></script>
-  <script src="engine/calendar.js" defer></script>
-
-  <script src="game.js" defer></script>
-  <script src="ui/ui.js" defer></script>
-  <script src="main.js" defer></script>
-
-</body>
+    <!-- Boot -->
+    <script defer src="./main.js"></script>
+  </body>
 </html>
