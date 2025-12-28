@@ -1,22 +1,19 @@
 /* =======================================================
    VALE FUTEBOL MANAGER 2026
-   Ui/team-ui.js — Seleção de Clube (OBRIGATÓRIO)
+   Ui/team-ui.js — Team Selection + Squad Renderer (AAA safe)
    -------------------------------------------------------
-   Corrige erro:
-   TeamUi.renderTeamSelection não encontrado
+   Fornece:
+   - TeamUi.renderTeamSelection()  ✅ (corrige erro)
+   - TeamUI.renderTeamSelection()  ✅ compat
+   - TeamUI.renderSquad()          ✅ mantém antigo
 
-   Responsável por:
-   - Tela de escolha de clube (logos já existentes)
-   - Define gameState.currentTeamId / selectedTeamId
-   - Recarrega para entrar no lobby
-
-   Exporta:
-   - window.TeamUi.renderTeamSelection()
-   - window.TeamUI.renderTeamSelection() (compatibilidade)
+   Usa:
+   - #tela-escolha-time, #lista-times
+   - gameState.selectedTeamId / currentTeamId
    =======================================================*/
 
 (function () {
-  console.log("%c[TeamUI] team-ui.js carregado", "color:#22c55e; font-weight:bold;");
+  console.log("%c[TEAM-UI] team-ui.js carregado (selection+squad)", "color:#a855f7; font-weight:bold;");
 
   function ensureGS() {
     if (!window.gameState) window.gameState = {};
@@ -24,11 +21,30 @@
   }
 
   function getTeams() {
-    return (window.Database && Array.isArray(Database.teams)) ? Database.teams : [];
+    if (window.Database && Array.isArray(Database.teams)) return Database.teams;
+    if (Array.isArray(window.teams)) return window.teams;
+    return [];
   }
 
-  function getLogo(team) {
-    return team?.logo || team?.escudo || team?.badge || team?.imgLogo || "";
+  function getPlayers() {
+    if (window.Database && Array.isArray(Database.players)) return Database.players;
+    if (Array.isArray(window.players)) return window.players;
+    return [];
+  }
+
+  function showScreen(id) {
+    // usa UI.mostrarTela se existir
+    try {
+      if (window.UI && typeof UI.mostrarTela === "function") {
+        UI.mostrarTela(id);
+        return;
+      }
+    } catch (e) {}
+
+    // fallback: alterna classes .tela/.ativa
+    document.querySelectorAll(".tela").forEach(t => t.classList.remove("ativa"));
+    const alvo = document.getElementById(id);
+    if (alvo) alvo.classList.add("ativa");
   }
 
   function safeSave() {
@@ -37,147 +53,172 @@
     try { localStorage.setItem("vfm-save", JSON.stringify(window.gameState)); } catch (e) {}
   }
 
-  function clearScreen() {
-    document.body.innerHTML = "";
-    document.body.style.margin = "0";
-    document.body.style.background = "#000";
+  function getLogo(team) {
+    return team?.logo || team?.escudo || team?.badge || team?.imgLogo || "assets/logos/default.png";
   }
 
+  // -----------------------------
+  // TEAM SELECTION (corrige erro)
+  // -----------------------------
   function renderTeamSelection() {
-    const gs = ensureGS();
     const teams = getTeams();
-
     if (!teams.length) {
-      alert("Nenhum time encontrado em Database.teams");
+      alert("Database.teams está vazio. engine/database.js não carregou.");
       return;
     }
 
-    clearScreen();
+    const tela = document.getElementById("tela-escolha-time");
+    const lista = document.getElementById("lista-times");
 
-    const wrap = document.createElement("div");
-    wrap.style.minHeight = "100vh";
-    wrap.style.padding = "16px";
-    wrap.style.boxSizing = "border-box";
-    wrap.style.background =
-      "radial-gradient(1200px 600px at 20% 10%, rgba(167,139,250,.18), transparent 52%)," +
-      "radial-gradient(1200px 600px at 85% 0%, rgba(34,197,94,.14), transparent 60%)," +
-      "rgba(0,0,0,.92)";
-    wrap.style.color = "#fff";
-    wrap.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+    if (!tela || !lista) {
+      alert("Tela de escolha (#tela-escolha-time / #lista-times) não encontrada no index.html.");
+      return;
+    }
 
-    const title = document.createElement("div");
-    title.style.display = "flex";
-    title.style.flexDirection = "column";
-    title.style.gap = "4px";
-    title.style.marginBottom = "14px";
-    title.style.textAlign = "center";
-
-    const h = document.createElement("div");
-    h.textContent = "Escolha seu Clube";
-    h.style.fontWeight = "1000";
-    h.style.letterSpacing = ".8px";
-    h.style.textTransform = "uppercase";
-    h.style.fontSize = "14px";
-
-    const sub = document.createElement("div");
-    sub.textContent = "Logos e identidade visual do seu banco — estilo AAA";
-    sub.style.opacity = ".75";
-    sub.style.fontWeight = "900";
-    sub.style.fontSize = "12px";
-
-    title.appendChild(h);
-    title.appendChild(sub);
-
-    const grid = document.createElement("div");
-    grid.style.display = "grid";
-    grid.style.gridTemplateColumns = "repeat(auto-fill, minmax(140px, 1fr))";
-    grid.style.gap = "12px";
+    // limpa e renderiza cards
+    lista.innerHTML = "";
 
     teams.forEach(team => {
       const card = document.createElement("div");
+      card.className = "card-time";
+
+      // estilos inline de fallback (caso style.css não tenha card-time)
       card.style.border = "1px solid rgba(255,255,255,.12)";
       card.style.borderRadius = "18px";
       card.style.padding = "12px";
-      card.style.background = "rgba(255,255,255,.05)";
+      card.style.background = "rgba(255,255,255,.06)";
       card.style.boxShadow = "0 10px 28px rgba(0,0,0,.30)";
       card.style.cursor = "pointer";
-      card.style.textAlign = "center";
+      card.style.display = "flex";
+      card.style.flexDirection = "column";
+      card.style.alignItems = "center";
+      card.style.gap = "8px";
       card.style.backdropFilter = "blur(10px)";
 
-      const logoWrap = document.createElement("div");
-      logoWrap.style.width = "72px";
-      logoWrap.style.height = "72px";
-      logoWrap.style.margin = "0 auto 8px";
-      logoWrap.style.borderRadius = "18px";
-      logoWrap.style.overflow = "hidden";
-      logoWrap.style.border = "1px solid rgba(255,255,255,.10)";
-      logoWrap.style.background = "rgba(0,0,0,.25)";
-      logoWrap.style.display = "flex";
-      logoWrap.style.alignItems = "center";
-      logoWrap.style.justifyContent = "center";
+      const img = document.createElement("img");
+      img.src = getLogo(team);
+      img.alt = team.name || "Time";
+      img.style.width = "72px";
+      img.style.height = "72px";
+      img.style.objectFit = "contain";
+      img.onerror = () => { img.src = "assets/logos/default.png"; };
 
-      const logo = document.createElement("img");
-      logo.src = getLogo(team);
-      logo.alt = team?.name || "Clube";
-      logo.style.width = "100%";
-      logo.style.height = "100%";
-      logo.style.objectFit = "contain";
+      const nm = document.createElement("div");
+      nm.textContent = team.name || "Clube";
+      nm.style.fontWeight = "1000";
+      nm.style.textAlign = "center";
 
-      // se não tiver logo, usa ícone
-      logo.onerror = () => {
-        logo.remove();
-        logoWrap.textContent = "⚽";
-        logoWrap.style.fontSize = "28px";
-      };
+      const serie = document.createElement("div");
+      const div = (team.division || team.serie || "A").toString().toUpperCase();
+      serie.textContent = `Série ${div}`;
+      serie.style.opacity = ".75";
+      serie.style.fontWeight = "900";
+      serie.style.fontSize = "12px";
 
-      logoWrap.appendChild(logo);
-
-      const name = document.createElement("div");
-      name.textContent = team?.name || "Clube";
-      name.style.fontWeight = "1000";
-      name.style.fontSize = "14px";
-      name.style.letterSpacing = ".2px";
-      name.style.whiteSpace = "nowrap";
-      name.style.overflow = "hidden";
-      name.style.textOverflow = "ellipsis";
-
-      const meta = document.createElement("div");
-      const serie = (team?.division || team?.serie || "A").toString().toUpperCase();
-      meta.textContent = `Série ${serie}`;
-      meta.style.opacity = ".75";
-      meta.style.fontWeight = "900";
-      meta.style.fontSize = "12px";
-      meta.style.marginTop = "2px";
-
-      card.appendChild(logoWrap);
-      card.appendChild(name);
-      card.appendChild(meta);
+      card.appendChild(img);
+      card.appendChild(nm);
+      card.appendChild(serie);
 
       card.onclick = () => {
-        gs.currentTeamId = team.id;
-        gs.selectedTeamId = team.id;
+        const gs = ensureGS();
 
-        // também seta Game.teamId se existir
+        gs.selectedTeamId = team.id;
+        gs.currentTeamId = team.id;
+
         try { if (window.Game) Game.teamId = team.id; } catch (e) {}
 
         safeSave();
 
-        // Recarrega para voltar ao fluxo normal do jogo
-        location.reload();
+        // entra no lobby se UI existir, senão só troca tela
+        try {
+          if (window.UI && typeof UI.entrarNoLobby === "function") {
+            UI.entrarNoLobby();
+          } else {
+            showScreen("tela-lobby");
+          }
+        } catch (e) {
+          showScreen("tela-lobby");
+        }
+
+        // força render do HUB AAA (se já estiver no projeto)
+        try { if (window.LobbyHubUI && typeof LobbyHubUI.render === "function") LobbyHubUI.render(); } catch (e) {}
       };
 
-      grid.appendChild(card);
+      lista.appendChild(card);
     });
 
-    wrap.appendChild(title);
-    wrap.appendChild(grid);
-    document.body.appendChild(wrap);
+    showScreen("tela-escolha-time");
   }
 
-  // Exporta nos 2 nomes (COMPATIBILIDADE TOTAL)
+  // -----------------------------
+  // SQUAD RENDER (mantém antigo)
+  // -----------------------------
+  function obterElencoAtual() {
+    const gs = ensureGS();
+    const teamId = gs.selectedTeamId || gs.currentTeamId || (window.Game && Game.teamId) || null;
+    if (!teamId) return [];
+
+    // se existir helper na Database
+    try {
+      if (window.Database && typeof Database.carregarElencoDoTime === "function") {
+        const elenco = Database.carregarElencoDoTime(teamId);
+        if (Array.isArray(elenco)) return elenco;
+      }
+    } catch (e) {}
+
+    const all = getPlayers();
+    return all.filter(p => String(p.teamId) === String(teamId));
+  }
+
+  function getFacePath(p) {
+    if (p && p.face) return p.face;
+    if (p && p.id) return `assets/face/${p.id}.png`;
+    return "";
+  }
+
+  function renderSquad() {
+    const container = document.getElementById("elenco-lista");
+    if (!container) {
+      console.warn("[TEAM-UI] #elenco-lista não encontrado.");
+      return;
+    }
+
+    const elenco = obterElencoAtual();
+    container.innerHTML = "";
+
+    if (!elenco.length) {
+      container.innerHTML = "<p style='padding:10px;'>Nenhum jogador encontrado para este time.</p>";
+      return;
+    }
+
+    elenco.forEach(p => {
+      const nome = p.name || p.nome || "Jogador";
+      const pos = p.position || p.posicao || p.pos || p.role || "POS";
+      const ovr = p.overall ?? p.ovr ?? p.rating ?? 70;
+      const imgSrc = getFacePath(p);
+
+      const card = document.createElement("div");
+      card.className = "card-jogador";
+      card.innerHTML = `
+        <img src="${imgSrc}" alt="${nome}" onerror="this.style.display='none'">
+        <h3>${nome}</h3>
+        <p>${pos}</p>
+        <p class="ovr">${ovr}</p>
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  // -----------------------------
+  // Export (TeamUi + TeamUI)
+  // -----------------------------
   if (!window.TeamUi) window.TeamUi = {};
   if (!window.TeamUI) window.TeamUI = window.TeamUi;
 
   window.TeamUi.renderTeamSelection = renderTeamSelection;
   window.TeamUI.renderTeamSelection = renderTeamSelection;
+
+  // mantém compat do antigo:
+  window.TeamUI.renderSquad = renderSquad;
+
 })();
