@@ -1,35 +1,24 @@
-/* engine/gameCore.js — Núcleo do jogo */
-(function () {
-  'use strict';
-
+(() => {
   const NS = (window.VFM26 = window.VFM26 || {});
-  const BootCheck = NS.BootCheck;
+  NS.bootStep?.("Carregando GameCore...");
 
-  const EngineCore = {
-    createBaseWorld(packData) {
-      BootCheck && BootCheck.step('ENGINECORE_CREATE_WORLD');
+  // GameCore aqui é propositalmente “leve” na Fase 3.
+  // O simulador pesado (resultados, treino, atributos, etc.) entra nas próximas fases.
 
-      const year = packData?.defaultSeasonYear || 2026;
-
+  NS.GameCore = {
+    version: "0.1.0",
+    buildMatchPreview(career) {
+      const club = career?.club?.name || "Clube";
       return {
-        schema: 'vfm26.world.v1',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        seasonYear: year,
-        calendar: {
-          schema: 'vfm26.calendar.v0',
-          dayIndex: 0,
-          year
-        },
-        competitions: {
-          leagueA: { schema: 'vfm26.leagueA.v0', ready: false },
-          leagueB: { schema: 'vfm26.leagueB.v0', ready: false },
-          cupBR: { schema: 'vfm26.cupBR.v0', ready: false },
-          state: { schema: 'vfm26.state.v0', ready: false }
-        }
+        title: `Bem-vindo, ${career?.name || "Manager"}!`,
+        subtitle: `Você assumiu: ${club}`,
+        tips: [
+          "Use o Lobby para gestão completa (elenco, treinos, notícias e calendário).",
+          "Em fases seguintes: engine de partidas, desempenho, demissão, evoluções e mundo completo."
+        ]
       };
     }
   };
 
-  NS.EngineCore = EngineCore;
+  NS.bootStep?.("GameCore pronto", { version: NS.GameCore.version });
 })();
