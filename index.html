@@ -2,26 +2,28 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Vale Futebol Manager 2026</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
+
 <body>
   <div id="app"></div>
 
-  <!-- Ordem segura: bootcheck -> engine -> game -> ui -> boot -->
-  <script src="bootcheck.js"></script>
-  <script src="engine.js"></script>
+  <!-- Boot + Engine -->
+  <script src="engine/boot-check.js"></script>
+  <script src="engine/index.js"></script>
+
+  <!-- Game bridge (obrigatório) -->
   <script src="game.js"></script>
 
+  <!-- UI -->
   <script src="ui/ui.js"></script>
-  <script src="ui/screens/datapack-ui.js"></script>
-  <script src="ui/screens/save-slot-ui.js"></script>
-  <script src="ui/screens/career-ui.js"></script>
-  <script src="ui/screens/club-select-ui.js"></script>
-  <script src="ui/screens/tutorial-ui.js"></script>
-  <script src="ui/screens/lobby-ui.js"></script>
+  <script src="ui/career-ui.js"></script>
+  <script src="ui/lobby-ui.js"></script>
+  <script src="ui/calendar-ui.js"></script>
 
-  <script src="boot.js"></script>
+  <!-- Boot runner -->
+  <script src="main.js"></script>
 </body>
 </html>
