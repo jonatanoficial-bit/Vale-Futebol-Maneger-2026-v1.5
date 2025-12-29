@@ -1,47 +1,15 @@
-(function () {
+(() => {
   const NS = (window.VFM26 = window.VFM26 || {});
+  NS.bootStep?.("main.js start");
 
-  const BOOT_STEPS = [];
-  window.BOOT_STEPS = BOOT_STEPS;
+  try {
+    NS.bootAssert?.(NS.UI, "UI não registrada", "window.VFM26.UI não existe.", "BOOT_E04_UI_NOT_FOUND");
+    NS.bootAssert?.(NS.Engine, "Engine não registrada", "window.VFM26.Engine não existe.", "BOOT_E03_ENGINE_NOT_REGISTERED");
 
-  function step(msg, ok = true) {
-    BOOT_STEPS.push({ t: new Date().toISOString(), ok, msg });
-    // eslint-disable-next-line no-console
-    console[ok ? 'log' : 'error']('[BOOT]', msg);
-  }
-
-  async function boot() {
-    try {
-      step('DOM pronto');
-      if (!NS.BootCheck) throw new Error('BootCheck não encontrado');
-      NS.BootCheck.assertDOMReady();
-
-      step('Engine encontrado');
-      if (!NS.Engine) throw new Error('Engine não registrado');
-
-      step('Game encontrado');
-      if (!NS.Game) throw new Error('Game (ponte) não registrada');
-
-      step('UI encontrada');
-      if (!NS.UI) throw new Error('UI não registrada');
-
-      step('Iniciando UI.start()');
-      NS.UI.start();
-
-      step('OK - UI iniciada com sucesso');
-    } catch (err) {
-      step(`Falha no boot: ${err && err.message ? err.message : String(err)}`, false);
-      if (NS.UI && typeof NS.UI.showCriticalError === 'function') {
-        NS.UI.showCriticalError(err);
-      } else {
-        alert('Erro crítico no boot: ' + (err && err.message ? err.message : String(err)));
-      }
-    }
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot);
-  } else {
-    boot();
+    // Start UI
+    NS.UI.start();
+    NS.bootStep?.("App iniciado com sucesso");
+  } catch (e) {
+    NS.fatal?.("Erro crítico no boot", e?.message || String(e), "BOOT_FATAL");
   }
 })();
