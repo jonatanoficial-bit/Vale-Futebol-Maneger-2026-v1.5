@@ -1,40 +1,30 @@
 <!doctype html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Vale Futebol Manager 2026</title>
-
-  <meta name="theme-color" content="#00ff66" />
+  <meta name="theme-color" content="#0b1410" />
   <style>
-    html, body { margin:0; padding:0; height:100%; background:#07110b; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-    #app { min-height:100%; display:flex; align-items:center; justify-content:center; }
+    html, body { height: 100%; margin: 0; background: #06100b; color: #d7ffe6; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    #app { min-height: 100%; display: flex; align-items: center; justify-content: center; padding: 24px; box-sizing: border-box; }
   </style>
 </head>
 
 <body>
   <div id="app"></div>
 
-  <!--
-    ORDEM INVOLÁVEL (resolve BOOT_E04_GAME_NOT_FOUND):
-    1) engine.js  -> cria window.VFM26 e Engine (se você tiver)
-    2) game.js    -> registra window.VFM26.Game
-    3) ui scripts -> usam VFM26.Game
-    4) boot.js    -> valida tudo e inicia a UI
-  -->
+  <!-- ORDEM: engine -> ui -> game -> boot -->
+  <script src="engine/index.js"></script>
 
-  <!-- Se você tiver engine em outro caminho, ajuste AQUI. -->
-  <script src="engine.js"></script>
-
-  <!-- Game Bridge (obrigatório) -->
-  <script src="game.js"></script>
-
-  <!-- UI (ajuste nomes se os seus forem diferentes) -->
   <script src="ui/ui.js"></script>
+  <script src="ui/home-ui.js"></script>
+  <script src="ui/pack-ui.js"></script>
+  <script src="ui/save-ui.js"></script>
   <script src="ui/career-ui.js"></script>
   <script src="ui/lobby-ui.js"></script>
 
-  <!-- Boot por último -->
+  <script src="game.js"></script>
   <script src="boot.js"></script>
 </body>
 </html>
