@@ -1,87 +1,89 @@
-/* engine/bootcheck.js */
-(function () {
-  const BootCheck = {
-    steps: [],
-    startedAt: new Date().toISOString(),
+// engine/bootcheck.js
+(() => {
+  "use strict";
 
-    step(code, label, details) {
-      const entry = {
-        code,
-        label,
-        at: new Date().toISOString(),
-        details: details || null
-      };
-      this.steps.push(entry);
-      return entry;
-    },
+  const STEPS = [];
+  const FAIL = (code, message, details) => {
+    const payload = {
+      code,
+      message,
+      steps: STEPS,
+      details: details || null
+    };
 
-    ok(code, label, details) {
-      return this.step(code, label, details);
-    },
+    console.error("BOOT FAIL:", payload);
 
-    fail(code, message, details) {
-      const payload = {
-        code,
-        message,
-        steps: this.steps.slice(),
-        details: details || null
-      };
+    alert(
+      "Erro crítico\n\n" +
+      message +
+      "\n\nCódigo: " + code +
+      "\n\nDebug no console (BOOT_STEPS)."
+    );
 
-      // Tenta modal bonitinho (se UI existir), senão alert.
-      try {
-        if (window.UI && typeof window.UI.showCritical === "function") {
-          window.UI.showCritical(payload);
-        } else {
-          alert(`${payload.code}\n${payload.message}`);
-        }
-      } catch (_) {
-        alert(`${payload.code}\n${payload.message}`);
-      }
-
-      // Também joga no console sempre
-      console.error("BOOT_FAIL", payload);
-
-      // Lança erro para interromper boot (sem “meio carregado”)
-      throw new Error(`${payload.code}: ${payload.message}`);
-    },
-
-    assert(condition, code, message, details) {
-      if (!condition) this.fail(code, message, details);
-    },
-
-    // Checks padrão do seu jogo
-    runBasicChecks() {
-      // E01: DOM
-      this.ok("BOOT_E01_DOM_READY", "DOM pronto");
-
-      // E02: ROOT
-      const root = document.getElementById("app");
-      this.assert(!!root, "BOOT_E02_ROOT_MISSING", "Elemento #app não existe no index.html.", {
-        hint: "Garanta que existe <div id=\"app\"></div> no body."
-      });
-      this.ok("BOOT_E02_ROOT_OK", "Root #app ok");
-
-      // E03: Engine base
-      const missing = [];
-      if (!window.StorageVFM) missing.push("StorageVFM");
-      if (!window.SaveSlots) missing.push("SaveSlots");
-      if (!window.DataPacks && !window.DataPack) missing.push("DataPacks/DataPack");
-      if (!window.SeasonEngine) missing.push("SeasonEngine");
-      if (!window.Game) missing.push("Game");
-      if (window.Game && typeof window.Game.boot !== "function") missing.push("Game.boot");
-      if (!window.UI) missing.push("UI");
-
-      this.assert(missing.length === 0, "BOOT_E03_ENGINE_MISSING", "Engine não carregou corretamente.", {
-        missing,
-        hint:
-          "Verifique a ORDEM e os NOMES dos scripts no index.html (storage -> saveSlots -> datapacks -> season -> gameCore -> ui -> bootcheck -> main). " +
-          "E confirme se os arquivos existem com o mesmo nome (maiúsculas/minúsculas e hífens contam no Vercel)."
-      });
-
-      this.ok("BOOT_E03_ENGINE_OK", "Engine carregada");
-      return true;
-    }
+    throw new Error(code + " :: " + message);
   };
 
-  window.BootCheck = BootCheck;
+  const OK = (code) => {
+    STEPS.push({
+      step: code,
+      at: new Date().toISOString()
+    });
+  };
+
+  // Expor para debug
+  window.BOOT_STEPS = STEPS;
+
+  // ===== ETAPAS =====
+
+  // E01 — DOM
+  if (document.readyState === "loading") {
+    FAIL("BOOT_E01_DOM_NOT_READY", "DOM não está pronto.");
+  }
+  OK("BOOT_E01_DOM_READY");
+
+  // E02 — Root
+  const root = document.getElementById("app");
+  if (!root) {
+    FAIL("BOOT_E02_ROOT_MISSING", "Elemento #app não encontrado.");
+  }
+  OK("BOOT_E02_ROOT_OK");
+
+  // E03 — Engine Core
+  if (!window.Game || typeof window.Game !== "object") {
+    FAIL("BOOT_E03_ENGINE_MISSING", "Engine não carregou corretamente.", {
+      missing: ["Game"],
+      hint: "Verifique se engine/gameCore.js está carregado antes do main.js"
+    });
+  }
+  OK("BOOT_E03_ENGINE_OK");
+
+  // E04 — DataPack
+  if (!window.DataPack) {
+    FAIL("BOOT_E04_DATAPACK_MISSING", "DataPack não carregou.", {
+      missing: ["DataPack"],
+      hint: "Verifique engine/datapack.js e a ordem no index.html"
+    });
+  }
+  OK("BOOT_E04_DATAPACK_OK");
+
+  // E05 — SaveSlots
+  if (!window.SaveSlots) {
+    FAIL("BOOT_E05_SAVESLOTS_MISSING", "SaveSlots não carregou.", {
+      missing: ["SaveSlots"],
+      hint: "Verifique engine/saveSlots.js"
+    });
+  }
+  OK("BOOT_E05_SAVESLOTS_OK");
+
+  // E06 — UI
+  if (!window.UI || typeof window.UI.init !== "function") {
+    FAIL("BOOT_E06_UI_MISSING", "UI não carregou corretamente.", {
+      missing: ["UI.init"],
+      hint: "Verifique ui/ui.js"
+    });
+  }
+  OK("BOOT_E06_UI_OK");
+
+  // ===== FINAL =====
+  console.log("BOOT OK:", STEPS);
 })();
