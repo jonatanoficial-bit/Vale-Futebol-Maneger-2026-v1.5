@@ -11,14 +11,37 @@
       catalog: null,
       packId: null,
       slotId: "1",
-      career: null
+      career: null,
+
+      // Fase 3: dados derivados (roster, news, finance)
+      careerData: null,
+
+      // dentro do Lobby
+      lobbyTab: "squad"
     },
 
     start() {
       this.mount = document.getElementById("app");
-      NS.bootAssert?.(this.mount, "DOM não está pronto.", "Elemento #app não encontrado.", "BOOT_E01_DOM_NOT_READY");
+      NS.bootAssert?.(
+        this.mount,
+        "DOM não está pronto.",
+        "Elemento #app não encontrado.",
+        "BOOT_E01_DOM_NOT_READY"
+      );
 
-      NS.bootAssert?.(NS.Engine, "Engine não registrada", "window.VFM26.Engine não existe.", "BOOT_E03_ENGINE_NOT_REGISTERED");
+      NS.bootAssert?.(
+        NS.Engine,
+        "Engine não registrada",
+        "window.VFM26.Engine não existe.",
+        "BOOT_E03_ENGINE_NOT_REGISTERED"
+      );
+
+      NS.bootAssert?.(
+        NS.GameCore,
+        "GameCore não registrado",
+        "window.VFM26.GameCore não existe.",
+        "BOOT_E05_GAMECORE_NOT_FOUND"
+      );
 
       this.render();
     },
@@ -26,6 +49,26 @@
     nav(screen) {
       this.screen = screen;
       this.error = null;
+
+      // quando entra no lobby, garante carreira carregada do slot
+      if (screen === "lobby") {
+        const slot = NS.Engine.getSlot(this.data.slotId);
+        const career = this.data.career || slot?.career || null;
+        this.data.career = career;
+
+        // cria cache dos dados da carreira (Fase 3)
+        if (career) {
+          this.data.careerData = NS.GameCore.buildCareerData(career);
+        } else {
+          this.data.careerData = null;
+        }
+
+        // aba inicial por cargo
+        const role = career?.role || "coach";
+        const menu = NS.GameCore.getLobbyMenu(role);
+        this.data.lobbyTab = menu?.[0]?.id || "squad";
+      }
+
       this.render();
     },
 
@@ -64,7 +107,6 @@
       const slot = NS.Engine.getSlot(this.data.slotId);
 
       if (!slot) {
-        // cria slot vazio já apontando pro pack
         const created = NS.Engine.createNewSlot(this.data.slotId, this.data.packId || "brasil");
         NS.bootStep?.("Slot criado", created);
       }
@@ -81,6 +123,11 @@
       this.data.career = careerObj;
       NS.Engine.saveCareer(this.data.slotId, careerObj);
       this.nav("lobby");
+    },
+
+    setLobbyTab(tabId) {
+      this.data.lobbyTab = tabId;
+      this.render();
     },
 
     render() {
@@ -131,21 +178,22 @@
 
     const p = document.createElement("p");
     p.className = "vfm-sub";
-    p.textContent = "Simulador de futebol manager. Base sólida pronta. Agora: DataPack e Saves.";
+    p.textContent =
+      "Simulador de futebol manager. Base sólida pronta. Agora: DataPack, Saves e Lobby (Fase 3).";
 
     const sec = document.createElement("div");
     sec.className = "vfm-section";
 
     const tag = document.createElement("div");
     tag.className = "vfm-pill";
-    tag.textContent = `Engine v${NS.Engine?.version || "?"}`;
+    tag.textContent = `Engine v${NS.Engine?.version || "?"} • Core v${NS.GameCore?.version || "?"}`;
 
     const h3 = document.createElement("h3");
     h3.textContent = "MODO CARREIRA";
 
     const info = document.createElement("div");
     info.className = "vfm-small";
-    info.textContent = "Fluxo obrigatório: DataPack → Save Slot → Carreira.";
+    info.textContent = "Fluxo obrigatório: DataPack → Save Slot → Carreira → Lobby.";
 
     const row = document.createElement("div");
     row.className = "vfm-row";
@@ -285,7 +333,16 @@
       const create = document.createElement("button");
       create.className = "vfm-btn vfm-btn-primary";
       create.textContent = slot?.career ? "CONTINUAR" : "CRIAR NOVO";
-      create.onclick = () => ui.selectSlot(slotId);
+      create.onclick = () => {
+        ui.data.slotId = slotId;
+        // Se já tem carreira, vai direto ao lobby
+        if (slot?.career) {
+          ui.data.career = slot.career;
+          ui.nav("lobby");
+        } else {
+          ui.selectSlot(slotId);
+        }
+      };
 
       const del = document.createElement("button");
       del.className = "vfm-btn vfm-btn-danger";
@@ -335,7 +392,6 @@
     const sec = document.createElement("div");
     sec.className = "vfm-section";
 
-    // Campos
     const form = document.createElement("div");
     form.className = "vfm-list";
 
@@ -347,14 +403,16 @@
       { v: "president", t: "Presidente" }
     ]);
 
-    // Clubes do pack
     const clubs = NS.Engine.getClubsFromPack();
     const clubOptions = clubs.map((c) => ({
       v: c.id,
       t: `${c.name} (${c.league === "A" ? "Série A" : c.league === "B" ? "Série B" : c.league})`
     }));
 
-    const club = selectRow("Clube", clubOptions.length ? clubOptions : [{ v: "", t: "Nenhum clube no pack" }]);
+    const club = selectRow(
+      "Clube",
+      clubOptions.length ? clubOptions : [{ v: "", t: "Nenhum clube no pack" }]
+    );
 
     form.appendChild(name.wrap);
     form.appendChild(country.wrap);
@@ -381,7 +439,15 @@
         country: country.input.value.trim() || "Brasil",
         role: role.select.value,
         club: found
-          ? { id: found.id, name: found.name, crest: found.crest, league: found.league, state: found.state }
+          ? {
+              id: found.id,
+              name: found.name,
+              crest: found.crest,
+              league: found.league,
+              state: found.state,
+              rating: found.rating,
+              budget: found.budget
+            }
           : null,
         createdAt: Date.now()
       };
@@ -402,22 +468,31 @@
   function renderLobby(ui) {
     const root = document.createElement("div");
 
+    const career = ui.data.career || NS.Engine.getSlot(ui.data.slotId)?.career || null;
+    if (!career) {
+      ui.setError("Carreira não encontrada. Volte e selecione um Save Slot.");
+      return renderHome(ui);
+    }
+
+    const header = NS.GameCore.buildLobbyHeader(career);
+    const menu = NS.GameCore.getLobbyMenu(career.role);
+    const data = ui.data.careerData || NS.GameCore.buildCareerData(career);
+
+    // título
     const h = document.createElement("h1");
     h.className = "vfm-title";
-    h.textContent = "Lobby";
-
-    const career = ui.data.career || NS.Engine.getSlot(ui.data.slotId)?.career || null;
-    const preview = NS.GameCore?.buildMatchPreview(career) || { title: "Lobby", subtitle: "", tips: [] };
+    h.textContent = header.title;
 
     const p = document.createElement("p");
     p.className = "vfm-sub";
-    p.textContent = preview.subtitle || "";
+    p.textContent = header.subtitle;
 
-    const sec = document.createElement("div");
-    sec.className = "vfm-section";
+    // Card topo com escudo + boas-vindas
+    const secTop = document.createElement("div");
+    secTop.className = "vfm-section";
 
-    const header = document.createElement("div");
-    header.className = "vfm-inline";
+    const topLine = document.createElement("div");
+    topLine.className = "vfm-inline";
 
     const crestBox = document.createElement("div");
     crestBox.className = "vfm-crest";
@@ -429,54 +504,237 @@
       crestImg.remove();
       crestBox.textContent = "⚽";
     };
-
     if (crestImg.src) crestBox.appendChild(crestImg);
     else crestBox.textContent = "⚽";
 
-    const title = document.createElement("div");
-    title.innerHTML = `<strong>${preview.title}</strong><div class="vfm-small">Cargo: ${
-      career?.role || "—"
-    } | Clube: ${career?.club?.name || "—"}</div>`;
+    const topText = document.createElement("div");
+    topText.innerHTML = `
+      <strong>${header.welcome}</strong>
+      <div class="vfm-small">Cargo: ${career.role} | Clube: ${career?.club?.name || "—"}</div>
+    `;
 
-    header.appendChild(crestBox);
-    header.appendChild(title);
+    topLine.appendChild(crestBox);
+    topLine.appendChild(topText);
 
-    const tips = document.createElement("div");
-    tips.className = "vfm-list";
-    tips.style.marginTop = "12px";
+    // Abas do Lobby
+    const tabsWrap = document.createElement("div");
+    tabsWrap.style.marginTop = "12px";
+    tabsWrap.style.display = "flex";
+    tabsWrap.style.gap = "10px";
+    tabsWrap.style.flexWrap = "wrap";
 
-    (preview.tips || []).forEach((t) => {
-      const it = document.createElement("div");
-      it.className = "vfm-item";
-      it.innerHTML = `<div class="vfm-small">${t}</div>`;
-      tips.appendChild(it);
+    menu.forEach((m) => {
+      const b = document.createElement("button");
+      b.className = "vfm-btn " + (ui.data.lobbyTab === m.id ? "vfm-btn-primary" : "vfm-btn-ghost");
+      b.style.minWidth = "0";
+      b.style.padding = "10px 12px";
+      b.textContent = m.label;
+      b.onclick = () => ui.setLobbyTab(m.id);
+      tabsWrap.appendChild(b);
     });
 
+    // Conteúdo da aba
+    const secBody = document.createElement("div");
+    secBody.className = "vfm-section";
+    secBody.style.marginTop = "12px";
+
+    const content = renderLobbyTab(ui, career, data);
+    secBody.appendChild(content);
+
+    // Rodapé
     const row = document.createElement("div");
     row.className = "vfm-row";
     row.style.marginTop = "12px";
-
-    const calendar = document.createElement("button");
-    calendar.className = "vfm-btn vfm-btn-primary";
-    calendar.textContent = "CALENDÁRIO (Fase 4)";
-    calendar.onclick = () => alert("Fase 4: calendário completo entra na próxima etapa.");
 
     const back = document.createElement("button");
     back.className = "vfm-btn vfm-btn-ghost";
     back.textContent = "VOLTAR";
     back.onclick = () => ui.goHome();
 
+    const calendar = document.createElement("button");
+    calendar.className = "vfm-btn vfm-btn-primary";
+    calendar.textContent = "CALENDÁRIO (Fase 4)";
+    calendar.onclick = () => ui.setLobbyTab("agenda");
+
     row.appendChild(back);
     row.appendChild(calendar);
 
-    sec.appendChild(header);
-    sec.appendChild(tips);
+    secTop.appendChild(topLine);
+    secTop.appendChild(tabsWrap);
 
     root.appendChild(h);
     root.appendChild(p);
-    root.appendChild(sec);
+    root.appendChild(secTop);
+    root.appendChild(secBody);
     root.appendChild(row);
     return root;
+  }
+
+  function renderLobbyTab(ui, career, data) {
+    const tab = ui.data.lobbyTab;
+
+    if (tab === "squad") {
+      const box = document.createElement("div");
+      box.innerHTML = `<h3>Elenco</h3><div class="vfm-small">Lista inicial (gerada na Fase 3). Em fases seguintes, elenco real + transferências completas.</div>`;
+
+      const list = document.createElement("div");
+      list.className = "vfm-list";
+      list.style.marginTop = "10px";
+
+      data.roster.slice(0, 18).forEach((p) => {
+        const it = document.createElement("div");
+        it.className = "vfm-item";
+        it.innerHTML = `
+          <div class="vfm-inline">
+            <div class="vfm-pill">#${p.number}</div>
+            <div style="flex:1">
+              <strong>${p.name}</strong>
+              <div class="vfm-small">${p.pos} • ${p.age} anos • Overall ${p.overall} • Pot ${p.potential}</div>
+            </div>
+            <div class="vfm-pill">Moral ${p.morale}</div>
+            <div class="vfm-pill">Fit ${p.fitness}</div>
+          </div>
+        `;
+        list.appendChild(it);
+      });
+
+      box.appendChild(list);
+      return box;
+    }
+
+    if (tab === "training") {
+      const box = document.createElement("div");
+      box.innerHTML = `
+        <h3>Treinos</h3>
+        <div class="vfm-small">
+          Estrutura pronta. Na próxima etapa vamos ligar treinos semanais → evolução de atributos e impacto em resultados.
+        </div>
+      `;
+
+      const list = document.createElement("div");
+      list.className = "vfm-list";
+      list.style.marginTop = "10px";
+
+      [
+        { t: "Treino Físico", d: "Aumenta fitness e reduz risco de queda no fim do jogo (Fase 4+)." },
+        { t: "Treino Tático", d: "Ajusta estilo de jogo e organização (Fase 4+)." },
+        { t: "Treino Finalização", d: "Beneficia atacantes e meio ofensivo (Fase 4+)." }
+      ].forEach((x) => {
+        const it = document.createElement("div");
+        it.className = "vfm-item";
+        it.innerHTML = `<strong>${x.t}</strong><div class="vfm-small">${x.d}</div>`;
+        list.appendChild(it);
+      });
+
+      box.appendChild(list);
+      return box;
+    }
+
+    if (tab === "news") {
+      const box = document.createElement("div");
+      box.innerHTML = `<h3>Notícias</h3><div class="vfm-small">Feed inicial (Fase 3). Depois: notícias dinâmicas e efeitos no moral.</div>`;
+
+      const list = document.createElement("div");
+      list.className = "vfm-list";
+      list.style.marginTop = "10px";
+
+      data.news.forEach((n) => {
+        const it = document.createElement("div");
+        it.className = "vfm-item";
+        it.innerHTML = `<strong>${n.title}</strong><div class="vfm-small">${n.body}</div>`;
+        list.appendChild(it);
+      });
+
+      box.appendChild(list);
+      return box;
+    }
+
+    if (tab === "agenda") {
+      const box = document.createElement("div");
+      box.innerHTML = `
+        <h3>Agenda</h3>
+        <div class="vfm-small">
+          Fase 3: tela base. Fase 4: calendário completo com partidas/treinos/eventos.
+        </div>
+      `;
+
+      const it = document.createElement("div");
+      it.className = "vfm-item";
+      it.innerHTML = `<strong>Em breve</strong><div class="vfm-small">Aqui entra a lista de datas e compromissos (Fase 4).</div>`;
+      box.appendChild(it);
+      return box;
+    }
+
+    if (tab === "finance") {
+      const box = document.createElement("div");
+      box.innerHTML = `
+        <h3>Finanças</h3>
+        <div class="vfm-small">Disponível principalmente para Presidente. Depois: receitas, despesas, contratos, estádio/CT.</div>
+      `;
+
+      const f = data.finance;
+      const list = document.createElement("div");
+      list.className = "vfm-list";
+      list.style.marginTop = "10px";
+
+      const items = [
+        { t: "Orçamento", v: money(f.budget) },
+        { t: "Folha (limite)", v: money(f.wageBudget) },
+        { t: "Receita mensal (estimada)", v: money(f.incomeMonthly) },
+        { t: "Despesas mensais (estimada)", v: money(f.expensesMonthly) }
+      ];
+
+      items.forEach((x) => {
+        const it = document.createElement("div");
+        it.className = "vfm-item";
+        it.innerHTML = `<strong>${x.t}</strong><div class="vfm-small">${x.v}</div>`;
+        list.appendChild(it);
+      });
+
+      box.appendChild(list);
+      return box;
+    }
+
+    if (tab === "stats") {
+      const box = document.createElement("div");
+      box.innerHTML = `
+        <h3>Estatísticas</h3>
+        <div class="vfm-small">Fase 3: estrutura. Fase 4+: partidas geram estatísticas reais.</div>
+      `;
+
+      const it = document.createElement("div");
+      it.className = "vfm-item";
+      it.innerHTML = `<strong>Sem dados ainda</strong><div class="vfm-small">Quando as partidas existirem, aqui terá artilharia, desempenho, tabela e gráficos.</div>`;
+      box.appendChild(it);
+      return box;
+    }
+
+    if (tab === "transfers") {
+      const box = document.createElement("div");
+      box.innerHTML = `
+        <h3>Mercado</h3>
+        <div class="vfm-small">Tela base para Diretor Esportivo. Fase 4+: compras, vendas, empréstimos e staff.</div>
+      `;
+
+      const it = document.createElement("div");
+      it.className = "vfm-item";
+      it.innerHTML = `<strong>Em breve</strong><div class="vfm-small">Lista de alvos, propostas e negociações entram na próxima etapa.</div>`;
+      box.appendChild(it);
+      return box;
+    }
+
+    const fallback = document.createElement("div");
+    fallback.className = "vfm-item";
+    fallback.innerHTML = `<strong>Aba não encontrada</strong><div class="vfm-small">ID: ${String(tab)}</div>`;
+    return fallback;
+  }
+
+  function money(v) {
+    try {
+      return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
+    } catch (_) {
+      return "R$ " + String(v || 0);
+    }
   }
 
   function renderError(msg) {
