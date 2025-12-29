@@ -1,0 +1,34 @@
+{
+  "id": "brasil",
+  "name": "Brasil Pack",
+  "version": "0.1.0",
+  "author": "VFM26",
+  "description": "Base do Brasil (Série A, Série B, Copa do Brasil, Estaduais). Expandível para mundo inteiro via novos packs.",
+  "content": {
+    "countries": [
+      { "id": "BR", "name": "Brasil" }
+    ],
+    "leagues": [
+      {
+        "id": "BR_A",
+        "name": "Brasil - Série A",
+        "level": 1,
+        "countryId": "BR",
+        "clubs": []
+      },
+      {
+        "id": "BR_B",
+        "name": "Brasil - Série B",
+        "level": 2,
+        "countryId": "BR",
+        "clubs": []
+      }
+    ],
+    "cups": [
+      { "id": "BR_CDB", "name": "Copa do Brasil", "countryId": "BR" }
+    ],
+    "stateCups": [
+      { "id": "BR_EST", "name": "Estaduais (placeholder)", "countryId": "BR" }
+    ]
+  }
+}
