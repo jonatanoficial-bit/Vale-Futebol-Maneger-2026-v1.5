@@ -1,9 +1,4 @@
 (function () {
-  // Regras de robustez:
-  // - Nunca assumir elemento existe sem checar
-  // - Nunca quebrar boot se algum botão não existir
-  // - Tudo deve renderizar a partir de um único root (#app)
-
   const $ = (sel) => document.querySelector(sel);
 
   function el(tag, attrs = {}, children = []) {
@@ -11,6 +6,7 @@
     for (const [k, v] of Object.entries(attrs)) {
       if (k === "class") n.className = v;
       else if (k === "text") n.textContent = v;
+      else if (k === "html") n.innerHTML = v;
       else if (k.startsWith("on") && typeof v === "function") n.addEventListener(k.slice(2), v);
       else n.setAttribute(k, v);
     }
@@ -28,27 +24,56 @@
     root.appendChild(node);
   }
 
-  function showCritical(err) {
-    console.error(err);
-    alert(`Erro crítico: ${err?.message || err}`);
+  function showBootFail(report) {
+    const fail = report.fail;
+    const stepsText = (report.steps || []).map((s) => `• ${s.stage} @ ${s.at}`).join("\n");
+    const details = fail?.details ? JSON.stringify(fail.details, null, 2) : "";
+    const payload = [
+      `Código: ${fail.code}`,
+      `Mensagem: ${fail.message}`,
+      "",
+      "Etapas concluídas:",
+      stepsText,
+      "",
+      details ? "Detalhes:" : "",
+      details,
+    ].join("\n");
+
+    mount(el("div", { class: "container" }, [
+      el("div", { class: "card" }, [
+        el("div", { class: "h1", text: "Erro crítico" }),
+        el("div", { class: "p", text: `Código: ${fail.code}` }),
+        el("div", { class: "p", text: fail.message }),
+        el("div", { style: "height:12px" }),
+        el("button", {
+          class: "btn blue",
+          text: "COPIAR RELATÓRIO",
+          onclick: async () => {
+            try {
+              await navigator.clipboard.writeText(payload);
+              alert("Relatório copiado.");
+            } catch {
+              alert(payload);
+            }
+          },
+        }),
+        el("div", { style: "height:10px" }),
+        el("button", {
+          class: "btn secondary",
+          text: "VER RELATÓRIO (popup)",
+          onclick: () => alert(payload),
+        }),
+      ]),
+    ]));
   }
 
-  // -----------------------------
-  // Screens
-  // -----------------------------
   function ScreenCover() {
-    // Mantém “a capa atual” via assets existentes (você pode ajustar depois).
-    // Baseline: tela simples com botão continuar.
     return el("div", { class: "container" }, [
       el("div", { class: "card" }, [
         el("div", { class: "h1", text: "Vale Futebol Manager 2026" }),
         el("div", { class: "p", text: "Capa (baseline). Próximo passo: escolher Pacote de Dados (DLC) e Slot." }),
         el("div", { style: "height:12px" }),
-        el("button", {
-          class: "btn",
-          text: "CONTINUAR",
-          onclick: () => goPacks(),
-        }),
+        el("button", { class: "btn", text: "CONTINUAR", onclick: () => goPacks() }),
       ]),
     ]);
   }
@@ -76,7 +101,7 @@
               window.State.saveState(next);
               goSlots();
             } catch (e) {
-              showCritical(e);
+              alert(String(e?.message || e));
             }
           },
         }),
@@ -101,7 +126,6 @@
     const pack = s.selection.pack;
 
     if (!pack) {
-      // segurança: se o usuário caiu aqui sem escolher pack
       return el("div", { class: "container" }, [
         el("div", { class: "card" }, [
           el("div", { class: "h1", text: "Pacote não selecionado" }),
@@ -168,16 +192,7 @@
     const slot = s.selection.slot;
     const pack = s.selection.pack;
 
-    if (!pack || !slot) {
-      return el("div", { class: "container" }, [
-        el("div", { class: "card" }, [
-          el("div", { class: "h1", text: "Fluxo inválido" }),
-          el("div", { class: "p", text: "Selecione pacote e slot antes de criar carreira." }),
-          el("div", { style: "height:12px" }),
-          el("button", { class: "btn", text: "IR PARA PACOTES", onclick: () => goPacks() }),
-        ]),
-      ]);
-    }
+    if (!pack || !slot) return ScreenPacks();
 
     const nameInput = el("input", {
       placeholder: "Seu nome (ex: Jonatan)",
@@ -238,12 +253,8 @@
               createdAt: Date.now(),
               packId: pack.id,
               role: roleSelect.value,
-              profile: {
-                avatar: avatarSelect.value,
-                name,
-                country,
-              },
-              club: null, // próxima etapa
+              profile: { avatar: avatarSelect.value, name, country },
+              club: null,
               date: "2026-01-01",
               points: 0,
             };
@@ -260,7 +271,6 @@
     const s = window.State.loadState();
     const slot = s.selection.slot;
     const career = slot ? window.SaveSlots.readCareer(slot) : null;
-
     if (!career) return ScreenSlots();
 
     return el("div", { class: "container" }, [
@@ -284,25 +294,39 @@
     ]);
   }
 
-  // -----------------------------
-  // Navigation
-  // -----------------------------
   function goCover() { mount(ScreenCover()); }
   function goPacks() { mount(ScreenPacks()); }
   function goSlots() { mount(ScreenSlots()); }
   function goCreateCareer() { mount(ScreenCreateCareer()); }
   function goLobby() { mount(ScreenLobby()); }
 
-  // -----------------------------
-  // Boot
-  // -----------------------------
+  function attachDebug() {
+    const btn = document.createElement("button");
+    btn.className = "debug";
+    btn.textContent = "DEBUG";
+    btn.addEventListener("click", () => {
+      const st = window.State?.loadState?.() || null;
+      const rep = window.BootCheck?.readReport?.() || null;
+      alert(
+        "STATE:\n" + JSON.stringify(st, null, 2) +
+        "\n\nLAST BOOT REPORT:\n" + JSON.stringify(rep, null, 2)
+      );
+    });
+    document.body.appendChild(btn);
+  }
+
   function boot() {
-    // Sanity checks: engine globals
-    if (!window.Utils || !window.State || !window.DataPack || !window.SaveSlots) {
-      throw new Error("Engine não carregou. Verifique ordem de scripts no index.html.");
+    const report = window.BootCheck.runChecks({
+      getRoot: () => document.querySelector("#app"),
+      getState: () => window.State.loadState(),
+      listPacks: () => window.DataPack.listPacks(),
+    });
+
+    if (report.fail) {
+      showBootFail(report);
+      return;
     }
 
-    // Start
     const s = window.State.loadState();
     if (s.selection.slot) {
       const c = window.SaveSlots.readCareer(s.selection.slot);
@@ -311,24 +335,24 @@
     return goCover();
   }
 
-  // Debug button (não pode quebrar)
-  function attachDebug() {
-    const btn = document.createElement("button");
-    btn.className = "debug";
-    btn.textContent = "DEBUG";
-    btn.addEventListener("click", () => {
-      const st = window.State.loadState();
-      alert(JSON.stringify(st, null, 2));
-    });
-    document.body.appendChild(btn);
-  }
-
   window.addEventListener("load", () => {
     try {
       boot();
       attachDebug();
     } catch (e) {
-      showCritical(e);
+      const report = {
+        startedAt: new Date().toISOString(),
+        endedAt: new Date().toISOString(),
+        steps: [],
+        fail: {
+          ok: false,
+          code: "BOOT_E99_UNHANDLED",
+          message: "Erro inesperado durante o boot.",
+          details: { error: String(e), stack: String(e?.stack || "") },
+        },
+      };
+      try { localStorage.setItem(window.BootCheck.REPORT_KEY, JSON.stringify(report, null, 2)); } catch {}
+      alert("Erro crítico: " + String(e?.message || e));
     }
   });
 })();
