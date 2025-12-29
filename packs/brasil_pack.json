@@ -1,21 +1,131 @@
 {
-  "schema": "vfm26.pack.v1",
   "id": "brasil",
-  "name": "Brasil Pack",
-  "defaultSeasonYear": 2026,
+  "name": "Brasil",
+  "region": "SA",
+  "version": "1.0.0",
+  "description": "Brasil: Série A, Série B, Estaduais e Copa do Brasil",
+  "calendar": {
+    "seasonStart": "2026-01-10",
+    "seasonEnd": "2026-12-10"
+  },
+  "leagues": [
+    {
+      "id": "A",
+      "name": "Série A",
+      "tier": 1
+    },
+    {
+      "id": "B",
+      "name": "Série B",
+      "tier": 2
+    }
+  ],
+  "cups": [
+    {
+      "id": "CDB",
+      "name": "Copa do Brasil"
+    }
+  ],
   "clubs": [
-    { "id": "CRU", "name": "Cruzeiro", "shortName": "Cruzeiro", "league": "A", "state": "MG", "rating": 78, "budget": 45000000 },
-    { "id": "CAM", "name": "Atlético-MG", "shortName": "Atlético-MG", "league": "A", "state": "MG", "rating": 80, "budget": 60000000 },
-    { "id": "FLA", "name": "Flamengo", "shortName": "Flamengo", "league": "A", "state": "RJ", "rating": 85, "budget": 90000000 },
-    { "id": "PAL", "name": "Palmeiras", "shortName": "Palmeiras", "league": "A", "state": "SP", "rating": 84, "budget": 88000000 },
-    { "id": "COR", "name": "Corinthians", "shortName": "Corinthians", "league": "A", "state": "SP", "rating": 80, "budget": 70000000 },
-    { "id": "SAO", "name": "São Paulo", "shortName": "São Paulo", "league": "A", "state": "SP", "rating": 79, "budget": 65000000 },
-    { "id": "GRE", "name": "Grêmio", "shortName": "Grêmio", "league": "A", "state": "RS", "rating": 79, "budget": 62000000 },
-    { "id": "INT", "name": "Internacional", "shortName": "Inter", "league": "A", "state": "RS", "rating": 79, "budget": 61000000 },
-
-    { "id": "AVA", "name": "Avaí", "shortName": "Avaí", "league": "B", "state": "SC", "rating": 70, "budget": 18000000 },
-    { "id": "CHA", "name": "Chapecoense", "shortName": "Chape", "league": "B", "state": "SC", "rating": 70, "budget": 19000000 },
-    { "id": "CEA", "name": "Ceará", "shortName": "Ceará", "league": "B", "state": "CE", "rating": 72, "budget": 24000000 },
-    { "id": "VIT", "name": "Vitória", "shortName": "Vitória", "league": "B", "state": "BA", "rating": 71, "budget": 23000000 }
+    {
+      "id": "FLA",
+      "name": "Flamengo",
+      "shortName": "FLA",
+      "league": "A",
+      "state": "RJ",
+      "rating": 85,
+      "budget": 90000000,
+      "crest": "assets/crests/FLA.png"
+    },
+    {
+      "id": "PAL",
+      "name": "Palmeiras",
+      "shortName": "PAL",
+      "league": "A",
+      "state": "SP",
+      "rating": 84,
+      "budget": 88000000,
+      "crest": "assets/crests/PAL.png"
+    },
+    {
+      "id": "COR",
+      "name": "Corinthians",
+      "shortName": "COR",
+      "league": "A",
+      "state": "SP",
+      "rating": 82,
+      "budget": 70000000,
+      "crest": "assets/crests/COR.png"
+    },
+    {
+      "id": "SAO",
+      "name": "São Paulo",
+      "shortName": "SAO",
+      "league": "A",
+      "state": "SP",
+      "rating": 81,
+      "budget": 65000000,
+      "crest": "assets/crests/SAO.png"
+    },
+    {
+      "id": "CAM",
+      "name": "Atlético Mineiro",
+      "shortName": "CAM",
+      "league": "A",
+      "state": "MG",
+      "rating": 82,
+      "budget": 72000000,
+      "crest": "assets/crests/CAM.png"
+    },
+    {
+      "id": "CRU",
+      "name": "Cruzeiro",
+      "shortName": "CRU",
+      "league": "A",
+      "state": "MG",
+      "rating": 78,
+      "budget": 50000000,
+      "crest": "assets/crests/CRU.png"
+    },
+    {
+      "id": "GRE",
+      "name": "Grêmio",
+      "shortName": "GRE",
+      "league": "A",
+      "state": "RS",
+      "rating": 80,
+      "budget": 60000000,
+      "crest": "assets/crests/GRE.png"
+    },
+    {
+      "id": "INT",
+      "name": "Internacional",
+      "shortName": "INT",
+      "league": "A",
+      "state": "RS",
+      "rating": 80,
+      "budget": 58000000,
+      "crest": "assets/crests/INT.png"
+    },
+    {
+      "id": "SAN",
+      "name": "Santos",
+      "shortName": "SAN",
+      "league": "B",
+      "state": "SP",
+      "rating": 76,
+      "budget": 42000000,
+      "crest": "assets/crests/SAN.png"
+    },
+    {
+      "id": "VAS",
+      "name": "Vasco da Gama",
+      "shortName": "VAS",
+      "league": "B",
+      "state": "RJ",
+      "rating": 75,
+      "budget": 40000000,
+      "crest": "assets/crests/VAS.png"
+    }
   ]
 }
