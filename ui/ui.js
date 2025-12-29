@@ -1,247 +1,240 @@
-/* ui/ui.js — UI principal (router simples, sem frameworks) */
+/* ui/ui.js - UI Root + Router (compatível com init() e start())
+   IMPORTANTE: start() é alias de init() para compatibilidade com boots antigos.
+*/
 (function () {
-  'use strict';
-
   const NS = (window.VFM26 = window.VFM26 || {});
-  const BootCheck = NS.BootCheck;
+  const UI = (NS.UI = NS.UI || {});
 
-  const UI = {
-    root: null,
-    screens: {},
+  // --------- Helpers ----------
+  function $(sel) {
+    return document.querySelector(sel);
+  }
 
-    init(rootEl) {
-      BootCheck && BootCheck.step('UI_INIT_START');
-      this.root = rootEl;
-      this.registerCoreScreens();
-      BootCheck && BootCheck.step('UI_INIT_OK');
-    },
+  function escapeHtml(str) {
+    return String(str ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
 
-    register(name, renderFn) {
-      this.screens[name] = renderFn;
-    },
-
-    go(name, params) {
-      const fn = this.screens[name];
-      if (!fn) {
-        return BootCheck.fatal('UI_E01_SCREEN_NOT_FOUND', `Tela não registrada: ${name}`);
-      }
-      try {
-        const html = fn(params || {});
-        this.root.innerHTML = html;
-        this._wire(name, params || {});
-      } catch (e) {
-        BootCheck.fatal('UI_E99_RENDER_FAIL', `Falha ao renderizar tela: ${name}`, String(e && e.stack ? e.stack : e));
-      }
-    },
-
-    _wire(name, params) {
-      // chama hook opcional
-      const hook = this.screens[name]?.afterRender;
-      if (typeof hook === 'function') {
-        try { hook(params); } catch (e) {
-          BootCheck.fatal('UI_E98_WIRE_FAIL', `Falha ao ativar eventos da tela: ${name}`, String(e));
-        }
-      }
-    },
-
-    // ---------- Telas da Fase 1/2/3 ----------
-    registerCoreScreens() {
-      // Cover
-      this.register('cover', () => {
-        const engineV = NS.Engine?.version || '?.?.?';
-        const gameV = NS.Game?.state?.version || '?.?.?';
-        return `
-          <div class="screen">
-            <div class="topbar">
-              <div class="brand">
-                <div class="title">VALE FUTEBOL MANAGER 2026</div>
-                <div class="subtitle">Simulador de futebol manager. Base sólida pronta. Agora: DataPack, Saves e Carreira.</div>
-              </div>
-              <div class="pill"><span class="dot"></span><span>Engine ${engineV} • Game ${gameV}</span></div>
-            </div>
-
-            <div class="hero">
-              <h1>Modo Carreira</h1>
-              <p>Fluxo obrigatório: <b>DataPack → Save Slot → Carreira</b>. Sem build, sem frameworks, tudo editável no celular.</p>
-            </div>
-
-            <div class="card">
-              <h2>Pronto para começar</h2>
-              <p>Escolha o pacote de dados (Brasil), selecione o slot e crie sua carreira com cargo e clube. A expansão mundial será via novos JSON em <span class="mono">/packs</span>.</p>
-            </div>
-
-            <div class="actions">
-              <button class="btn btn-primary" id="btnStart">Iniciar</button>
-            </div>
-          </div>
-        `;
-      });
-      this.screens.cover.afterRender = () => {
-        document.getElementById('btnStart').onclick = () => this.go('datapack');
-      };
-
-      // DataPack (Fase 2)
-      this.register('datapack', () => {
-        return `
-          <div class="screen">
-            <div class="topbar">
-              <div class="brand">
-                <div class="title">Escolher DataPack</div>
-                <div class="subtitle">Sem mexer no código do jogo: os packs são arquivos JSON em <span class="mono">/packs</span>.</div>
-              </div>
-              <div class="pill"><span class="dot"></span><span>Fase 2</span></div>
-            </div>
-
-            <div class="stack" id="packList">
-              <div class="toast">Carregando packs...</div>
-            </div>
-
-            <div class="actions">
-              <button class="btn btn-secondary" id="btnBack">Voltar</button>
-            </div>
-          </div>
-        `;
-      });
-      this.screens.datapack.afterRender = async () => {
-        document.getElementById('btnBack').onclick = () => this.go('cover');
-
-        const listEl = document.getElementById('packList');
-        try {
-          const packs = await NS.Game.listPacks();
-          listEl.innerHTML = packs.map(p => `
-            <div class="card">
-              <h2>${p.name}</h2>
-              <p><b>ID:</b> ${p.id}  •  <b>Região:</b> ${p.region}<br>${p.description}</p>
-              <div style="margin-top:12px;">
-                <button class="btn btn-primary btn-wide" data-pack="${p.id}">Selecionar</button>
-              </div>
-            </div>
-          `).join('');
-
-          listEl.querySelectorAll('button[data-pack]').forEach(btn => {
-            btn.onclick = async () => {
-              const id = btn.getAttribute('data-pack');
-              btn.disabled = true;
-              btn.textContent = 'Carregando...';
-              try {
-                await NS.Game.loadPack(id);
-                this.go('saveslot');
-              } catch (e) {
-                BootCheck.fatal('PACK_E01_LOAD_FAIL', 'Falha ao carregar o DataPack.', String(e));
-              } finally {
-                btn.disabled = false;
-                btn.textContent = 'Selecionar';
-              }
-            };
-          });
-        } catch (e) {
-          BootCheck.fatal('PACK_E00_LIST_FAIL', 'Falha ao listar DataPacks.', String(e));
-        }
-      };
-
-      // SaveSlots (Fase 2)
-      this.register('saveslot', () => {
-        const pack = NS.Game.getPackSummary();
-        return `
-          <div class="screen">
-            <div class="topbar">
-              <div class="brand">
-                <div class="title">Escolher Save Slot</div>
-                <div class="subtitle">DataPack ativo: <b>${pack ? pack.name : '—'}</b> (ID: <span class="mono">${pack ? pack.id : '—'}</span>)</div>
-              </div>
-              <div class="pill"><span class="dot"></span><span>2 slots</span></div>
-            </div>
-
-            <div class="stack" id="slots"></div>
-
-            <div class="actions">
-              <button class="btn btn-secondary" id="btnBack">Voltar</button>
-            </div>
-          </div>
-        `;
-      });
-      this.screens.saveslot.afterRender = () => {
-        document.getElementById('btnBack').onclick = () => this.go('datapack');
-
-        const slotsEl = document.getElementById('slots');
-        const packId = NS.Game.state.packId;
-
-        function renderSlot(slotNum) {
-          const save = NS.Game.readSlot(slotNum);
-          const hasCareer = !!save?.career;
-          const title = hasCareer ? 'Continuar carreira' : 'Começar novo jogo';
-          const sub = save
-            ? `Pack: ${save.packId} • Atualizado: ${save.updatedAt ? save.updatedAt.slice(0,10) : '—'}`
-            : `Slot vazio. Pack atual: ${packId}`;
-
-          const badge = hasCareer ? 'CARREIRA' : 'VAZIO';
-
-          return `
-            <div class="list-item">
-              <div>
-                <strong>SLOT ${slotNum} — ${title}</strong>
-                <small>${sub}</small>
-                ${hasCareer ? `<small><b>Manager:</b> ${save.career.manager.firstName} ${save.career.manager.lastName} • <b>Clube:</b> ${save.career.club.name}</small>` : ``}
-              </div>
-              <div style="display:flex;flex-direction:column;gap:10px;align-items:flex-end;">
-                <span class="badge">${badge}</span>
-                <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
-                  <button class="btn btn-primary" data-act="open" data-slot="${slotNum}">${hasCareer ? 'ABRIR' : 'CRIAR NOVO'}</button>
-                  <button class="btn btn-danger" data-act="del" data-slot="${slotNum}">APAGAR</button>
-                </div>
-              </div>
-            </div>
-          `;
-        }
-
-        slotsEl.innerHTML = `
-          <div class="list">
-            ${renderSlot(1)}
-            ${renderSlot(2)}
-          </div>
-        `;
-
-        slotsEl.querySelectorAll('button[data-act]').forEach(btn => {
-          btn.onclick = () => {
-            const act = btn.getAttribute('data-act');
-            const slot = Number(btn.getAttribute('data-slot'));
-
-            if (act === 'del') {
-              const ok = confirm(`Apagar SLOT ${slot}?`);
-              if (!ok) return;
-              NS.Game.deleteSlot(slot);
-              this.go('saveslot');
-              return;
-            }
-
-            if (act === 'open') {
-              NS.Game.selectSlot(slot);
-              const save = NS.Game.readSlot(slot);
-
-              // Se já tem carreira, vai direto pro lobby (ou tutorial se preferir)
-              if (save?.career) {
-                NS.Game.state.career = save.career;
-                if (NS.Game.shouldShowTutorial()) this.go('tutorial');
-                else this.go('lobby');
-                return;
-              }
-
-              // Novo jogo -> Fase 3
-              this.go('career');
-            }
-          };
-        });
-      };
-
-      // Fase 3: Carreira (registrada em arquivo separado, mas garantimos fallback)
-      if (NS.CareerUI && typeof NS.CareerUI.register === 'function') {
-        NS.CareerUI.register(this);
-      }
-      if (NS.LobbyUI && typeof NS.LobbyUI.register === 'function') {
-        NS.LobbyUI.register(this);
-      }
+  function ensureRoot() {
+    let root = $("#app");
+    if (!root) {
+      root = document.createElement("div");
+      root.id = "app";
+      document.body.appendChild(root);
     }
+    return root;
+  }
+
+  function setView(html) {
+    const root = ensureRoot();
+    root.innerHTML = html;
+  }
+
+  // --------- State ----------
+  UI._engine = null;
+  UI._mounted = false;
+
+  // --------- Screens (mantém o estilo atual do seu projeto) ----------
+  function renderHome() {
+    const engineVersion = escapeHtml(NS.VERSION || "v?");
+    setView(`
+      <div class="screen">
+        <div class="panel">
+          <h1 class="title">VALE FUTEBOL MANAGER 2026</h1>
+          <p class="subtitle">Simulador de futebol manager. Base sólida pronta. Agora: DataPack e Saves.</p>
+
+          <div class="card">
+            <h2>MODO CARREIRA</h2>
+            <p>Fluxo obrigatório: DataPack → Save Slot → Carreira.</p>
+            <span class="badge">Engine ${engineVersion}</span>
+          </div>
+
+          <button class="btn btn-primary" id="btnStart">INICIAR</button>
+        </div>
+      </div>
+    `);
+
+    $("#btnStart").onclick = () => UI.go("datapack");
+  }
+
+  async function renderDataPack() {
+    const engine = UI._engine;
+    const catalog = engine?.state?.packCatalog;
+    const packs = Array.isArray(catalog?.packs) ? catalog.packs : [];
+
+    const listHtml = packs
+      .map((p) => {
+        const id = escapeHtml(p.id);
+        const name = escapeHtml(p.name);
+        const desc = escapeHtml(p.description || "");
+        const active = String(engine.state.activePackId) === String(p.id);
+
+        return `
+          <div class="card">
+            <h2>${name}</h2>
+            <p>${desc}</p>
+            <p class="small">ID: <b>${id}</b></p>
+            <button class="btn btn-primary" data-pack="${id}">
+              ${active ? "SELECIONADO" : "SELECIONAR"}
+            </button>
+          </div>
+        `;
+      })
+      .join("");
+
+    setView(`
+      <div class="screen">
+        <div class="panel">
+          <h1 class="title">Escolher DataPack</h1>
+          <p class="subtitle">Sem mexer no código do jogo: os packs são arquivos JSON em /packs.</p>
+          ${listHtml || `<div class="card"><p>Nenhum pack encontrado em packs/catalog.json</p></div>`}
+          <button class="btn" id="btnBack">VOLTAR</button>
+        </div>
+      </div>
+    `);
+
+    $("#btnBack").onclick = () => UI.go("home");
+
+    document.querySelectorAll("[data-pack]").forEach((btn) => {
+      btn.onclick = async () => {
+        const id = btn.getAttribute("data-pack");
+        try {
+          await engine.setActivePack(id);
+          UI.go("saves");
+        } catch (e) {
+          alert(`Falha ao carregar pack ${id}: ${e.message}`);
+        }
+      };
+    });
+  }
+
+  function renderSaves() {
+    const engine = UI._engine;
+    const s1 = engine.state.slots["1"];
+    const s2 = engine.state.slots["2"];
+
+    function slotCard(slotId, slotData) {
+      const isEmpty = !slotData;
+      const packId = escapeHtml(slotData?.packId || engine.state.activePackId || "");
+      return `
+        <div class="card">
+          <h2>SLOT ${slotId} — ${isEmpty ? "Começar novo jogo" : "Continuar carreira"}</h2>
+          <p class="small">${isEmpty ? "Slot vazio." : "Slot com progresso."} Pack atual: <b>${packId}</b></p>
+          <div class="row">
+            <button class="btn btn-primary" data-create="${slotId}">
+              ${isEmpty ? "CRIAR NOVO" : "CONTINUAR"}
+            </button>
+            <button class="btn btn-danger" data-del="${slotId}">APAGAR</button>
+          </div>
+        </div>
+      `;
+    }
+
+    setView(`
+      <div class="screen">
+        <div class="panel">
+          <h1 class="title">Escolher Save Slot</h1>
+          <p class="subtitle">DataPack ativo: <b>${escapeHtml(engine.state.activePackId || "-")}</b></p>
+          ${slotCard("1", s1)}
+          ${slotCard("2", s2)}
+          <button class="btn" id="btnBack">VOLTAR</button>
+        </div>
+      </div>
+    `);
+
+    $("#btnBack").onclick = () => UI.go("datapack");
+
+    document.querySelectorAll("[data-create]").forEach((btn) => {
+      btn.onclick = () => {
+        const slotId = btn.getAttribute("data-create");
+        // cria slot vazio amarrado ao pack atual
+        const existing = engine.loadSlot(slotId);
+        if (!existing) {
+          engine.saveSlot(slotId, {
+            packId: engine.state.activePackId,
+            career: null,
+          });
+        }
+        // segue para carreira
+        UI.go("career", { slotId });
+      };
+    });
+
+    document.querySelectorAll("[data-del]").forEach((btn) => {
+      btn.onclick = () => {
+        const slotId = btn.getAttribute("data-del");
+        const ok = confirm(`Apagar SLOT ${slotId}?`);
+        if (!ok) return;
+        engine.deleteSlot(slotId);
+        UI.go("saves");
+      };
+    });
+  }
+
+  function renderCareer(params) {
+    // Sua career-ui.js já existe e pode ser plugada aqui depois.
+    const slotId = params?.slotId || "1";
+    const packId = escapeHtml(UI._engine.state.activePackId || "-");
+    setView(`
+      <div class="screen">
+        <div class="panel">
+          <h1 class="title">Próxima Etapa: Carreira</h1>
+          <p class="subtitle">Slot ${escapeHtml(slotId)} selecionado. Agora entra a criação de carreira (nome, avatar, país, cargo, clube).</p>
+
+          <div class="card">
+            <h2>FASE 3 vai começar aqui</h2>
+            <p>Vamos montar o fluxo completo: Criar perfil (nome/país/avatar) → Escolher cargo → Escolher clube do Brasil → Tutorial de boas-vindas → Lobby</p>
+            <span class="badge">Pack: ${packId} | Slot: ${escapeHtml(slotId)}</span>
+          </div>
+
+          <div class="row">
+            <button class="btn" id="btnBack">VOLTAR</button>
+            <button class="btn btn-primary" id="btnContinue">CONTINUAR</button>
+          </div>
+        </div>
+      </div>
+    `);
+
+    $("#btnBack").onclick = () => UI.go("saves");
+    $("#btnContinue").onclick = () => {
+      alert("Fase 3: Próximo passo é implementar o formulário completo de carreira + escolha de clube com escudo.");
+    };
+  }
+
+  // --------- Router ----------
+  UI.go = function (route, params) {
+    UI._route = route || "home";
+    UI._params = params || {};
+
+    if (UI._route === "home") return renderHome();
+    if (UI._route === "datapack") return renderDataPack();
+    if (UI._route === "saves") return renderSaves();
+    if (UI._route === "career") return renderCareer(UI._params);
+
+    // fallback
+    return renderHome();
   };
 
-  NS.UI = UI;
+  // --------- Public API ----------
+  UI.init = async function (engine) {
+    UI._engine = engine || null;
+
+    // monta 1x
+    if (!UI._mounted) {
+      UI._mounted = true;
+    }
+
+    // rota inicial
+    UI.go("home");
+    return true;
+  };
+
+  // ✅ Compatibilidade para boots que chamam NS.UI.start()
+  UI.start = async function (engine) {
+    return UI.init(engine);
+  };
 })();
