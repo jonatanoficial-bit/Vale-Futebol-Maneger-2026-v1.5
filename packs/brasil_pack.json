@@ -35,7 +35,7 @@
       "state": "RJ",
       "rating": 85,
       "budget": 90000000,
-      "crest": "assets/crests/FLA.png"
+      "crest": "assets/logos/FLA.png"
     },
     {
       "id": "PAL",
@@ -45,7 +45,7 @@
       "state": "SP",
       "rating": 84,
       "budget": 88000000,
-      "crest": "assets/crests/PAL.png"
+      "crest": "assets/logos/PAL.png"
     },
     {
       "id": "COR",
@@ -55,7 +55,7 @@
       "state": "SP",
       "rating": 82,
       "budget": 70000000,
-      "crest": "assets/crests/COR.png"
+      "crest": "assets/logos/COR.png"
     },
     {
       "id": "SAO",
@@ -65,7 +65,7 @@
       "state": "SP",
       "rating": 81,
       "budget": 65000000,
-      "crest": "assets/crests/SAO.png"
+      "crest": "assets/logos/SAO.png"
     },
     {
       "id": "CAM",
@@ -75,7 +75,7 @@
       "state": "MG",
       "rating": 82,
       "budget": 72000000,
-      "crest": "assets/crests/CAM.png"
+      "crest": "assets/logos/CAM.png"
     },
     {
       "id": "CRU",
@@ -85,7 +85,7 @@
       "state": "MG",
       "rating": 78,
       "budget": 50000000,
-      "crest": "assets/crests/CRU.png"
+      "crest": "assets/logos/CRU.png"
     },
     {
       "id": "GRE",
@@ -95,7 +95,7 @@
       "state": "RS",
       "rating": 80,
       "budget": 60000000,
-      "crest": "assets/crests/GRE.png"
+      "crest": "assets/logos/GRE.png"
     },
     {
       "id": "INT",
@@ -105,7 +105,7 @@
       "state": "RS",
       "rating": 80,
       "budget": 58000000,
-      "crest": "assets/crests/INT.png"
+      "crest": "assets/logos/INT.png"
     },
     {
       "id": "SAN",
@@ -115,7 +115,7 @@
       "state": "SP",
       "rating": 76,
       "budget": 42000000,
-      "crest": "assets/crests/SAN.png"
+      "crest": "assets/logos/SAN.png"
     },
     {
       "id": "VAS",
@@ -125,7 +125,7 @@
       "state": "RJ",
       "rating": 75,
       "budget": 40000000,
-      "crest": "assets/crests/VAS.png"
+      "crest": "assets/logos/VAS.png"
     }
   ]
 }
