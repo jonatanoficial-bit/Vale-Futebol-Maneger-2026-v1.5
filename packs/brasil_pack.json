@@ -1,34 +1,21 @@
 {
+  "schema": "vfm26.pack.v1",
   "id": "brasil",
   "name": "Brasil Pack",
-  "version": "0.1.0",
-  "author": "VFM26",
-  "description": "Base do Brasil (Série A, Série B, Copa do Brasil, Estaduais). Expandível para mundo inteiro via novos packs.",
-  "content": {
-    "countries": [
-      { "id": "BR", "name": "Brasil" }
-    ],
-    "leagues": [
-      {
-        "id": "BR_A",
-        "name": "Brasil - Série A",
-        "level": 1,
-        "countryId": "BR",
-        "clubs": []
-      },
-      {
-        "id": "BR_B",
-        "name": "Brasil - Série B",
-        "level": 2,
-        "countryId": "BR",
-        "clubs": []
-      }
-    ],
-    "cups": [
-      { "id": "BR_CDB", "name": "Copa do Brasil", "countryId": "BR" }
-    ],
-    "stateCups": [
-      { "id": "BR_EST", "name": "Estaduais (placeholder)", "countryId": "BR" }
-    ]
-  }
+  "defaultSeasonYear": 2026,
+  "clubs": [
+    { "id": "CRU", "name": "Cruzeiro", "shortName": "Cruzeiro", "league": "A", "state": "MG", "rating": 78, "budget": 45000000 },
+    { "id": "CAM", "name": "Atlético-MG", "shortName": "Atlético-MG", "league": "A", "state": "MG", "rating": 80, "budget": 60000000 },
+    { "id": "FLA", "name": "Flamengo", "shortName": "Flamengo", "league": "A", "state": "RJ", "rating": 85, "budget": 90000000 },
+    { "id": "PAL", "name": "Palmeiras", "shortName": "Palmeiras", "league": "A", "state": "SP", "rating": 84, "budget": 88000000 },
+    { "id": "COR", "name": "Corinthians", "shortName": "Corinthians", "league": "A", "state": "SP", "rating": 80, "budget": 70000000 },
+    { "id": "SAO", "name": "São Paulo", "shortName": "São Paulo", "league": "A", "state": "SP", "rating": 79, "budget": 65000000 },
+    { "id": "GRE", "name": "Grêmio", "shortName": "Grêmio", "league": "A", "state": "RS", "rating": 79, "budget": 62000000 },
+    { "id": "INT", "name": "Internacional", "shortName": "Inter", "league": "A", "state": "RS", "rating": 79, "budget": 61000000 },
+
+    { "id": "AVA", "name": "Avaí", "shortName": "Avaí", "league": "B", "state": "SC", "rating": 70, "budget": 18000000 },
+    { "id": "CHA", "name": "Chapecoense", "shortName": "Chape", "league": "B", "state": "SC", "rating": 70, "budget": 19000000 },
+    { "id": "CEA", "name": "Ceará", "shortName": "Ceará", "league": "B", "state": "CE", "rating": 72, "budget": 24000000 },
+    { "id": "VIT", "name": "Vitória", "shortName": "Vitória", "league": "B", "state": "BA", "rating": 71, "budget": 23000000 }
+  ]
 }
