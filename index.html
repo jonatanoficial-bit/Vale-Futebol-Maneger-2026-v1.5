@@ -1,82 +1,354 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>VALE FUTEBOL MANAGER 2026</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
+  <meta name="theme-color" content="#00ff84" />
   <style>
-    body {
-      margin: 0;
-      background: #0b1a12;
-      font-family: Arial, sans-serif;
-      color: #ffffff;
+    :root{
+      --bg:#06140f;
+      --card:rgba(10,25,20,.72);
+      --card2:rgba(8,18,16,.85);
+      --line:rgba(0,255,132,.22);
+      --glow:rgba(0,255,132,.22);
+      --txt:#e9fff5;
+      --muted:rgba(233,255,245,.72);
+      --green:#00ff84;
+      --green2:#00c86a;
+      --red:#ff3b3b;
+      --yellow:#ffd54a;
+      --shadow:0 14px 40px rgba(0,0,0,.45);
+      --radius:18px;
+      --radius2:24px;
+      --font: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     }
 
-    #app {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family:var(--font);
+      background: radial-gradient(1200px 800px at 50% 30%, rgba(0,255,132,.08), transparent 55%),
+                  radial-gradient(900px 700px at 20% 80%, rgba(0,170,255,.06), transparent 55%),
+                  linear-gradient(180deg, #04110d, #020806 60%, #010403);
+      color:var(--txt);
+      overflow:hidden;
     }
 
-    .boot-screen {
-      text-align: center;
-      padding: 18px;
-      max-width: 520px;
+    /* Background image (if exists), NEVER required */
+    .bg{
+      position:fixed; inset:0;
+      background-image:
+        linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.72)),
+        url('assets/backgrounds/main.jpg');
+      background-size:cover;
+      background-position:center;
+      filter:saturate(1.1) contrast(1.05);
+      opacity:.45;
+      pointer-events:none;
     }
 
-    .boot-title {
-      font-size: 22px;
-      font-weight: 800;
-      margin-bottom: 10px;
-      color: #00ff7f;
-      letter-spacing: 0.5px;
+    #app{
+      position:relative;
+      height:100%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
     }
 
-    .boot-status {
-      font-size: 14px;
-      opacity: 0.92;
-      line-height: 1.4;
+    .screen{
+      width:min(860px, 96vw);
+      max-height:92vh;
+      overflow:auto;
+      padding:22px;
+      border-radius:var(--radius2);
+      background:linear-gradient(180deg, rgba(14,30,24,.62), rgba(6,16,12,.82));
+      border:1px solid rgba(0,255,132,.18);
+      box-shadow:var(--shadow);
+      backdrop-filter: blur(10px);
     }
 
-    .boot-error {
-      color: #ff4c4c;
-      margin-top: 14px;
-      font-weight: 800;
-      letter-spacing: 0.4px;
+    .topbar{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:16px;
+      padding-bottom:16px;
+      border-bottom:1px solid rgba(255,255,255,.06);
+      margin-bottom:16px;
     }
 
-    .boot-box {
-      width: 100%;
-      border: 1px solid rgba(0,255,127,0.35);
-      background: rgba(0,0,0,0.35);
-      border-radius: 14px;
-      padding: 18px;
-      box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+    .brand{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+    .brand .title{
+      font-weight:800;
+      letter-spacing:.6px;
+      text-transform:uppercase;
+      color:var(--green);
+      font-size:18px;
+    }
+    .brand .subtitle{
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.35;
     }
 
-    .boot-mini {
-      margin-top: 10px;
-      font-size: 12px;
-      opacity: 0.75;
-      word-break: break-word;
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:8px 12px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(0,0,0,.22);
+      color:rgba(233,255,245,.82);
+      font-size:12px;
+      white-space:nowrap;
     }
+    .dot{
+      width:8px;height:8px;border-radius:50%;
+      background:var(--green);
+      box-shadow:0 0 12px var(--glow);
+    }
+
+    .hero{
+      padding:16px 0 8px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .hero h1{
+      margin:0;
+      font-size:24px;
+      letter-spacing:.2px;
+    }
+    .hero p{
+      margin:0;
+      color:var(--muted);
+      line-height:1.45;
+      font-size:14px;
+    }
+
+    .card{
+      background:linear-gradient(180deg, rgba(0,0,0,.18), rgba(0,0,0,.36));
+      border:1px solid rgba(0,255,132,.14);
+      border-radius:var(--radius);
+      padding:16px;
+      box-shadow: 0 10px 24px rgba(0,0,0,.35);
+    }
+    .card h2{
+      margin:0 0 6px;
+      font-size:18px;
+    }
+    .card p{
+      margin:0;
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.45;
+    }
+
+    .stack{ display:flex; flex-direction:column; gap:14px; }
+
+    .actions{
+      display:flex;
+      gap:12px;
+      justify-content:flex-end;
+      padding-top:14px;
+      border-top:1px solid rgba(255,255,255,.06);
+      margin-top:16px;
+      position:sticky;
+      bottom:0;
+      background:linear-gradient(180deg, rgba(10,25,20,0), rgba(10,25,20,.82) 38%, rgba(10,25,20,.92));
+      backdrop-filter: blur(10px);
+      padding-bottom:8px;
+    }
+
+    .btn{
+      border:none;
+      outline:none;
+      cursor:pointer;
+      border-radius:14px;
+      padding:14px 18px;
+      font-weight:800;
+      letter-spacing:.3px;
+      text-transform:uppercase;
+      font-size:13px;
+      min-width:140px;
+      transition: transform .08s ease, filter .12s ease;
+      user-select:none;
+    }
+    .btn:active{ transform:scale(.99); }
+
+    .btn-primary{
+      background:linear-gradient(180deg, var(--green), var(--green2));
+      color:#062013;
+      box-shadow:0 14px 30px rgba(0,255,132,.22);
+    }
+    .btn-secondary{
+      background:linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.06));
+      color:var(--txt);
+      border:1px solid rgba(255,255,255,.14);
+    }
+    .btn-danger{
+      background:linear-gradient(180deg, rgba(255,59,59,.92), rgba(150,15,15,.92));
+      color:#fff;
+      border:1px solid rgba(255,255,255,.10);
+    }
+    .btn-wide{ width:100%; }
+
+    .grid{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:12px;
+    }
+    @media(min-width:720px){
+      .grid-2{ grid-template-columns:1fr 1fr; }
+      .grid-3{ grid-template-columns:1fr 1fr 1fr; }
+    }
+
+    .field{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+    .label{
+      color:rgba(233,255,245,.86);
+      font-size:12px;
+      font-weight:700;
+      letter-spacing:.2px;
+      text-transform:uppercase;
+    }
+    input, select{
+      width:100%;
+      padding:12px 12px;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(0,0,0,.28);
+      color:var(--txt);
+      font-size:14px;
+      outline:none;
+    }
+    input::placeholder{ color:rgba(233,255,245,.45); }
+
+    .seg{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .seg button{
+      flex:1;
+      min-width:150px;
+      border-radius:16px;
+      padding:14px 14px;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(0,0,0,.22);
+      color:rgba(233,255,245,.86);
+      font-weight:800;
+      text-transform:uppercase;
+      letter-spacing:.25px;
+      cursor:pointer;
+      transition: transform .08s ease, border-color .12s ease;
+    }
+    .seg button:active{ transform:scale(.99); }
+    .seg button.active{
+      border-color:rgba(0,255,132,.65);
+      box-shadow:0 0 0 3px rgba(0,255,132,.12);
+      background:linear-gradient(180deg, rgba(0,255,132,.18), rgba(0,0,0,.16));
+      color:#eafff5;
+    }
+
+    .list{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .list-item{
+      display:flex;
+      gap:12px;
+      align-items:center;
+      justify-content:space-between;
+      padding:14px;
+      border-radius:16px;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(0,0,0,.20);
+    }
+    .list-item strong{ font-size:14px; }
+    .list-item small{ color:var(--muted); display:block; margin-top:4px; font-size:12px; line-height:1.25; }
+
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:6px 10px;
+      border-radius:999px;
+      font-weight:900;
+      font-size:12px;
+      letter-spacing:.2px;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(0,0,0,.20);
+      color:rgba(233,255,245,.90);
+      min-width:52px;
+    }
+
+    .toast{
+      margin-top:12px;
+      padding:12px 12px;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(0,0,0,.26);
+      color:rgba(233,255,245,.86);
+      font-size:13px;
+      line-height:1.4;
+    }
+
+    .err{
+      border-color: rgba(255,59,59,.55) !important;
+      box-shadow: 0 0 0 3px rgba(255,59,59,.10);
+    }
+
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
   </style>
 </head>
 <body>
+  <div class="bg"></div>
+  <div id="app" aria-live="polite"></div>
 
-  <div id="app">
-    <div class="boot-screen">
-      <div class="boot-box">
-        <div class="boot-title">VALE FUTEBOL MANAGER 2026</div>
-        <div class="boot-status" id="bootStatus">Preparando inicialização...</div>
-        <div class="boot-mini" id="bootHint">Se travar, abra o console (F12) e procure BOOT_STEPS.</div>
-      </div>
-    </div>
-  </div>
+  <!-- ENGINE (obrigatório antes da UI) -->
+  <script src="engine/boot-check.js"></script>
+  <script src="engine/index.js"></script>
+  <script src="engine/gameCore.js"></script>
+  <script src="engine/datapacks.js"></script>
+  <script src="engine/database.js"></script>
+  <script src="engine/calendar.js"></script>
+  <script src="engine/league.js"></script>
+  <script src="engine/cup.js"></script>
+  <script src="engine/match.js"></script>
+  <script src="engine/market.js"></script>
+  <script src="engine/finances.js"></script>
+  <script src="engine/contracts.js"></script>
+  <script src="engine/fitness.js"></script>
+  <script src="engine/dynamics.js"></script>
+  <script src="engine/news.js"></script>
 
-  <!-- IMPORTANTE: module garante que import() funcione no GitHub Pages -->
-  <script type="module" src="main.js"></script>
+  <!-- GAME (ponte Engine <-> UI) -->
+  <script src="game.js"></script>
+
+  <!-- UI -->
+  <script src="ui/ui.js"></script>
+  <script src="ui/career-ui.js"></script>
+  <script src="ui/lobby-ui.js"></script>
+  <script src="ui/calendar-ui.js"></script>
+  <script src="ui/market-ui.js"></script>
+  <script src="ui/tactics-ui.js"></script>
+  <script src="ui/match-ui.js"></script>
+  <script src="ui/post-match-ui.js"></script>
+
+  <!-- MAIN (orquestrador final) -->
+  <script src="main.js"></script>
 </body>
 </html>
