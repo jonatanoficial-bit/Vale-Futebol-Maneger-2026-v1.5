@@ -1,120 +1,54 @@
-// /main.js (module)
-// Regras do boot:
-// - Nunca tela preta sem diagnóstico
-// - Esperar DOM pronto
-// - BootCheck -> Engine -> Game(UI)
+/* main.js — Orquestrador principal (ponto único de inicialização) */
+(function () {
+  'use strict';
 
-function $(id) {
-  return document.getElementById(id);
-}
+  function fatalBoot(code, message, detail) {
+    try {
+      window.VFM26 && window.VFM26.BootCheck && window.VFM26.BootCheck.fatal(code, message, detail);
+    } catch (e) {
+      alert(`Erro crítico\n\n${message}\n\nCódigo: ${code}`);
+      console.error(e);
+    }
+  }
 
-function setStatus(text) {
-  const el = $("bootStatus");
-  if (el) el.textContent = text;
-}
+  function boot() {
+    try {
+      const BootCheck = window.VFM26?.BootCheck;
+      if (!BootCheck) return fatalBoot('BOOT_E00_BOOTCHECK_MISSING', 'BootCheck não encontrado.');
 
-function renderFatal(code, err) {
-  console.error(code, err);
-  const app = $("app");
-  const msg = (err && err.message) ? err.message : "Erro desconhecido";
-  const stack = (err && err.stack) ? String(err.stack) : "";
+      BootCheck.step('MAIN_START');
 
-  if (app) {
-    app.innerHTML = `
-      <div class="boot-screen">
-        <div class="boot-box">
-          <div class="boot-title">Erro de Inicialização</div>
-          <div class="boot-error">${code}</div>
-          <div class="boot-status">${escapeHtml(msg)}</div>
-          <div class="boot-mini">Debug: abra o console e procure <b>BOOT_STEPS</b>.</div>
-          <div class="boot-mini">${escapeHtml(stack).slice(0, 1200)}</div>
-        </div>
-      </div>
-    `;
+      // Verificações mínimas
+      const app = document.getElementById('app');
+      if (!app) return BootCheck.fatal('BOOT_E02_APP_NOT_FOUND', '#app não encontrado.');
+
+      if (!window.VFM26?.Engine) return BootCheck.fatal('BOOT_E03_ENGINE_NOT_FOUND', 'Engine não registrada.');
+      if (!window.VFM26?.Game) return BootCheck.fatal('BOOT_E04_GAME_NOT_FOUND', 'Game (ponte) não registrada.');
+      if (!window.VFM26?.UI) return BootCheck.fatal('BOOT_E05_UI_NOT_FOUND', 'UI não registrada.');
+
+      BootCheck.step('ENGINE_INIT');
+      window.VFM26.Engine.init();
+
+      BootCheck.step('GAME_INIT');
+      window.VFM26.Game.init();
+
+      BootCheck.step('UI_INIT');
+      window.VFM26.UI.init(app);
+
+      BootCheck.step('ROUTE_START');
+      window.VFM26.UI.go('cover');
+
+      BootCheck.step('BOOT_OK');
+      console.log('VFM26: Boot completo.');
+    } catch (err) {
+      fatalBoot('BOOT_E99_UNHANDLED', 'Falha inesperada no boot.', String(err && err.stack ? err.stack : err));
+    }
+  }
+
+  // Anti-erro clássico: DOM não pronto
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
   } else {
-    alert(`${code}\n${msg}`);
+    boot();
   }
-}
-
-function escapeHtml(s) {
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function waitForDOM() {
-  return new Promise((resolve) => {
-    if (document.readyState === "interactive" || document.readyState === "complete") {
-      resolve(true);
-      return;
-    }
-    document.addEventListener("DOMContentLoaded", () => resolve(true), { once: true });
-  });
-}
-
-async function boot() {
-  // Log estruturado de passos (para debug do usuário)
-  console.log("BOOT_STEPS: START");
-
-  try {
-    // 0) Garantir DOM pronto
-    setStatus("Aguardando DOM...");
-    await waitForDOM();
-
-    if (!document.getElementById("app")) {
-      throw new Error("Elemento #app não encontrado após DOMContentLoaded.");
-    }
-
-    // 1) BootCheck
-    setStatus("Executando BootCheck...");
-    console.log("BOOT_STEPS: importing boot-check");
-    const bootCheck = await import("./engine/boot-check.js");
-
-    console.log("BOOT_STEPS: runBootCheck");
-    await bootCheck.runBootCheck();
-
-    // 2) Engine
-    setStatus("Carregando Engine...");
-    console.log("BOOT_STEPS: importing engine/index");
-    const engineModule = await import("./engine/index.js");
-
-    if (!engineModule || !engineModule.Engine) {
-      throw new Error("Engine inválida: engine/index.js não exportou Engine.");
-    }
-
-    // 3) Game
-    setStatus("Iniciando jogo...");
-    console.log("BOOT_STEPS: importing game.js");
-    const game = await import("./game.js");
-
-    if (!game || typeof game.start !== "function") {
-      throw new Error("Game inválido: game.js não exportou start().");
-    }
-
-    console.log("BOOT_STEPS: starting game");
-    game.start(engineModule.Engine);
-
-    console.log("BOOT_STEPS: OK");
-  } catch (err) {
-    // Mapeamento de erros de boot
-    const msg = (err && err.message) ? err.message : "";
-
-    if (msg.includes("DOMContentLoaded") || msg.includes("#app")) {
-      renderFatal("BOOT_E01_DOM_NOT_READY", err);
-      return;
-    }
-
-    if (msg.includes("BootCheck")) {
-      renderFatal("BOOT_E03_BOOTCHECK_FAIL", err);
-      return;
-    }
-
-    renderFatal("BOOT_E02_RUNTIME_FAIL", err);
-  }
-}
-
-// Disparar boot
-boot();
+})();
