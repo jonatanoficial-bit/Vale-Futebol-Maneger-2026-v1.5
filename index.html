@@ -2,29 +2,26 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Vale Futebol Manager 2026</title>
-  <meta name="theme-color" content="#0b1410" />
-  <style>
-    html, body { height: 100%; margin: 0; background: #06100b; color: #d7ffe6; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-    #app { min-height: 100%; display: flex; align-items: center; justify-content: center; padding: 24px; box-sizing: border-box; }
-  </style>
+  <link rel="stylesheet" href="styles.css" />
 </head>
-
 <body>
   <div id="app"></div>
 
-  <!-- ORDEM: engine -> ui -> game -> boot -->
-  <script src="engine/index.js"></script>
+  <!-- Ordem segura: bootcheck -> engine -> game -> ui -> boot -->
+  <script src="bootcheck.js"></script>
+  <script src="engine.js"></script>
+  <script src="game.js"></script>
 
   <script src="ui/ui.js"></script>
-  <script src="ui/home-ui.js"></script>
-  <script src="ui/pack-ui.js"></script>
-  <script src="ui/save-ui.js"></script>
-  <script src="ui/career-ui.js"></script>
-  <script src="ui/lobby-ui.js"></script>
+  <script src="ui/screens/datapack-ui.js"></script>
+  <script src="ui/screens/save-slot-ui.js"></script>
+  <script src="ui/screens/career-ui.js"></script>
+  <script src="ui/screens/club-select-ui.js"></script>
+  <script src="ui/screens/tutorial-ui.js"></script>
+  <script src="ui/screens/lobby-ui.js"></script>
 
-  <script src="game.js"></script>
   <script src="boot.js"></script>
 </body>
 </html>
