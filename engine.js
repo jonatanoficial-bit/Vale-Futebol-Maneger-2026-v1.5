@@ -1,166 +1,192 @@
-/* engine.js — Engine consolidado (root)
-   Motivo: o index.html carrega "engine.js" na raiz, mas no ZIP o engine estava em /engine.
-   Este arquivo junta:
-   - engine/gameCore.js
-   - engine/index.js
+/* engine.js - VFM26 Engine v1.2.x
+   Responsável por:
+   - Namespace global
+   - Estado central (pack, slots, carreira)
+   - Persistência em localStorage
+   - Helpers de fetch com cache-bust
 */
-
 (function () {
-  'use strict';
-
   const NS = (window.VFM26 = window.VFM26 || {});
-  const BootCheck = NS.BootCheck;
+  NS.VERSION = NS.VERSION || "v1.2.0";
 
-  function clamp(n, a, b) {
-    return Math.max(a, Math.min(b, n));
-  }
-  function rand(seedObj) {
-    seedObj.s = (seedObj.s * 1664525 + 1013904223) % 4294967296;
-    return seedObj.s / 4294967296;
+  // ---------- Utils ----------
+  function nowISO() {
+    return new Date().toISOString();
   }
 
-  const EngineCore = {
-    version: '1.2.0',
-    clamp,
-    rand,
+  function safeJsonParse(str, fallback = null) {
+    try {
+      return JSON.parse(str);
+    } catch (e) {
+      return fallback;
+    }
+  }
 
-    // Forma base do jogador (simples e estável)
-    makePlayer(p) {
-      return {
-        id: String(p.id),
-        name: String(p.name || p.id),
-        pos: String(p.pos || 'UNK'),
-        age: typeof p.age === 'number' ? p.age : 22,
-        ovr: typeof p.ovr === 'number' ? p.ovr : 50,
-        pot: typeof p.pot === 'number' ? p.pot : null,
-        value: typeof p.value === 'number' ? p.value : null,
-        wage: typeof p.wage === 'number' ? p.wage : null,
-        form: typeof p.form === 'number' ? p.form : 0,
-        fitness: typeof p.fitness === 'number' ? p.fitness : 100,
-        morale: typeof p.morale === 'number' ? p.morale : 50,
-        traits: Array.isArray(p.traits) ? p.traits.slice(0) : []
-      };
-    },
+  function cacheBust(url) {
+    const u = String(url);
+    const sep = u.includes("?") ? "&" : "?";
+    return `${u}${sep}v=${encodeURIComponent(String(Date.now()))}`;
+  }
 
-    // Calcula “força” do time a partir do XI + forma + fitness + moral
-    teamStrength(team) {
-      const xi = Array.isArray(team?.xi) ? team.xi : [];
-      if (!xi.length) return 50;
+  async function fetchJson(url) {
+    const res = await fetch(cacheBust(url), { cache: "no-store" });
+    if (!res.ok) {
+      throw new Error(`FETCH_FAILED ${res.status} ${res.statusText} :: ${url}`);
+    }
+    return await res.json();
+  }
 
-      let sum = 0;
-      for (const pl of xi) {
-        const ovr = typeof pl.ovr === 'number' ? pl.ovr : 50;
-        const form = typeof pl.form === 'number' ? pl.form : 0;
-        const fit = typeof pl.fitness === 'number' ? pl.fitness : 100;
-        const mor = typeof pl.morale === 'number' ? pl.morale : 50;
+  // ---------- Storage ----------
+  const STORAGE_PREFIX = "VFM26_";
+  const KEY_ACTIVE_PACK = `${STORAGE_PREFIX}ACTIVE_PACK_ID`;
+  const KEY_SLOT_PREFIX = `${STORAGE_PREFIX}SLOT_`; // SLOT_1, SLOT_2
+  const KEY_LAST_BOOT = `${STORAGE_PREFIX}LAST_BOOT`;
 
-        const fitFactor = clamp(fit / 100, 0.6, 1.0);
-        const morFactor = clamp(0.85 + mor / 400, 0.85, 1.05);
-        const formFactor = clamp(1 + form / 50, 0.85, 1.15);
+  function slotKey(slotId) {
+    const s = String(slotId).trim();
+    return `${KEY_SLOT_PREFIX}${s}`;
+  }
 
-        sum += ovr * fitFactor * morFactor * formFactor;
-      }
+  // ---------- Engine ----------
+  class Engine {
+    constructor() {
+      this.state = {
+        // catálogo / pack
+        packCatalog: null,
+        packData: null,
+        activePackId: null,
 
-      return clamp(sum / xi.length, 1, 99);
-    },
-
-    // Simulador simples mas consistente (evita bugs e mantém “cara de simulador”)
-    simulateMatch({ home, away, seed = 12345, minutes = 90 }) {
-      const seedObj = { s: seed >>> 0 };
-
-      const hs = EngineCore.teamStrength(home);
-      const as = EngineCore.teamStrength(away);
-
-      // posse e chances baseadas em força
-      const total = hs + as;
-      const homePoss = total > 0 ? hs / total : 0.5;
-
-      const homeChances = clamp(Math.round(8 + (homePoss - 0.5) * 6 + (hs - as) / 8), 4, 18);
-      const awayChances = clamp(Math.round(8 + ((1 - homePoss) - 0.5) * 6 + (as - hs) / 8), 4, 18);
-
-      function finish(chances, atkStr, defStr) {
-        let goals = 0;
-        let xg = 0;
-        for (let i = 0; i < chances; i++) {
-          const r = rand(seedObj);
-          const quality = clamp(0.06 + (atkStr - defStr) / 500 + (rand(seedObj) - 0.5) * 0.04, 0.03, 0.18);
-          xg += quality;
-          if (r < quality) goals++;
-        }
-        return { goals, xg: +xg.toFixed(2) };
-      }
-
-      const homeFin = finish(homeChances, hs, as);
-      const awayFin = finish(awayChances, as, hs);
-
-      // eventos simples
-      const events = [];
-      function pushGoal(team, minute) {
-        events.push({ type: 'goal', team, minute });
-      }
-
-      // distribui gols ao longo do tempo
-      function spreadGoals(n, team) {
-        for (let i = 0; i < n; i++) {
-          const minute = clamp(Math.floor(rand(seedObj) * minutes) + 1, 1, minutes);
-          pushGoal(team, minute);
-        }
-      }
-      spreadGoals(homeFin.goals, 'home');
-      spreadGoals(awayFin.goals, 'away');
-      events.sort((a, b) => a.minute - b.minute);
-
-      return {
-        score: { home: homeFin.goals, away: awayFin.goals },
-        stats: {
-          possessionHome: Math.round(homePoss * 100),
-          possessionAway: 100 - Math.round(homePoss * 100),
-          shotsHome: homeChances,
-          shotsAway: awayChances,
-          xgHome: homeFin.xg,
-          xgAway: awayFin.xg
+        // slots (2 slots como no fluxo)
+        slots: {
+          "1": null,
+          "2": null,
         },
-        events
+
+        // carreira (rascunho / definitivo)
+        career: null,
+        careerDraft: null,
+
+        // meta
+        bootAt: null,
       };
     }
-  };
 
-  NS.EngineCore = EngineCore;
-  BootCheck && BootCheck.step('ENGINE_CORE_READY');
-})();
+    // Inicialização do motor (carrega catálogo, pack ativo e slots)
+    async init() {
+      this.state.bootAt = nowISO();
+      localStorage.setItem(KEY_LAST_BOOT, this.state.bootAt);
 
-(function () {
-  'use strict';
+      // 1) catálogo
+      this.state.packCatalog = await this.loadPackCatalog();
 
-  const NS = (window.VFM26 = window.VFM26 || {});
-  const BootCheck = NS.BootCheck;
-
-  const Engine = {
-    version: '1.2.0',
-
-    init() {
-      BootCheck && BootCheck.step('ENGINE_INIT_START');
-      if (!NS.EngineCore) {
-        return BootCheck.fatal('ENGINE_E01_CORE_MISSING', 'EngineCore não carregou.');
+      // 2) pack ativo (se existir)
+      const storedPackId = localStorage.getItem(KEY_ACTIVE_PACK);
+      if (storedPackId) {
+        await this.setActivePack(storedPackId);
+      } else {
+        // default: primeiro do catálogo se houver
+        const first = Array.isArray(this.state.packCatalog?.packs)
+          ? this.state.packCatalog.packs[0]
+          : null;
+        if (first?.id) {
+          await this.setActivePack(first.id);
+        }
       }
-      BootCheck && BootCheck.step('ENGINE_INIT_OK');
+
+      // 3) slots
+      this.state.slots["1"] = this.loadSlot("1");
+      this.state.slots["2"] = this.loadSlot("2");
+
       return true;
-    },
-
-    // delega pro core
-    simulateMatch(opts) {
-      return NS.EngineCore.simulateMatch(opts);
-    },
-
-    teamStrength(team) {
-      return NS.EngineCore.teamStrength(team);
-    },
-
-    makePlayer(p) {
-      return NS.EngineCore.makePlayer(p);
     }
-  };
 
+    // ---------- Packs ----------
+    async loadPackCatalog() {
+      // catalog.json fica em /packs/catalog.json (como está no seu ZIP)
+      const catalog = await fetchJson("packs/catalog.json");
+      return catalog;
+    }
+
+    async loadPackById(packId) {
+      const catalog = this.state.packCatalog || (await this.loadPackCatalog());
+      const packs = Array.isArray(catalog?.packs) ? catalog.packs : [];
+      const found = packs.find((p) => String(p.id) === String(packId));
+      if (!found?.file) throw new Error(`PACK_NOT_FOUND :: ${packId}`);
+      const data = await fetchJson(found.file);
+      return data;
+    }
+
+    async setActivePack(packId) {
+      const id = String(packId);
+      const data = await this.loadPackById(id);
+
+      this.state.activePackId = id;
+      this.state.packData = data;
+
+      localStorage.setItem(KEY_ACTIVE_PACK, id);
+
+      // ao trocar pack, não apagamos slots, mas registramos qual pack está sendo usado
+      return true;
+    }
+
+    // ---------- Slots ----------
+    loadSlot(slotId) {
+      const raw = localStorage.getItem(slotKey(slotId));
+      const data = safeJsonParse(raw, null);
+      if (!data) return null;
+
+      // compat mínimo
+      return {
+        slotId: String(slotId),
+        packId: data.packId || null,
+        createdAt: data.createdAt || null,
+        updatedAt: data.updatedAt || null,
+        career: data.career || null,
+      };
+    }
+
+    saveSlot(slotId, payload) {
+      const slot = {
+        slotId: String(slotId),
+        packId: payload?.packId || this.state.activePackId || null,
+        createdAt: payload?.createdAt || nowISO(),
+        updatedAt: nowISO(),
+        career: payload?.career || null,
+      };
+
+      localStorage.setItem(slotKey(slotId), JSON.stringify(slot));
+      this.state.slots[String(slotId)] = slot;
+      return slot;
+    }
+
+    deleteSlot(slotId) {
+      localStorage.removeItem(slotKey(slotId));
+      this.state.slots[String(slotId)] = null;
+      return true;
+    }
+
+    // ---------- Career ----------
+    setCareerDraft(draft) {
+      this.state.careerDraft = draft || null;
+      return this.state.careerDraft;
+    }
+
+    confirmCareerOnSlot(slotId, career) {
+      this.state.career = career || null;
+
+      const current = this.loadSlot(slotId);
+      const createdAt = current?.createdAt || nowISO();
+
+      const saved = this.saveSlot(slotId, {
+        packId: this.state.activePackId,
+        createdAt,
+        career: this.state.career,
+      });
+
+      return saved;
+    }
+  }
+
+  // Expor
   NS.Engine = Engine;
-  BootCheck && BootCheck.step('ENGINE_READY');
 })();
