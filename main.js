@@ -1,51 +1,44 @@
-/* main.js — Orquestrador principal (ponto único de inicialização) */
 (function () {
-  'use strict';
+  const NS = (window.VFM26 = window.VFM26 || {});
 
-  function fatalBoot(code, message, detail) {
-    try {
-      window.VFM26 && window.VFM26.BootCheck && window.VFM26.BootCheck.fatal(code, message, detail);
-    } catch (e) {
-      alert(`Erro crítico\n\n${message}\n\nCódigo: ${code}`);
-      console.error(e);
-    }
+  const BOOT_STEPS = [];
+  window.BOOT_STEPS = BOOT_STEPS;
+
+  function step(msg, ok = true) {
+    BOOT_STEPS.push({ t: new Date().toISOString(), ok, msg });
+    // eslint-disable-next-line no-console
+    console[ok ? 'log' : 'error']('[BOOT]', msg);
   }
 
-  function boot() {
+  async function boot() {
     try {
-      const BootCheck = window.VFM26?.BootCheck;
-      if (!BootCheck) return fatalBoot('BOOT_E00_BOOTCHECK_MISSING', 'BootCheck não encontrado.');
+      step('DOM pronto');
+      if (!NS.BootCheck) throw new Error('BootCheck não encontrado');
+      NS.BootCheck.assertDOMReady();
 
-      BootCheck.step('MAIN_START');
+      step('Engine encontrado');
+      if (!NS.Engine) throw new Error('Engine não registrado');
 
-      // Verificações mínimas
-      const app = document.getElementById('app');
-      if (!app) return BootCheck.fatal('BOOT_E02_APP_NOT_FOUND', '#app não encontrado.');
+      step('Game encontrado');
+      if (!NS.Game) throw new Error('Game (ponte) não registrada');
 
-      if (!window.VFM26?.Engine) return BootCheck.fatal('BOOT_E03_ENGINE_NOT_FOUND', 'Engine não registrada.');
-      if (!window.VFM26?.Game) return BootCheck.fatal('BOOT_E04_GAME_NOT_FOUND', 'Game (ponte) não registrada.');
-      if (!window.VFM26?.UI) return BootCheck.fatal('BOOT_E05_UI_NOT_FOUND', 'UI não registrada.');
+      step('UI encontrada');
+      if (!NS.UI) throw new Error('UI não registrada');
 
-      BootCheck.step('ENGINE_INIT');
-      window.VFM26.Engine.init();
+      step('Iniciando UI.start()');
+      NS.UI.start();
 
-      BootCheck.step('GAME_INIT');
-      window.VFM26.Game.init();
-
-      BootCheck.step('UI_INIT');
-      window.VFM26.UI.init(app);
-
-      BootCheck.step('ROUTE_START');
-      window.VFM26.UI.go('cover');
-
-      BootCheck.step('BOOT_OK');
-      console.log('VFM26: Boot completo.');
+      step('OK - UI iniciada com sucesso');
     } catch (err) {
-      fatalBoot('BOOT_E99_UNHANDLED', 'Falha inesperada no boot.', String(err && err.stack ? err.stack : err));
+      step(`Falha no boot: ${err && err.message ? err.message : String(err)}`, false);
+      if (NS.UI && typeof NS.UI.showCriticalError === 'function') {
+        NS.UI.showCriticalError(err);
+      } else {
+        alert('Erro crítico no boot: ' + (err && err.message ? err.message : String(err)));
+      }
     }
   }
 
-  // Anti-erro clássico: DOM não pronto
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);
   } else {
