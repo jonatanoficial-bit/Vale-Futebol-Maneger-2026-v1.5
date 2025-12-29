@@ -1,252 +1,323 @@
-/* ui/career-ui.js — Criação de carreira (Fase 3) */
+// ui/career-ui.js
+// Career creation flow (Phase 3)
+// Steps: Profile -> Role -> Club -> Confirm -> Proceed to Lobby
+//
+// Namespace: window.VFM26.UI.Career
+
 (function () {
-  'use strict';
-
   const NS = (window.VFM26 = window.VFM26 || {});
-  const BootCheck = NS.BootCheck;
+  NS.UI = NS.UI || {};
 
-  const CareerUI = {
-    register(UI) {
-      UI.register('career', () => {
-        const countries = NS.Game.getCountriesForCareer();
-        const avatars = NS.Game.getAvatars();
-        const roles = NS.Game.getRoles();
+  const Career = {};
 
-        return `
-          <div class="screen">
-            <div class="topbar">
-              <div class="brand">
-                <div class="title">Criar Carreira</div>
-                <div class="subtitle">Crie seu perfil, escolha o cargo e selecione um clube do DataPack.</div>
-              </div>
-              <div class="pill"><span class="dot"></span><span>Fase 3</span></div>
-            </div>
+  function $(sel, root = document) {
+    return root.querySelector(sel);
+  }
 
-            <div class="stack">
-
-              <div class="card">
-                <h2>1) Perfil do Manager</h2>
-                <div class="grid grid-2" style="margin-top:12px;">
-                  <div class="field">
-                    <div class="label">Nome</div>
-                    <input id="firstName" placeholder="Ex: Jonatan" maxlength="18" />
-                  </div>
-                  <div class="field">
-                    <div class="label">Sobrenome</div>
-                    <input id="lastName" placeholder="Ex: Vale" maxlength="18" />
-                  </div>
-                  <div class="field">
-                    <div class="label">País</div>
-                    <select id="country">
-                      ${countries.map(c => `<option value="${c.id}" ${c.id==='BR'?'selected':''}>${c.name}</option>`).join('')}
-                    </select>
-                  </div>
-                  <div class="field">
-                    <div class="label">Avatar</div>
-                    <select id="avatar">
-                      ${avatars.map(a => `<option value="${a.id}">${a.label}</option>`).join('')}
-                    </select>
-                  </div>
-                </div>
-                <div class="toast" style="margin-top:12px;">
-                  Dica: avatares aqui são IDs (sem mexer em <span class="mono">/assets</span>). Depois podemos plugar faces reais do seu pacote.
-                </div>
-              </div>
-
-              <div class="card">
-                <h2>2) Escolher Cargo</h2>
-                <div class="seg" id="roleSeg" style="margin-top:12px;">
-                  ${roles.map(r => `<button type="button" data-role="${r.id}">${r.name}</button>`).join('')}
-                </div>
-                <div class="toast" id="roleDesc" style="margin-top:12px;">Selecione um cargo para ver a descrição.</div>
-              </div>
-
-              <div class="card">
-                <h2>3) Escolher Clube (Brasil)</h2>
-                <p>Os clubes vêm do DataPack atual. Pronto para expansão mundial: basta adicionar novos JSON em <span class="mono">/packs</span>.</p>
-                <div class="field" style="margin-top:12px;">
-                  <div class="label">Filtrar</div>
-                  <input id="clubFilter" placeholder="Digite para buscar clube..." />
-                </div>
-                <div class="list" id="clubList" style="margin-top:12px;"></div>
-              </div>
-
-              <div id="formError" class="toast" style="display:none;border-color:rgba(255,59,59,.5)"></div>
-
-            </div>
-
-            <div class="actions">
-              <button class="btn btn-secondary" id="btnBack">Voltar</button>
-              <button class="btn btn-primary" id="btnCreate">Criar Carreira</button>
-            </div>
-          </div>
-        `;
-      });
-
-      UI.screens.career.afterRender = () => {
-        const roles = NS.Game.getRoles();
-        const clubs = NS.Game.getClubsFromPack();
-        let selectedRole = null;
-        let selectedClub = null;
-
-        const roleSeg = document.getElementById('roleSeg');
-        const roleDesc = document.getElementById('roleDesc');
-        const clubList = document.getElementById('clubList');
-        const clubFilter = document.getElementById('clubFilter');
-        const formError = document.getElementById('formError');
-
-        function showError(msg) {
-          formError.style.display = 'block';
-          formError.textContent = msg;
-        }
-        function clearError() {
-          formError.style.display = 'none';
-          formError.textContent = '';
-        }
-
-        function renderClubs(filter) {
-          const f = (filter || '').toLowerCase().trim();
-          const list = clubs
-            .filter(c => !f || c.name.toLowerCase().includes(f) || (c.state || '').toLowerCase().includes(f))
-            .slice(0, 40);
-
-          if (list.length === 0) {
-            clubList.innerHTML = `<div class="toast">Nenhum clube encontrado.</div>`;
-            return;
-          }
-
-          clubList.innerHTML = list.map(c => `
-            <div class="list-item ${selectedClub === c.id ? 'err' : ''}" data-club="${c.id}">
-              <div>
-                <strong>${c.name}</strong>
-                <small>${c.league === 'A' ? 'Série A' : c.league === 'B' ? 'Série B' : 'Liga'} ${c.state ? '• ' + c.state : ''}</small>
-              </div>
-              <span class="badge">${typeof c.rating === 'number' ? c.rating : '—'}</span>
-            </div>
-          `).join('');
-
-          clubList.querySelectorAll('[data-club]').forEach(el => {
-            el.onclick = () => {
-              selectedClub = el.getAttribute('data-club');
-              clearError();
-              renderClubs(clubFilter.value);
-              // marca visualmente selecionado
-              clubList.querySelectorAll('.list-item').forEach(x => x.style.outline = 'none');
-              el.style.outline = '2px solid rgba(0,255,132,.55)';
-              el.style.boxShadow = '0 0 0 3px rgba(0,255,132,.10)';
-            };
-          });
-        }
-
-        // roles
-        roleSeg.querySelectorAll('button[data-role]').forEach(btn => {
-          btn.onclick = () => {
-            const id = btn.getAttribute('data-role');
-            selectedRole = id;
-
-            roleSeg.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-
-            const r = roles.find(x => x.id === id);
-            roleDesc.textContent = r ? r.desc : '—';
-            clearError();
-          };
-        });
-
-        // default: Treinador
-        const defaultBtn = roleSeg.querySelector('button[data-role="coach"]') || roleSeg.querySelector('button[data-role]');
-        if (defaultBtn) defaultBtn.click();
-
-        // clubs
-        renderClubs('');
-
-        clubFilter.oninput = () => renderClubs(clubFilter.value);
-
-        // back
-        document.getElementById('btnBack').onclick = () => {
-          NS.UI.go('saveslot');
-        };
-
-        // create
-        document.getElementById('btnCreate').onclick = () => {
-          clearError();
-
-          const firstName = document.getElementById('firstName').value;
-          const lastName = document.getElementById('lastName').value;
-          const countryId = document.getElementById('country').value;
-          const avatarId = document.getElementById('avatar').value;
-          const roleId = selectedRole;
-          const clubId = selectedClub;
-
-          const draft = NS.Game.createCareerDraft({ firstName, lastName, countryId, avatarId, roleId, clubId });
-          if (!draft.ok) {
-            showError('Ajuste os dados para continuar: ' + draft.error);
-            return;
-          }
-
-          const ok = NS.Game.commitCareerToSlot(draft.career);
-          if (!ok) return;
-
-          // Tutorial de boas-vindas (uma vez)
-          if (NS.Game.shouldShowTutorial()) NS.UI.go('tutorial');
-          else NS.UI.go('lobby');
-        };
-      };
-
-      // Tutorial
-      UI.register('tutorial', () => {
-        const c = NS.Game.state.career;
-        const roleId = c?.role?.id;
-
-        let title = 'Bem-vindo.';
-        let body = 'Sua carreira começa agora. Decisões importam.';
-        if (roleId === 'coach') {
-          title = 'Bem-vindo, Treinador.';
-          body = 'Você controla escalação, treinos e táticas. Resultados afetam moral, reputação e segurança no cargo.';
-        } else if (roleId === 'sporting') {
-          title = 'Bem-vindo, Diretor Esportivo.';
-          body = 'Você lidera contratações, estrutura do futebol e planejamento. Monta o projeto e sustenta a competitividade.';
-        } else if (roleId === 'president') {
-          title = 'Bem-vindo, Presidente.';
-          body = 'Você decide o rumo total do clube: orçamento, infraestrutura, diretrizes e poder máximo. Mas a cobrança é maior.';
-        }
-
-        const club = c?.club?.name || 'seu clube';
-        const name = `${c?.manager?.firstName || ''} ${c?.manager?.lastName || ''}`.trim();
-
-        return `
-          <div class="screen">
-            <div class="topbar">
-              <div class="brand">
-                <div class="title">Tutorial de Boas-Vindas</div>
-                <div class="subtitle">${club} • ${name}</div>
-              </div>
-              <div class="pill"><span class="dot"></span><span>Entrada</span></div>
-            </div>
-
-            <div class="card">
-              <h2>${title}</h2>
-              <p style="margin-top:8px;">${body}</p>
-              <div class="toast" style="margin-top:12px;">
-                Próximo passo: Lobby. Depois vamos ativar calendário real brasileiro, elenco, staff, mercado e simulação.
-              </div>
-            </div>
-
-            <div class="actions">
-              <button class="btn btn-primary" id="btnOk">OK</button>
-            </div>
-          </div>
-        `;
-      });
-
-      UI.screens.tutorial.afterRender = () => {
-        document.getElementById('btnOk').onclick = () => {
-          NS.Game.markTutorialShown();
-          NS.UI.go('lobby');
-        };
-      };
+  function el(tag, attrs = {}, children = []) {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === "class") node.className = v;
+      else if (k === "html") node.innerHTML = String(v);
+      else if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2), v);
+      else node.setAttribute(k, String(v));
     }
-  };
+    for (const c of children) node.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+    return node;
+  }
 
-  NS.CareerUI = CareerUI;
+  function ensureCrestStyles() {
+    if (document.getElementById("career-crest-styles")) return;
+    const style = el("style", { id: "career-crest-styles", html: `
+      .club-row{display:flex;align-items:center;gap:12px;padding:10px 10px;border-radius:14px;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.06);cursor:pointer}
+      .club-row:hover{border-color:rgba(0,255,140,.35)}
+      .club-crest{width:40px;height:40px;border-radius:10px;object-fit:contain;background:rgba(255,255,255,.06)}
+      .club-meta{display:flex;flex-direction:column}
+      .club-name{font-weight:800;letter-spacing:.2px}
+      .club-sub{opacity:.85;font-size:.92rem}
+      .club-badge{margin-left:auto;opacity:.85;font-size:.85rem;padding:6px 10px;border-radius:999px;background:rgba(0,255,140,.12);border:1px solid rgba(0,255,140,.18)}
+    `});
+    document.head.appendChild(style);
+  }
+
+  function leagueLabel(code) {
+    if (code === "A") return "Série A";
+    if (code === "B") return "Série B";
+    return String(code || "Liga");
+  }
+
+  function render(container, html) {
+    container.innerHTML = html;
+  }
+
+  function getState() {
+    return NS.Game?.state || {};
+  }
+
+  function setCareerPatch(patch) {
+    NS.Game?.setCareerPatch?.(patch);
+  }
+
+  async function start(container) {
+    ensureCrestStyles();
+
+    const state = getState();
+    if (!state?.packData) {
+      NS.UI?.init?.(container);
+      return;
+    }
+
+    render(container, `
+      <div class="screen">
+        <div class="card">
+          <h2>Criar Carreira</h2>
+          <p>Defina seu perfil. Você pode alterar depois, mas isso impacta algumas notícias e eventos.</p>
+
+          <div class="form">
+            <label>Nome</label>
+            <input id="careerName" type="text" placeholder="Seu nome" value="${escapeHtml(state.career?.name || "")}" />
+
+            <label>País</label>
+            <select id="careerCountry">
+              ${countryOption(state.career?.country || "BR")}
+            </select>
+
+            <label>Avatar</label>
+            <select id="careerAvatar">
+              ${avatarOptions(state.career?.avatar || "default")}
+            </select>
+          </div>
+
+          <div class="actions">
+            <button class="btn secondary" id="btnBack">Voltar</button>
+            <button class="btn primary" id="btnNext">Continuar</button>
+          </div>
+        </div>
+      </div>
+    `);
+
+    $("#btnBack", container).addEventListener("click", () => NS.UI?.init?.(container));
+    $("#btnNext", container).addEventListener("click", () => {
+      const name = String($("#careerName", container).value || "").trim();
+      const country = String($("#careerCountry", container).value || "BR");
+      const avatar = String($("#careerAvatar", container).value || "default");
+      setCareerPatch({ name: name || "Treinador", country, avatar });
+      stepRole(container);
+    });
+  }
+
+  function stepRole(container) {
+    const state = getState();
+    const current = String(state.career?.role || "coach");
+
+    render(container, `
+      <div class="screen">
+        <div class="card">
+          <h2>Escolher Cargo</h2>
+          <p>O cargo muda o que você controla no clube.</p>
+
+          <div class="grid">
+            ${roleCard("coach", "Treinador", "Escalação, treinos, tática, gestão do elenco.", current)}
+            ${roleCard("director", "Diretor Esportivo", "Contratações (jogadores/staff), planejamento e negociações.", current)}
+            ${roleCard("president", "Presidente", "Gestão total: finanças, estrutura, metas e decisões estratégicas.", current)}
+          </div>
+
+          <div class="actions">
+            <button class="btn secondary" id="btnBack">Voltar</button>
+            <button class="btn primary" id="btnNext" disabled>Continuar</button>
+          </div>
+        </div>
+      </div>
+    `);
+
+    let selected = current || "";
+    const cards = container.querySelectorAll("[data-role]");
+    const nextBtn = $("#btnNext", container);
+
+    function refresh() {
+      cards.forEach(c => c.classList.toggle("selected", c.getAttribute("data-role") === selected));
+      nextBtn.disabled = !selected;
+    }
+
+    cards.forEach(c => {
+      c.addEventListener("click", () => {
+        selected = c.getAttribute("data-role");
+        refresh();
+      });
+    });
+
+    $("#btnBack", container).addEventListener("click", () => start(container));
+    nextBtn.addEventListener("click", () => {
+      setCareerPatch({ role: selected });
+      stepClub(container);
+    });
+
+    refresh();
+  }
+
+  function stepClub(container) {
+    const state = getState();
+    const clubs = NS.Game?.getClubsFromPack?.() || [];
+    const currentId = String(state.career?.clubId || "");
+
+    const list = clubs.map(c => {
+      const crest = escapeHtml(c.crest || `assets/crests/${String(c.id)}.png`);
+      const badge = `${leagueLabel(c.league)} • ${escapeHtml(c.state || "")}`;
+      const rating = typeof c.rating === "number" ? `OVR ${c.rating}` : "OVR ?";
+      return `
+        <div class="club-row" data-club="${escapeHtml(String(c.id))}">
+          <img class="club-crest" src="${crest}" alt="" onerror="this.style.visibility='hidden'"/>
+          <div class="club-meta">
+            <div class="club-name">${escapeHtml(c.name)}</div>
+            <div class="club-sub">${badge} • Orçamento: ${formatMoney(c.budget)}</div>
+          </div>
+          <div class="club-badge">${rating}</div>
+        </div>
+      `;
+    }).join("");
+
+    render(container, `
+      <div class="screen">
+        <div class="card">
+          <h2>Escolher Clube</h2>
+          <p>Começamos pelo Brasil. No futuro você só adiciona novos packs em <code>/packs</code> e registra no <code>catalog.json</code>.</p>
+
+          <div class="list" id="clubList" style="display:flex;flex-direction:column;gap:10px;max-height:52vh;overflow:auto;padding-right:4px">
+            ${list || `<div class="muted">Nenhum clube encontrado no pack selecionado.</div>`}
+          </div>
+
+          <div class="actions">
+            <button class="btn secondary" id="btnBack">Voltar</button>
+            <button class="btn primary" id="btnNext" disabled>Continuar</button>
+          </div>
+        </div>
+      </div>
+    `);
+
+    let selected = currentId;
+    const nextBtn = $("#btnNext", container);
+
+    function refresh() {
+      container.querySelectorAll(".club-row").forEach(row => {
+        const id = row.getAttribute("data-club");
+        row.style.outline = (id === selected) ? "2px solid rgba(0,255,140,.45)" : "none";
+      });
+      nextBtn.disabled = !selected;
+    }
+
+    container.querySelectorAll(".club-row").forEach(row => {
+      row.addEventListener("click", () => {
+        selected = row.getAttribute("data-club");
+        refresh();
+      });
+    });
+
+    $("#btnBack", container).addEventListener("click", () => stepRole(container));
+    nextBtn.addEventListener("click", () => {
+      setCareerPatch({ clubId: selected });
+      stepConfirm(container);
+    });
+
+    refresh();
+  }
+
+  function stepConfirm(container) {
+    const state = getState();
+    const career = state.career || {};
+    const club = (NS.Game?.getClubsFromPack?.() || []).find(c => String(c.id) === String(career.clubId));
+    const crest = club?.crest || `assets/crests/${String(club?.id || "")}.png`;
+
+    render(container, `
+      <div class="screen">
+        <div class="card">
+          <h2>Confirmar</h2>
+          <p>Revise antes de iniciar. (Você poderá ajustar algumas coisas depois.)</p>
+
+          <div style="display:flex;gap:14px;align-items:center;margin-top:10px">
+            <img class="club-crest" style="width:56px;height:56px;border-radius:14px" src="${escapeHtml(crest)}" alt="" onerror="this.style.visibility='hidden'"/>
+            <div>
+              <div style="font-weight:900;font-size:1.05rem">${escapeHtml(career.name || "Treinador")}</div>
+              <div class="muted">${escapeHtml(roleLabel(career.role))} • ${escapeHtml(career.country || "BR")} • Avatar: ${escapeHtml(career.avatar || "default")}</div>
+              <div style="margin-top:6px;font-weight:800">${escapeHtml(club?.name || "Clube não selecionado")}</div>
+              <div class="muted">${leagueLabel(club?.league)} • ${escapeHtml(club?.state || "")}</div>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="btn secondary" id="btnBack">Voltar</button>
+            <button class="btn primary" id="btnStart">Iniciar Carreira</button>
+          </div>
+        </div>
+      </div>
+    `);
+
+    $("#btnBack", container).addEventListener("click", () => stepClub(container));
+    $("#btnStart", container).addEventListener("click", async () => {
+      await NS.Game?.saveCurrentSlot?.();
+      NS.UI?.Lobby?.start?.(container);
+    });
+  }
+
+  function roleLabel(role) {
+    if (role === "director") return "Diretor Esportivo";
+    if (role === "president") return "Presidente";
+    return "Treinador";
+  }
+
+  function formatMoney(v) {
+    if (typeof v !== "number" || !isFinite(v)) return "—";
+    try {
+      return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+    } catch {
+      return "R$ " + Math.round(v).toString();
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function countryOption(selected) {
+    const options = [
+      ["BR", "Brasil"],
+      ["AR", "Argentina"],
+      ["UY", "Uruguai"],
+      ["CL", "Chile"],
+      ["CO", "Colômbia"],
+      ["PT", "Portugal"],
+      ["ES", "Espanha"],
+      ["FR", "França"],
+      ["DE", "Alemanha"],
+      ["IT", "Itália"],
+      ["GB", "Inglaterra"],
+    ];
+    return options
+      .map(([code, label]) => `<option value="${code}" ${code === selected ? "selected" : ""}>${label}</option>`)
+      .join("");
+  }
+
+  function avatarOptions(selected) {
+    const items = ["default", "01", "02", "03", "04", "05"];
+    return items
+      .map(id => `<option value="${id}" ${id === selected ? "selected" : ""}>Avatar ${id}</option>`)
+      .join("");
+  }
+
+  function roleCard(id, title, desc, current) {
+    const selected = id === current ? "selected" : "";
+    return `
+      <div class="role-card ${selected}" data-role="${id}" style="padding:14px;border-radius:16px;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.06);cursor:pointer">
+        <div style="font-weight:900;font-size:1.05rem">${title}</div>
+        <div class="muted" style="margin-top:6px">${desc}</div>
+      </div>
+    `;
+  }
+
+  Career.start = start;
+  NS.UI.Career = Career;
 })();
