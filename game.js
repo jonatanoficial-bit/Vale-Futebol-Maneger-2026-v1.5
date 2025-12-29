@@ -1,164 +1,96 @@
-/* Vale Futebol Manager 2026 - Game Bridge (Fase 3)
- * Responsável por: carregar DataPacks, gerenciar Save Slots, criar Carreira,
- * e expor funções usadas pela UI (ui/*.js).
- *
- * IMPORTANTE:
- * - Este arquivo deve existir e registrar window.VFM26.Game, senão a inicialização falha.
- * - Não depende de frameworks.
- */
 (function () {
-  'use strict';
-
   const NS = (window.VFM26 = window.VFM26 || {});
-  const STORAGE_KEY = 'VFM26_SAVES_V1';
 
   // -----------------------------
-  // Utils
-  // -----------------------------
-  function nowIso() {
-    return new Date().toISOString();
-  }
-
-  function safeJsonParse(str, fallback) {
-    try { return JSON.parse(str); } catch { return fallback; }
-  }
-
-  async function fetchJson(url) {
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`HTTP ${res.status} ao carregar ${url}`);
-    return await res.json();
-  }
-
-  function addDays(isoDate, days) {
-    const d = new Date(isoDate + 'T00:00:00');
-    d.setDate(d.getDate() + days);
-    return d.toISOString().slice(0, 10);
-  }
-
-  function clampStr(v, fallback) {
-    if (typeof v === 'string' && v.trim()) return v.trim();
-    return fallback;
-  }
-
-  // -----------------------------
-  // Save Slots (2 slots)
-  // -----------------------------
-  function loadSaveSlots() {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const parsed = safeJsonParse(raw, null);
-
-    // Estrutura padrão: 2 slots
-    const base = {
-      version: 1,
-      slots: {
-        1: { id: 1, exists: false, packId: null, updatedAt: null, data: null },
-        2: { id: 2, exists: false, packId: null, updatedAt: null, data: null }
-      }
-    };
-
-    if (!parsed || typeof parsed !== 'object' || !parsed.slots) return base;
-
-    // merge defensivo
-    const out = base;
-    for (const k of ['1', '2']) {
-      const s = parsed.slots && parsed.slots[k];
-      if (s && typeof s === 'object') {
-        out.slots[k] = {
-          id: Number(k),
-          exists: !!s.exists,
-          packId: s.packId ?? null,
-          updatedAt: s.updatedAt ?? null,
-          data: s.data ?? null
-        };
-      }
-    }
-    return out;
-  }
-
-  function saveSaveSlots(model) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(model));
-  }
-
-  // -----------------------------
-  // Game State
+  // Estado do jogo (ponte)
   // -----------------------------
   const state = {
-    version: '1.2.0',
-
-    // pack
+    version: "v1.5",
+    engineVersion: "v1.2.0",
     packId: null,
     packData: null,
+    packsCatalog: null,
 
-    // save
-    saveSlot: null, // 1|2
+    // saves
+    saveSlots: [
+      { id: 1, name: "Slot 1", data: null },
+      { id: 2, name: "Slot 2", data: null }
+    ],
+    currentSlot: null,
 
-    // career
-    career: null, // { manager, role, club, createdAt }
-
-    // calendar/world
-    world: null, // { today, seasonStart, seasonEnd, dayIndex }
-    tutorialShown: false
+    // carreira
+    career: null
   };
 
   // -----------------------------
-  // Packs
+  // Util
   // -----------------------------
-  async function listPacks() {
-    // Se existir um catálogo no futuro, ele será usado automaticamente.
-    // Caso não exista, retornamos fallback (Brasil).
-    try {
-      const catalog = await fetchJson('packs/catalog.json');
-      if (Array.isArray(catalog)) return catalog;
-      if (catalog && Array.isArray(catalog.packs)) return catalog.packs;
-    } catch (e) {
-      // ignore e usa fallback
-    }
-
-    return [
-      {
-        id: 'brasil',
-        name: 'Brasil (Série A, Série B, Copa do Brasil, Estaduais)',
-        region: 'SA',
-        file: 'packs/brasil_pack.json',
-        description: 'Pack inicial do Brasil. Pronto para expansão global adicionando novos packs em /packs.'
-      }
-    ];
+  function safeJsonParse(str) {
+    try { return JSON.parse(str); } catch { return null; }
   }
 
-  async function loadPack(packId) {
-    const id = String(packId || '').trim();
-    if (!id) throw new Error('packId inválido');
-
-    const packs = await listPacks();
-    const packMeta = packs.find(p => String(p.id) === id);
-
-    const file = packMeta && packMeta.file ? String(packMeta.file) : `packs/${id}_pack.json`;
-    const pack = await fetchJson(file);
-
-    state.packId = id;
-    state.packData = pack;
-
-    // Ajusta world se já existe carreira (ou se UI abrir calendário)
-    ensureWorld();
-
-    return pack;
+  function storageKey(slotId) {
+    return `VFM26_SAVE_SLOT_${slotId}`;
   }
 
-  function getPackSummary() {
-    const p = state.packData;
-    if (!p) return null;
-    return {
-      id: p.id ?? state.packId,
-      name: p.name ?? state.packId,
-      region: p.region ?? '',
-      version: p.version ?? '',
-      description: p.description ?? ''
-    };
+  function loadSavesFromStorage() {
+    state.saveSlots.forEach(s => {
+      const raw = localStorage.getItem(storageKey(s.id));
+      s.data = raw ? safeJsonParse(raw) : null;
+    });
   }
 
+  function saveSlotToStorage(slotId, data) {
+    localStorage.setItem(storageKey(slotId), JSON.stringify(data));
+    loadSavesFromStorage();
+  }
+
+  function deleteSlotFromStorage(slotId) {
+    localStorage.removeItem(storageKey(slotId));
+    loadSavesFromStorage();
+  }
+
+  function fmtMoney(n) {
+    if (typeof n !== "number") return "—";
+    return n.toLocaleString("pt-BR");
+  }
+
+  // -----------------------------
+  // DataPack
+  // -----------------------------
+  async function fetchCatalog() {
+    const url = "packs/catalog.json";
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error(`Falha ao carregar ${url}: HTTP ${res.status}`);
+    const json = await res.json();
+    return json;
+  }
+
+  async function fetchPack(packFile) {
+    const url = `packs/${packFile}`;
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error(`Falha ao carregar ${url}: HTTP ${res.status}`);
+    const json = await res.json();
+    return json;
+  }
+
+  function setActivePack(packId, packData) {
+    state.packId = packId;
+    state.packData = packData;
+    localStorage.setItem("VFM26_ACTIVE_PACK", packId);
+  }
+
+  function loadActivePackId() {
+    return localStorage.getItem("VFM26_ACTIVE_PACK");
+  }
+
+  // -----------------------------
+  // Clubs (com CREST real)
+  // -----------------------------
   function getClubsFromPack() {
     const pack = state.packData;
     if (!pack) return [];
+
     const clubs = Array.isArray(pack.clubs) ? pack.clubs : [];
     return clubs
       .filter(c => c && c.id && c.name)
@@ -166,253 +98,364 @@
         id: String(c.id),
         name: String(c.name),
         shortName: c.shortName ? String(c.shortName) : String(c.name),
-        league: c.league ? String(c.league) : 'unknown',
-        state: c.state ? String(c.state) : '',
-        rating: typeof c.rating === 'number' ? c.rating : null,
-        budget: typeof c.budget === 'number' ? c.budget : null,
-        crest: c.crest ? String(c.crest) : `assets/crests/${String(c.id)}.png` // fallback padrão
+        league: c.league ? String(c.league) : "unknown",
+        state: c.state ? String(c.state) : "",
+        rating: typeof c.rating === "number" ? c.rating : null,
+        budget: typeof c.budget === "number" ? c.budget : null,
+
+        // prioridade: o que vem do pack (campo crest)
+        // fallback: pasta que EXISTE no seu ZIP: assets/logos/ID.png
+        crest: c.crest ? String(c.crest) : `assets/logos/${String(c.id)}.png`
       }));
   }
 
-  function getClubById(clubId) {
-    const id = String(clubId || '');
-    return getClubsFromPack().find(c => c.id === id) || null;
+  // -----------------------------
+  // UI helpers (cards/botões)
+  // -----------------------------
+  function screenShell(title, subtitle, innerHtml) {
+    return `
+      <div class="screen">
+        <div class="hdr">
+          <h1 class="title">${title}</h1>
+          <p class="sub">${subtitle || ""}</p>
+        </div>
+        <div class="body">${innerHtml}</div>
+      </div>
+    `;
+  }
+
+  function btn(label, cls, onclick) {
+    return `<button class="btn ${cls}" onclick="${onclick}">${label}</button>`;
   }
 
   // -----------------------------
-  // World / Calendar
+  // Fluxo: Cover → DataPack → SaveSlot → Carreira (fase 3)
   // -----------------------------
-  function ensureWorld() {
-    if (state.world) return state.world;
+  function renderCover() {
+    const html = screenShell(
+      "Vale Futebol Manager 2026",
+      "Simulador de futebol manager. Base sólida pronta. Agora: DataPack e Saves.",
+      `
+        <div class="card">
+          <div style="font-weight:900; text-transform:uppercase;">Modo Carreira</div>
+          <div class="sp"></div>
+          <div style="color:var(--muted); line-height:1.35">
+            Fluxo obrigatório: DataPack → Save Slot → Carreira.
+          </div>
+          <div class="sp"></div>
+          <span class="badge">Engine ${state.engineVersion}</span>
+        </div>
+        <div class="sp"></div>
+        <div class="row">
+          ${btn("Iniciar", "btn-green", "VFM26.Game.goDataPack()")}
+        </div>
+      `
+    );
 
-    const pack = state.packData;
-    const cal = pack && pack.calendar ? pack.calendar : null;
-    const seasonStart = (cal && cal.seasonStart) ? String(cal.seasonStart) : '2026-01-01';
-    const seasonEnd   = (cal && cal.seasonEnd) ? String(cal.seasonEnd) : '2026-12-31';
-
-    state.world = {
-      seasonStart,
-      seasonEnd,
-      dayIndex: 0,
-      today: seasonStart
-    };
-
-    return state.world;
+    NS.UI.setHTML(html);
   }
 
-  function getToday() {
-    return ensureWorld().today;
+  async function renderDataPack() {
+    let catalog;
+    try {
+      catalog = await fetchCatalog();
+      state.packsCatalog = catalog;
+    } catch (e) {
+      const html = screenShell(
+        "Escolher DataPack",
+        "Sem mexer no código do jogo: os packs são arquivos JSON em /packs.",
+        `
+          <div class="card">
+            <div style="font-weight:900; color:var(--red)">Falha ao carregar catálogo</div>
+            <div class="sp"></div>
+            <div style="color:var(--muted)">${String(e.message || e)}</div>
+          </div>
+          <div class="sp"></div>
+          <div class="row">
+            ${btn("Voltar", "btn-gray", "VFM26.Game.goCover()")}
+          </div>
+        `
+      );
+      NS.UI.setHTML(html);
+      return;
+    }
+
+    const packs = Array.isArray(catalog.packs) ? catalog.packs : [];
+    if (!packs.length) {
+      const html = screenShell(
+        "Escolher DataPack",
+        "Sem mexer no código do jogo: os packs são arquivos JSON em /packs.",
+        `
+          <div class="card">
+            <div style="font-weight:900">Nenhum pack encontrado em packs/catalog.json</div>
+            <div class="sp"></div>
+            <div style="color:var(--muted)">Verifique se catalog.json tem o array <b>packs</b> com pelo menos 1 item.</div>
+          </div>
+          <div class="sp"></div>
+          <div class="row">
+            ${btn("Voltar", "btn-gray", "VFM26.Game.goCover()")}
+          </div>
+        `
+      );
+      NS.UI.setHTML(html);
+      return;
+    }
+
+    const list = packs.map(p => {
+      const region = p.region ? `Região: ${p.region}` : "";
+      const desc = p.description ? p.description : "";
+      return `
+        <div class="card" style="margin-bottom:12px;">
+          <div style="font-weight:900; text-transform:uppercase;">${p.name}</div>
+          <div class="sp"></div>
+          <div style="color:var(--muted); line-height:1.35">${desc}</div>
+          <div class="sp"></div>
+          <div style="color:var(--muted); font-size:12px;">ID: <b>${p.id}</b> ${region ? `| ${region}` : ""}</div>
+          <div class="sp"></div>
+          <div class="row">
+            ${btn("Selecionar", "btn-green", `VFM26.Game.selectPack('${p.id}')`)}
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    const html = screenShell(
+      "Escolher DataPack",
+      "Escolha o pacote de dados. Ele define ligas, clubes e calendário.",
+      `
+        ${list}
+        <div class="row">
+          ${btn("Voltar", "btn-gray", "VFM26.Game.goCover()")}
+        </div>
+      `
+    );
+    NS.UI.setHTML(html);
   }
 
-  function getNextMatchday() {
-    // Fase 4 vai substituir isso por calendário real/rodadas.
-    // Por enquanto, consideramos próximo "matchday" como +7 dias.
-    const w = ensureWorld();
-    return addDays(w.today, 7);
+  async function selectPack(packId) {
+    const packs = (state.packsCatalog && Array.isArray(state.packsCatalog.packs)) ? state.packsCatalog.packs : [];
+    const p = packs.find(x => x.id === packId);
+    if (!p) {
+      alert("Pack não encontrado no catálogo.");
+      return;
+    }
+
+    try {
+      const packData = await fetchPack(p.file);
+      setActivePack(packId, packData);
+      NS.UI.setHTML(
+        screenShell(
+          "Próxima Etapa: Save Slot",
+          `Pack selecionado: ${p.name}`,
+          `
+            <div class="card">
+              <div style="font-weight:900">Pack ativo: <b>${packId}</b></div>
+              <div class="sp"></div>
+              <div style="color:var(--muted)">Agora escolha um slot para criar/continuar carreira.</div>
+            </div>
+            <div class="sp"></div>
+            <div class="row">
+              ${btn("Continuar", "btn-green", "VFM26.Game.goSaveSlot()")}
+              ${btn("Voltar", "btn-gray", "VFM26.Game.goDataPack()")}
+            </div>
+          `
+        )
+      );
+    } catch (e) {
+      alert("Falha ao carregar pack: " + (e.message || e));
+    }
   }
 
-  function advanceDay(days) {
-    const w = ensureWorld();
-    const n = (typeof days === 'number' && isFinite(days)) ? Math.max(1, Math.floor(days)) : 1;
-    w.dayIndex += n;
-    w.today = addDays(w.today, n);
+  function renderSaveSlot() {
+    loadSavesFromStorage();
 
-    // persiste no save se existir
-    persistToCurrentSlot();
-    return w.today;
+    const packId = state.packId || loadActivePackId() || "—";
+    const cards = state.saveSlots.map(s => {
+      const isEmpty = !s.data;
+      const title = `SLOT ${s.id} — ${isEmpty ? "Começar novo jogo" : "Continuar carreira"}`;
+      const packInfo = `Pack atual: ${packId}`;
+      return `
+        <div class="card" style="margin-bottom:12px;">
+          <div style="font-weight:900">${title}</div>
+          <div class="sp"></div>
+          <div style="color:var(--muted)">${isEmpty ? "Slot vazio." : "Slot com dados salvos."} ${packInfo}</div>
+          <div class="sp"></div>
+          <div class="row">
+            ${btn(isEmpty ? "Criar novo" : "Continuar", "btn-green", `VFM26.Game.useSlot(${s.id})`)}
+            ${btn("Apagar", "btn-red", `VFM26.Game.deleteSlot(${s.id})`)}
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    const html = screenShell(
+      "Escolher Save Slot",
+      `DataPack ativo: ${packId}`,
+      `
+        ${cards}
+        <div class="row">
+          ${btn("Voltar", "btn-gray", "VFM26.Game.goDataPack()")}
+        </div>
+      `
+    );
+
+    NS.UI.setHTML(html);
   }
 
-  // -----------------------------
-  // Career
-  // -----------------------------
-  function getCountriesForCareer() {
-    // Pode virar data-driven (via pack) no futuro.
-    return [
-      { id: 'BR', name: 'Brasil' },
-      { id: 'AR', name: 'Argentina' },
-      { id: 'UY', name: 'Uruguai' },
-      { id: 'CO', name: 'Colômbia' },
-      { id: 'PT', name: 'Portugal' }
-    ];
-  }
+  function useSlot(slotId) {
+    loadSavesFromStorage();
+    const slot = state.saveSlots.find(s => s.id === slotId);
+    if (!slot) return;
 
-  function getAvatars() {
-    // IDs que batem com assets/avatars/*.png (ou o que você já tiver).
-    // Pode trocar/expandir sem quebrar saves.
-    return [
-      { id: 'a1', name: 'Avatar 1', file: 'assets/avatars/a1.png' },
-      { id: 'a2', name: 'Avatar 2', file: 'assets/avatars/a2.png' },
-      { id: 'a3', name: 'Avatar 3', file: 'assets/avatars/a3.png' },
-      { id: 'a4', name: 'Avatar 4', file: 'assets/avatars/a4.png' }
-    ];
-  }
+    state.currentSlot = slotId;
 
-  function getRoles() {
-    return [
-      { id: 'coach', name: 'Treinador' },
-      { id: 'sporting', name: 'Diretor Esportivo' },
-      { id: 'president', name: 'Presidente' }
-    ];
-  }
-
-  function createCareer(payload) {
-    const p = payload || {};
-    const managerName = clampStr(p.name, 'Seu Nome');
-    const country = clampStr(p.country, 'BR');
-    const avatar = clampStr(p.avatar, 'a1');
-    const role = clampStr(p.role, 'coach');
-    const clubId = clampStr(p.clubId, '');
-
-    const club = getClubById(clubId) || (getClubsFromPack()[0] || null);
-    if (!club) throw new Error('Nenhum clube disponível no pack selecionado.');
-
-    state.career = {
-      createdAt: nowIso(),
-      manager: { name: managerName, country, avatar },
-      role,
-      club
-    };
-
-    // Garante world
-    ensureWorld();
-
-    // Marca tutorial como não visto (vai ser mostrado após criação)
-    state.tutorialShown = false;
-
-    // persiste no slot atual
-    persistToCurrentSlot();
-
-    return state.career;
-  }
-
-  function markTutorialShown() {
-    state.tutorialShown = true;
-    persistToCurrentSlot();
-  }
-
-  // -----------------------------
-  // Save Slot API (UI)
-  // -----------------------------
-  function getSlots() {
-    const model = loadSaveSlots();
-    return [model.slots['1'], model.slots['2']];
+    // se já existe carreira salva, carrega; senão cria etapa de carreira (fase 3)
+    if (slot.data && slot.data.career) {
+      state.career = slot.data.career;
+      NS.UI.go("lobby"); // lobby-ui.js vai pegar state.career via VFM26.Game.getCareer()
+    } else {
+      renderCareerCreate();
+    }
   }
 
   function deleteSlot(slotId) {
-    const sid = Number(slotId);
-    if (sid !== 1 && sid !== 2) return;
-
-    const model = loadSaveSlots();
-    model.slots[String(sid)] = { id: sid, exists: false, packId: null, updatedAt: null, data: null };
-    saveSaveSlots(model);
-
-    if (state.saveSlot === sid) {
-      state.saveSlot = null;
-      state.career = null;
-      state.world = null;
-      state.tutorialShown = false;
-    }
-  }
-
-  function selectSlot(slotId) {
-    const sid = Number(slotId);
-    if (sid !== 1 && sid !== 2) throw new Error('Slot inválido');
-    state.saveSlot = sid;
-
-    // carrega data se existir
-    const model = loadSaveSlots();
-    const slot = model.slots[String(sid)];
-    if (slot && slot.exists && slot.data) {
-      hydrateFromSave(slot.data);
-    }
-    return sid;
-  }
-
-  function createNew(slotId) {
-    const sid = Number(slotId);
-    if (sid !== 1 && sid !== 2) throw new Error('Slot inválido');
-
-    state.saveSlot = sid;
-    state.career = null;
-    state.world = null;
-    state.tutorialShown = false;
-
-    const model = loadSaveSlots();
-    model.slots[String(sid)] = {
-      id: sid,
-      exists: true,
-      packId: state.packId,
-      updatedAt: nowIso(),
-      data: snapshotForSave()
-    };
-    saveSaveSlots(model);
-  }
-
-  function snapshotForSave() {
-    return {
-      version: 1,
-      packId: state.packId,
-      career: state.career,
-      world: state.world,
-      tutorialShown: state.tutorialShown
-    };
-  }
-
-  function hydrateFromSave(data) {
-    if (!data || typeof data !== 'object') return;
-
-    state.packId = data.packId ?? state.packId;
-    state.career = data.career ?? null;
-    state.world = data.world ?? null;
-    state.tutorialShown = !!data.tutorialShown;
-  }
-
-  function persistToCurrentSlot() {
-    if (state.saveSlot !== 1 && state.saveSlot !== 2) return;
-    const model = loadSaveSlots();
-    const sid = String(state.saveSlot);
-
-    // Se o slot ainda não existe, cria.
-    model.slots[sid] = {
-      id: Number(sid),
-      exists: true,
-      packId: state.packId,
-      updatedAt: nowIso(),
-      data: snapshotForSave()
-    };
-    saveSaveSlots(model);
+    if (!confirm(`Apagar Slot ${slotId}?`)) return;
+    deleteSlotFromStorage(slotId);
+    renderSaveSlot();
   }
 
   // -----------------------------
-  // Public API
+  // FASE 3: Criar carreira (nome/avatar/país/cargo/clube)
+  // -----------------------------
+  function renderCareerCreate() {
+    const clubs = getClubsFromPack();
+    const options = clubs.map(c => {
+      const label = `${c.name} (${c.league}${c.state ? " - " + c.state : ""})`;
+      return `<option value="${c.id}">${label}</option>`;
+    }).join("");
+
+    const html = screenShell(
+      "Criar Carreira",
+      "Preencha perfil, escolha cargo e selecione um clube do Brasil (fase inicial).",
+      `
+        <div class="card">
+          <div style="font-weight:900; margin-bottom:8px;">Perfil</div>
+          <div style="display:grid; gap:10px;">
+            <input id="c_name" placeholder="Seu nome" style="padding:12px;border-radius:12px;border:1px solid var(--stroke2);background:rgba(0,0,0,.25);color:var(--text);" />
+            <input id="c_country" placeholder="País (ex: Brasil)" style="padding:12px;border-radius:12px;border:1px solid var(--stroke2);background:rgba(0,0,0,.25);color:var(--text);" />
+            <select id="c_role" style="padding:12px;border-radius:12px;border:1px solid var(--stroke2);background:rgba(0,0,0,.25);color:var(--text);">
+              <option value="coach">Treinador</option>
+              <option value="sporting">Diretor Esportivo</option>
+              <option value="president">Presidente</option>
+            </select>
+
+            <div style="height:6px;"></div>
+
+            <div style="font-weight:900; margin-bottom:6px;">Clube</div>
+            <select id="c_club" style="padding:12px;border-radius:12px;border:1px solid var(--stroke2);background:rgba(0,0,0,.25);color:var(--text);">
+              ${options || `<option value="">(Sem clubes no pack)</option>`}
+            </select>
+          </div>
+        </div>
+
+        <div class="sp"></div>
+
+        <div class="row">
+          ${btn("Criar", "btn-green", "VFM26.Game.createCareerFromForm()")}
+          ${btn("Voltar", "btn-gray", "VFM26.Game.goSaveSlot()")}
+        </div>
+      `
+    );
+
+    NS.UI.setHTML(html);
+  }
+
+  function createCareerFromForm() {
+    const name = (document.getElementById("c_name")?.value || "").trim();
+    const country = (document.getElementById("c_country")?.value || "").trim();
+    const role = (document.getElementById("c_role")?.value || "coach").trim();
+    const clubId = (document.getElementById("c_club")?.value || "").trim();
+
+    if (!name || !country || !clubId) {
+      alert("Preencha nome, país e selecione um clube.");
+      return;
+    }
+
+    const clubs = getClubsFromPack();
+    const club = clubs.find(c => c.id === clubId);
+    if (!club) {
+      alert("Clube inválido.");
+      return;
+    }
+
+    state.career = {
+      createdAt: Date.now(),
+      profile: { name, country },
+      role,
+      club,
+      points: 0
+    };
+
+    // salva no slot
+    const data = { packId: state.packId, career: state.career };
+    saveSlotToStorage(state.currentSlot, data);
+
+    // tutorial/boas vindas (simples por enquanto)
+    NS.UI.setHTML(
+      screenShell(
+        "Bem-vindo!",
+        "Você iniciou sua carreira. Próximo passo: Lobby.",
+        `
+          <div class="card">
+            <div style="font-weight:900">Olá, <b>${name}</b>!</div>
+            <div class="sp"></div>
+            <div style="color:var(--muted); line-height:1.35">
+              Cargo: <b>${role}</b><br/>
+              Clube: <b>${club.name}</b>
+            </div>
+            <div class="sp"></div>
+            <div class="row">
+              ${btn("Ir para o Lobby", "btn-green", "VFM26.UI.go('lobby')")}
+            </div>
+          </div>
+        `
+      )
+    );
+  }
+
+  // -----------------------------
+  // Navegação
+  // -----------------------------
+  function goCover() { NS.UI.go('cover'); }
+  function goDataPack() { NS.UI.go('datapack'); }
+  function goSaveSlot() { NS.UI.go('saveslot'); }
+
+  // -----------------------------
+  // Exposição pública
   // -----------------------------
   NS.Game = {
     state,
 
-    // packs
-    listPacks,
-    loadPack,
-    getPackSummary,
+    // getters
+    getCareer: () => state.career,
+    getPack: () => state.packData,
     getClubsFromPack,
-    getClubById,
 
-    // slots
-    getSlots,
-    selectSlot,
-    createNew,
+    // flow
+    goCover,
+    goDataPack,
+    goSaveSlot,
+
+    // actions
+    selectPack,
+    useSlot,
     deleteSlot,
+    createCareerFromForm,
 
-    // career
-    createCareer,
-    getCountriesForCareer,
-    getAvatars,
-    getRoles,
-    markTutorialShown,
-
-    // calendar/world
-    ensureWorld,
-    getToday,
-    getNextMatchday,
-    advanceDay
+    // render hooks chamados pelo UI
+    renderCover,
+    renderDataPack,
+    renderSaveSlot,
+    renderCareerCreate
   };
 })();
