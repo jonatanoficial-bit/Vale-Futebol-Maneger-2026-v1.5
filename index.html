@@ -22,24 +22,45 @@
 
     .boot-screen {
       text-align: center;
+      padding: 18px;
+      max-width: 520px;
     }
 
     .boot-title {
       font-size: 22px;
-      font-weight: bold;
+      font-weight: 800;
       margin-bottom: 10px;
       color: #00ff7f;
+      letter-spacing: 0.5px;
     }
 
     .boot-status {
       font-size: 14px;
-      opacity: 0.9;
+      opacity: 0.92;
+      line-height: 1.4;
     }
 
     .boot-error {
       color: #ff4c4c;
-      margin-top: 15px;
-      font-weight: bold;
+      margin-top: 14px;
+      font-weight: 800;
+      letter-spacing: 0.4px;
+    }
+
+    .boot-box {
+      width: 100%;
+      border: 1px solid rgba(0,255,127,0.35);
+      background: rgba(0,0,0,0.35);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+    }
+
+    .boot-mini {
+      margin-top: 10px;
+      font-size: 12px;
+      opacity: 0.75;
+      word-break: break-word;
     }
   </style>
 </head>
@@ -47,11 +68,15 @@
 
   <div id="app">
     <div class="boot-screen">
-      <div class="boot-title">VALE FUTEBOL MANAGER 2026</div>
-      <div class="boot-status" id="bootStatus">Inicializando...</div>
+      <div class="boot-box">
+        <div class="boot-title">VALE FUTEBOL MANAGER 2026</div>
+        <div class="boot-status" id="bootStatus">Preparando inicialização...</div>
+        <div class="boot-mini" id="bootHint">Se travar, abra o console (F12) e procure BOOT_STEPS.</div>
+      </div>
     </div>
   </div>
 
-  <script src="main.js"></script>
+  <!-- IMPORTANTE: module garante que import() funcione no GitHub Pages -->
+  <script type="module" src="main.js"></script>
 </body>
 </html>
