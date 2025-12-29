@@ -7,136 +7,78 @@
 
   <style>
     :root{
-      --bg0:#04130d;
-      --bg1:#061f15;
-      --card:#0b1f17cc;
-      --card2:#0b1f17f0;
-      --stroke:#1df59a55;
-      --stroke2:#1df59a22;
-      --text:#e8fff4;
-      --muted:#a6c8b8;
-      --green:#18f28f;
-      --green2:#0ad67a;
-      --red:#ff3b3b;
-      --shadow: 0 14px 40px rgba(0,0,0,.55);
-      --r:18px;
+      --bg:#06130d;
+      --card:rgba(0,0,0,.35);
+      --stroke:rgba(255,255,255,.08);
+      --accent:#00ff8c;
+      --text:#e8fff2;
+      --muted:rgba(232,255,242,.72);
     }
-
-    *{ box-sizing:border-box; }
-    html,body{ height:100%; margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    html,body{height:100%}
     body{
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial;
+      background:radial-gradient(1200px 800px at 50% 20%, #0b2b1b 0%, var(--bg) 60%, #020806 100%);
       color:var(--text);
-      background:
-        radial-gradient(1200px 800px at 50% 20%, #0b3a27 0%, transparent 55%),
-        radial-gradient(900px 600px at 40% 110%, #072115 0%, transparent 60%),
-        linear-gradient(180deg, var(--bg1), var(--bg0));
-      overflow-x:hidden;
+      overflow:hidden;
     }
-
-    /* app container */
     #app{
-      min-height:100%;
+      min-height:100vh;
       display:flex;
       align-items:center;
       justify-content:center;
-      padding:18px 14px;
+      padding:16px;
+      box-sizing:border-box;
     }
-
-    /* compat com telas existentes do seu UI */
-    .screen{
-      width: min(560px, 96vw);
-      border-radius: var(--r);
-      background: linear-gradient(180deg, var(--card2), var(--card));
-      border:1px solid var(--stroke2);
-      box-shadow: var(--shadow);
-      overflow:hidden;
-    }
-    .screen .hdr{
-      padding:18px 18px 10px 18px;
-      border-bottom:1px solid var(--stroke2);
-    }
-    .title{
-      margin:0;
-      font-size:22px;
-      letter-spacing:.5px;
-      font-weight:900;
-      text-transform:uppercase;
-    }
-    .sub{
-      margin:8px 0 0 0;
-      color:var(--muted);
-      line-height:1.35;
-      font-size:14px;
-    }
-
-    .body{
-      padding:16px 18px 18px 18px;
-    }
-
+    .screen{width:min(720px,100%);}
     .card{
-      border:1px solid var(--stroke2);
-      border-radius:16px;
-      padding:14px;
-      background: rgba(0,0,0,.18);
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,.03);
+      background:var(--card);
+      border:1px solid var(--stroke);
+      border-radius:22px;
+      padding:18px;
+      box-shadow:0 18px 50px rgba(0,0,0,.35);
+      backdrop-filter: blur(10px);
     }
-
-    .row{ display:flex; gap:10px; flex-wrap:wrap; }
-    .sp{ height:12px; }
-
+    h1,h2,h3{margin:0 0 8px 0; letter-spacing:.4px}
+    p{margin:6px 0 14px 0; color:var(--muted); line-height:1.35}
+    code{color:#b9ffdf}
+    .muted{color:var(--muted)}
+    .actions{display:flex; gap:10px; margin-top:16px}
     .btn{
-      border:none;
-      border-radius:16px;
+      appearance:none;
+      border:0;
+      border-radius:18px;
       padding:14px 16px;
       font-weight:900;
-      letter-spacing:.5px;
-      text-transform:uppercase;
+      letter-spacing:.3px;
       cursor:pointer;
       min-width:140px;
-      transition: transform .06s ease, filter .12s ease;
-      user-select:none;
     }
-    .btn:active{ transform: translateY(1px) scale(.99); }
-
-    .btn-green{
-      color:#022114;
-      background: linear-gradient(180deg, var(--green), var(--green2));
-      box-shadow: 0 10px 22px rgba(24,242,143,.18);
+    .btn.primary{
+      background:linear-gradient(180deg, rgba(0,255,140,1) 0%, rgba(0,200,110,1) 100%);
+      color:#052012;
+      box-shadow:0 12px 25px rgba(0,255,140,.18);
     }
-    .btn-gray{
-      color:#eaf7f0;
-      background: linear-gradient(180deg, #3a3a3a, #1f1f1f);
-      border:1px solid rgba(255,255,255,.07);
+    .btn.secondary{
+      background:linear-gradient(180deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.06) 100%);
+      color:var(--text);
+      border:1px solid rgba(255,255,255,.12);
     }
-    .btn-red{
-      color:#fff;
-      background: linear-gradient(180deg, #ff5050, #b70000);
-      box-shadow: 0 10px 22px rgba(255,59,59,.16);
-    }
-
-    /* badges */
-    .badge{
-      display:inline-flex;
-      align-items:center;
-      padding:6px 10px;
-      border-radius:999px;
-      font-size:12px;
-      font-weight:800;
-      border:1px solid var(--stroke2);
-      background: rgba(0,0,0,.22);
-      color: var(--green);
-    }
-
-    /* fallback debug */
-    .bootlog{
-      margin-top:10px;
-      font-size:12px;
-      line-height:1.35;
-      color:#cfeee0;
-      opacity:.85;
-      white-space:pre-wrap;
-      border-top:1px dashed rgba(255,255,255,.10);
-      padding-top:10px;
+    .btn:disabled{opacity:.55; cursor:not-allowed}
+    .grid{display:grid;grid-template-columns:1fr;gap:10px}
+    @media(min-width:680px){.grid{grid-template-columns:1fr 1fr 1fr}}
+    .role-card.selected{border-color:rgba(0,255,140,.45)!important; box-shadow:0 12px 25px rgba(0,255,140,.12)}
+    .form{display:flex; flex-direction:column; gap:8px}
+    label{font-weight:800; opacity:.9}
+    input,select{
+      width:100%;
+      padding:12px 12px;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(0,0,0,.25);
+      color:var(--text);
+      outline:none;
+      box-sizing:border-box;
     }
   </style>
 </head>
@@ -144,17 +86,14 @@
 <body>
   <div id="app"></div>
 
-  <!-- ORDEM CORRETA (existente no seu ZIP) -->
-  <script defer src="engine/boot-check.js"></script>
-  <script defer src="engine/gameCore.js"></script>
-  <script defer src="engine/index.js"></script>
-
-  <script defer src="game.js"></script>
-
-  <script defer src="ui/ui.js"></script>
-  <script defer src="ui/career-ui.js"></script>
-  <script defer src="ui/lobby-ui.js"></script>
-
-  <script defer src="boot.js"></script>
+  <!-- Ordem correta do boot (inviolável): engine core -> bootcheck -> datapacks -> game -> ui -> main -->
+  <script src="engine/gameCore.js"></script>
+  <script src="engine/boot-check.js"></script>
+  <script src="engine/datapacks.js"></script>
+  <script src="game.js"></script>
+  <script src="ui/ui.js"></script>
+  <script src="ui/career-ui.js"></script>
+  <script src="ui/lobby-ui.js"></script>
+  <script src="main.js"></script>
 </body>
 </html>
