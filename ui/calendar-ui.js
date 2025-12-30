@@ -1,98 +1,188 @@
-/* ui/calendar-ui.js — Fase 4: calendário + próximo jogo */
 (function () {
   'use strict';
-  const NS = (window.VFM26 = window.VFM26 || {});
 
-  function compName(id){
-    if (id === 'state') return 'Estadual';
-    if (id === 'cupBR') return 'Copa do Brasil';
-    if (id === 'leagueA') return 'Série A';
-    if (id === 'leagueB') return 'Série B';
-    return id;
+  window.VFM26 = window.VFM26 || {};
+  const NS = window.VFM26;
+
+  function esc(s) {
+    return String(s || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
-  NS.UI && NS.UI.register && NS.UI.register('calendar', () => {
-    const c = NS.Game.state.career;
-    if (!c) return `<div class="screen"><div class="card"><h2>Sem carreira</h2></div></div>`;
+  function fmtDate(iso) {
+    try {
+      const d = new Date(iso + 'T00:00:00');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      return `${dd}/${mm}/${yyyy}`;
+    } catch {
+      return iso;
+    }
+  }
 
-    NS.Game.ensureWorld();
-    const today = NS.Game.getToday();
-    const next = NS.Game.getNextMatchday();
+  function addDaysISO(iso, add) {
+    const d = new Date(iso + 'T00:00:00');
+    d.setDate(d.getDate() + add);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
 
-    const club = c.club?.name || '—';
-    const crest = c.club?.crest || `assets/crests/${c.club?.id}.png`;
-
-    const todayEvents = (today.day?.events || []).filter(e => e.type === 'matchday');
-
-    return `
-      <div class="screen">
-        <div class="topbar">
-          <div class="brand">
-            <div class="title">Calendário</div>
-            <div class="subtitle">${club} • Dia ${today.dayIndex}</div>
+  function renderList(fixtures, clubsById) {
+    if (!fixtures.length) {
+      return `<div class="muted">Nenhum jogo marcado.</div>`;
+    }
+    return fixtures.map(f => {
+      const home = clubsById[f.home]?.shortName || f.home;
+      const away = clubsById[f.away]?.shortName || f.away;
+      return `
+        <div class="card small">
+          <div class="row">
+            <div class="col">
+              <div class="title">${esc(f.comp)} • Rodada ${esc(f.round)}</div>
+              <div class="muted">${esc(home)} x ${esc(away)}</div>
+            </div>
+            <div class="col right muted">${esc(fmtDate(f.dateISO))}</div>
           </div>
-          <div class="pill"><span class="dot"></span><span>Fase 4</span></div>
         </div>
+      `;
+    }).join('');
+  }
 
-        <div class="card">
-          <div style="display:flex;gap:12px;align-items:center;">
-            <img src="${crest}" style="width:42px;height:42px;border-radius:12px;object-fit:contain;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.10)"
-                 onerror="this.onerror=null;this.src='assets/crests/_placeholder.png';" />
-            <div>
-              <h2 style="margin:0;">Hoje</h2>
-              <p style="margin-top:6px;">Dia <b>${today.dayIndex}</b> • Eventos: <b>${todayEvents.length}</b></p>
+  const CalendarUI = {
+    id: 'calendar',
+
+    render(container) {
+      const game = NS.Game;
+      const career = game.getCareer();
+
+      if (!career) {
+        container.innerHTML = `
+          <div class="screen">
+            <h1>Calendário</h1>
+            <p>Sem carreira ativa.</p>
+            <button class="btn" data-act="back">Voltar</button>
+          </div>
+        `;
+        container.querySelector('[data-act="back"]').onclick = () => NS.UI.go('cover');
+        return;
+      }
+
+      // garante mundo/temporada
+      game.ensureWorld();
+
+      const world = career.world || {};
+      const today = game.getToday();
+      const clubs = game.getClubsFromPack();
+      const clubsById = {};
+      clubs.forEach(c => clubsById[c.id] = c);
+
+      const clubId = career.clubId;
+      const clubName = clubsById[clubId]?.name || clubId;
+
+      const todayISO = today.dateISO;
+      const todayFix = game.getFixturesForDate(todayISO).filter(f => f.home === clubId || f.away === clubId);
+      const nextMatch = game.getNextMatchday(clubId);
+
+      const last = world.lastMatch || null;
+
+      const next7 = [];
+      for (let i = 0; i < 7; i++) {
+        const dISO = addDaysISO(todayISO, i);
+        const fx = game.getFixturesForDate(dISO).filter(f => f.home === clubId || f.away === clubId);
+        if (fx.length) next7.push({ dISO, fx });
+      }
+
+      container.innerHTML = `
+        <div class="screen">
+          <div class="topbar">
+            <button class="btn ghost" data-act="back">Voltar</button>
+            <div class="spacer"></div>
+          </div>
+
+          <div class="panel">
+            <h1>Calendário</h1>
+            <div class="muted">Clube: <b>${esc(clubName)}</b></div>
+            <div class="muted">Hoje: <b>${esc(fmtDate(todayISO))}</b> (dia ${esc(today.dayIndex)})</div>
+          </div>
+
+          <div class="panel">
+            <h2>Próxima partida</h2>
+            ${
+              nextMatch
+                ? `<div class="card">
+                    <div class="title">${esc(nextMatch.comp)} • Rodada ${esc(nextMatch.round)}</div>
+                    <div>${esc(clubsById[nextMatch.home]?.shortName || nextMatch.home)} x ${esc(clubsById[nextMatch.away]?.shortName || nextMatch.away)}</div>
+                    <div class="muted">${esc(fmtDate(nextMatch.dateISO))}</div>
+                  </div>`
+                : `<div class="muted">Nenhuma partida futura encontrada.</div>`
+            }
+
+            <div class="row gap">
+              <button class="btn" data-act="advance">Avançar 1 dia</button>
+              <button class="btn primary" data-act="sim-next">Simular próxima partida</button>
             </div>
           </div>
 
-          <div class="toast" style="margin-top:12px;">
-            ${todayEvents.length
-              ? todayEvents.map(e => `Matchday: <b>${compName(e.competitionId)}</b> (Rodada ${e.round})`).join('<br>')
-              : 'Sem jogos hoje.'}
+          <div class="panel">
+            <h2>Jogos hoje</h2>
+            ${renderList(todayFix, clubsById)}
+          </div>
+
+          <div class="panel">
+            <h2>Próximos 7 dias</h2>
+            ${
+              next7.length
+                ? next7.map(block => `
+                    <div class="card">
+                      <div class="title">${esc(fmtDate(block.dISO))}</div>
+                      ${renderList(block.fx, clubsById)}
+                    </div>
+                  `).join('')
+                : `<div class="muted">Nenhum jogo do seu clube nos próximos 7 dias.</div>`
+            }
+          </div>
+
+          <div class="panel">
+            <h2>Último resultado</h2>
+            ${
+              last
+                ? `<div class="card">
+                    <div class="title">${esc(last.comp)} • Rodada ${esc(last.round)}</div>
+                    <div><b>${esc(clubsById[last.home]?.shortName || last.home)} ${esc(last.homeGoals)} x ${esc(last.awayGoals)} ${esc(clubsById[last.away]?.shortName || last.away)}</b></div>
+                    <div class="muted">${esc(fmtDate(last.dateISO))}</div>
+                  </div>`
+                : `<div class="muted">Ainda não há partidas simuladas.</div>`
+            }
           </div>
         </div>
+      `;
 
-        <div class="card">
-          <h2>Próximo Jogo</h2>
-          <p>${next ? `Daqui a <b>${Math.max(0, next.dayIndex - today.dayIndex)}</b> dia(s) • <b>${compName(next.event.competitionId)}</b> (Rodada ${next.event.round})` : 'Nenhum jogo encontrado.'}</p>
-          <div class="toast" style="margin-top:12px;">
-            Na próxima fase vamos gerar <b>adversário real + mando + tabela</b>.
-            Por enquanto o “Jogar” entra na simulação simples.
-          </div>
-          <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
-            <button class="btn btn-secondary" id="btnAdvance">Avançar Dia</button>
-            <button class="btn btn-primary" id="btnPlay" ${next && next.dayIndex === today.dayIndex ? '' : 'disabled style="opacity:.6;cursor:not-allowed;"'}>Jogar (simples)</button>
-          </div>
-        </div>
+      container.querySelector('[data-act="back"]').onclick = () => NS.UI.go('lobby');
 
-        <div class="actions">
-          <button class="btn btn-secondary" id="btnBack">Voltar</button>
-        </div>
-      </div>
-    `;
-  });
-
-  if (NS.UI?.screens?.calendar) {
-    NS.UI.screens.calendar.afterRender = () => {
-      document.getElementById('btnBack').onclick = () => NS.UI.go('lobby');
-
-      document.getElementById('btnAdvance').onclick = () => {
-        NS.Game.advanceDay();
+      container.querySelector('[data-act="advance"]').onclick = () => {
+        game.advanceDay(1);
         NS.UI.go('calendar');
       };
 
-      const btnPlay = document.getElementById('btnPlay');
-      if (btnPlay) {
-        btnPlay.onclick = () => {
-          // por enquanto vamos só simular contra um “clube genérico” do pack (fase 5 vira adversário real)
-          const clubs = NS.Game.getClubsFromPack();
-          const myClub = NS.Game.state.career.club;
-          const opp = clubs.find(x => x.id !== myClub.id) || clubs[0];
+      container.querySelector('[data-act="sim-next"]').onclick = () => {
+        const ok = game.simulateNextMatch();
+        if (!ok) {
+          alert('Nenhuma partida futura para simular.');
+        }
+        NS.UI.go('calendar');
+      };
+    },
 
-          const result = NS.Engine.Match.simulate(myClub, opp);
+    onEnter() {},
+    onExit() {}
+  };
 
-          alert(`Resultado (simples)\n\n${result.clubA.name} ${result.clubA.goals} x ${result.clubB.goals} ${result.clubB.name}`);
-        };
-      }
-    };
-  }
+  NS.UI.register(CalendarUI.id, CalendarUI);
 })();
