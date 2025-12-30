@@ -1,35 +1,29 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Vale Futebol Manager 2026</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="app"></div>
 
-  <!-- BOOT -->
-  <script src="boot.js"></script>
+  <!-- ORDEM INEGOCIÁVEL (sem defer / sem misturar) -->
+  <script src="engine.js"></script>
+  <script src="main.js"></script>
 
-  <!-- ENGINE -->
-  <script src="engine/index.js"></script>
-  <script src="engine/gameCore.js"></script>
-
-  <!-- GAME -->
-  <script src="game.js"></script>
-
-  <!-- UI -->
+  <!-- UI base (define NS.UI.init / NS.UI.go) -->
   <script src="ui/ui.js"></script>
+
+  <!-- Telas/fluxo -->
+  <script src="ui/datapack-ui.js"></script>
+  <script src="ui/saves-ui.js"></script>
   <script src="ui/career-ui.js"></script>
   <script src="ui/lobby-ui.js"></script>
   <script src="ui/calendar-ui.js"></script>
-  <script src="ui/market-ui.js"></script>
-  <script src="ui/tactics-ui.js"></script>
-  <script src="ui/match-ui.js"></script>
-  <script src="ui/post-match-ui.js"></script>
 
-  <!-- MAIN -->
-  <script src="main.js"></script>
+  <!-- Boot por último (usa NS.UI.init / NS.UI.go) -->
+  <script src="boot.js"></script>
 </body>
 </html>
