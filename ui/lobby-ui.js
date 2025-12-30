@@ -1,82 +1,65 @@
-/* ui/lobby-ui.js — Lobby (hub inicial) */
 (function () {
-  'use strict';
-
-  const NS = (window.VFM26 = window.VFM26 || {});
+  window.VFM26 = window.VFM26 || {};
+  const NS = window.VFM26;
 
   const LobbyUI = {
-    register(UI) {
-      UI.register('lobby', () => {
-        const c = NS.Game.state.career;
-        if (!c) {
-          return `
-            <div class="screen">
-              <div class="card">
-                <h2>Sem carreira carregada</h2>
-                <p>Volte e crie/abra uma carreira.</p>
-                <div class="actions">
-                  <button class="btn btn-secondary" id="btnBack">Voltar</button>
-                </div>
-              </div>
-            </div>
-          `;
-        }
+    id: 'lobby',
 
-        const club = c.club?.name || '—';
-        const role = c.role?.name || '—';
-        const name = `${c.manager?.firstName || ''} ${c.manager?.lastName || ''}`.trim();
-        const year = c.progress?.seasonYear || 2026;
-
-        return `
+    render(container) {
+      const game = NS.Game;
+      const career = game.getCareer();
+      if (!career) {
+        container.innerHTML = `
           <div class="screen">
-            <div class="topbar">
-              <div class="brand">
-                <div class="title">Lobby</div>
-                <div class="subtitle">${club} • ${role} • Temporada ${year}</div>
-              </div>
-              <div class="pill"><span class="dot"></span><span>${name}</span></div>
-            </div>
-
-            <div class="grid grid-2">
-              <div class="card">
-                <h2>Próximo passo</h2>
-                <p>Na próxima fase vamos montar o <b>Calendário real do Brasil</b> (Estaduais, Série A/B, Copa do Brasil) e criar “Próximo Jogo”.</p>
-                <div class="toast" style="margin-top:12px;">
-                  Carreira salva no slot: <b>${NS.Game.state.slot}</b> • Pack: <span class="mono">${NS.Game.state.packId}</span>
-                </div>
-              </div>
-
-              <div class="card">
-                <h2>Acesso rápido</h2>
-                <p>Por enquanto, telas abaixo são placeholders (não quebram boot). Vamos ativar uma por fase.</p>
-
-                <div class="grid" style="margin-top:12px;">
-                  <button class="btn btn-secondary btn-wide" id="btnCalendar">Calendário</button>
-                  <button class="btn btn-secondary btn-wide" id="btnMarket">Mercado</button>
-                  <button class="btn btn-secondary btn-wide" id="btnTactics">Táticas</button>
-                </div>
-              </div>
-            </div>
-
-            <div class="actions">
-              <button class="btn btn-secondary" id="btnExit">Voltar aos Slots</button>
-            </div>
+            <h1>Lobby</h1>
+            <p>Sem carreira ativa.</p>
+            <button class="btn" id="back">Voltar</button>
           </div>
         `;
-      });
+        container.querySelector('#back').onclick = () => NS.UI.go('cover');
+        return;
+      }
 
-      UI.screens.lobby.afterRender = () => {
-        const back = document.getElementById('btnBack');
-        if (back) back.onclick = () => NS.UI.go('saveslot');
+      const clubs = game.getClubsFromPack();
+      const club = clubs.find(c => c.id === career.clubId) || { name: career.clubId, crest: null };
 
-        document.getElementById('btnExit').onclick = () => NS.UI.go('saveslot');
+      container.innerHTML = `
+        <div class="screen">
+          <div class="panel">
+            <h1>Lobby</h1>
+            <div class="muted">Você assumiu: <b>${club.name}</b></div>
+          </div>
 
-        document.getElementById('btnCalendar').onclick = () => NS.UI.go('calendar');
-        document.getElementById('btnMarket').onclick = () => NS.UI.go('market');
-        document.getElementById('btnTactics').onclick = () => NS.UI.go('tactics');
-      };
+          <div class="card">
+            <div class="row">
+              ${club.crest ? `<img class="crest" src="${club.crest}" alt="escudo" />` : ``}
+              <div>
+                <div class="title">Bem-vindo, ${career.managerName}!</div>
+                <div class="muted">Cargo: ${career.role} | Clube: ${club.name}</div>
+              </div>
+            </div>
+            <div class="muted" style="margin-top:10px">
+              Use o Lobby para gestão completa (elenco, treinos, notícias e calendário).
+            </div>
+          </div>
+
+          <div class="row gap">
+            <button class="btn" id="backBtn">VOLTAR</button>
+            <button class="btn primary" id="calBtn">CALENDÁRIO (Fase 4)</button>
+          </div>
+
+          <div class="panel">
+            <div class="muted">
+              Em fases seguintes: elenco completo, treinos semanais, táticas, mercado e engine mais profunda.
+            </div>
+          </div>
+        </div>
+      `;
+
+      container.querySelector('#backBtn').onclick = () => NS.UI.go('cover');
+      container.querySelector('#calBtn').onclick = () => NS.UI.go('calendar');
     }
   };
 
-  NS.LobbyUI = LobbyUI;
+  NS.UI.register(LobbyUI.id, LobbyUI);
 })();
