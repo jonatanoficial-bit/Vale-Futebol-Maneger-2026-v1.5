@@ -1,31 +1,61 @@
-/* engine/match.js — Simulação de partidas (placeholder inicial) */
 (function () {
   'use strict';
-  const NS = (window.VFM26 = window.VFM26 || {});
-  const Match = {
-    simulate(clubA, clubB) {
-      // Placeholder: usa rating (se existir) com leve aleatoriedade
-      const ra = typeof clubA?.rating === 'number' ? clubA.rating : 60;
-      const rb = typeof clubB?.rating === 'number' ? clubB.rating : 60;
-      const bias = ra - rb;
 
-      function goals(base) {
-        const r = Math.random();
-        const v = base + (r * 1.8) + (bias / 45);
-        return Math.max(0, Math.round(v));
-      }
+  window.VFM26 = window.VFM26 || {};
+  window.VFM26.Engine = window.VFM26.Engine || {};
 
-      const ga = goals(0.9);
-      const gb = goals(0.9 - (bias / 60));
+  function clamp(n, min, max) {
+    return Math.max(min, Math.min(max, n));
+  }
 
-      return {
-        schema: 'vfm26.match.v0',
-        clubA: { id: clubA.id, name: clubA.name, goals: ga },
-        clubB: { id: clubB.id, name: clubB.name, goals: gb },
-        playedAt: new Date().toISOString()
-      };
+  /**
+   * Simulação rápida (fase 4):
+   * - Usa rating + vantagem de casa + sorte
+   * - Gera placar plausível (0-4)
+   */
+  function simulate(params) {
+    const home = String(params.home || '');
+    const away = String(params.away || '');
+    const homeRating = Number.isFinite(params.homeRating) ? params.homeRating : 70;
+    const awayRating = Number.isFinite(params.awayRating) ? params.awayRating : 70;
+    const rng = typeof params.rng === 'function' ? params.rng : Math.random;
+
+    const homeAdv = 3; // vantagem de casa simples
+    const diff = (homeRating + homeAdv) - awayRating; // positivo favorece mandante
+
+    // força ofensiva/defensiva
+    const baseHome = 1.2 + diff / 40; // ~0.2..2.2
+    const baseAway = 1.1 - diff / 45; // ~0.2..2.2
+
+    function goals(base) {
+      // mistura: poisson-ish simples
+      const x = base + (rng() - 0.5) * 0.9;
+      const y = base + (rng() - 0.5) * 0.9;
+      const z = (x + y) / 2;
+      // mapeia para 0-4
+      const g = Math.round(clamp(z, 0, 4));
+      // pequena chance de “jogo doido”
+      if (rng() < 0.05) return clamp(g + (rng() < 0.5 ? -1 : 1), 0, 5);
+      return g;
     }
+
+    const homeGoals = goals(baseHome);
+    const awayGoals = goals(baseAway);
+
+    const draw = homeGoals === awayGoals;
+    const winner = draw ? null : (homeGoals > awayGoals ? home : away);
+
+    return {
+      home,
+      away,
+      homeGoals,
+      awayGoals,
+      draw,
+      winner
+    };
+  }
+
+  window.VFM26.Engine.Match = {
+    simulate
   };
-  NS.Engine = NS.Engine || {};
-  NS.Engine.Match = Match;
 })();
