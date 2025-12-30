@@ -1,15 +1,36 @@
-(() => {
-  const NS = (window.VFM26 = window.VFM26 || {});
-  NS.bootStep?.("main.js start");
+/*
+  main.js
+  ---------------------------------------------------------------------------
+  Este arquivo existia como um "starter" simples (chamava UI.start()).
+  Agora o boot.js é o responsável por inicializar a aplicação (e exibir erros
+  amigáveis quando algo falta).
 
-  try {
-    NS.bootAssert?.(NS.UI, "UI não registrada", "window.VFM26.UI não existe.", "BOOT_E04_UI_NOT_FOUND");
-    NS.bootAssert?.(NS.Engine, "Engine não registrada", "window.VFM26.Engine não existe.", "BOOT_E03_ENGINE_NOT_REGISTERED");
+  Para manter compatibilidade e evitar "double boot", o main.js só executa
+  um fallback quando o boot.js não rodou.
+*/
 
-    // Start UI
-    NS.UI.start();
-    NS.bootStep?.("App iniciado com sucesso");
-  } catch (e) {
-    NS.fatal?.("Erro crítico no boot", e?.message || String(e), "BOOT_FATAL");
-  }
+(function () {
+  window.addEventListener('DOMContentLoaded', () => {
+    const NS = window.VFM26;
+    if (!NS) return;
+
+    // Se o boot.js já iniciou, não faz nada.
+    if (NS.__booted) return;
+
+    // Fallback: inicializa UI pelo método disponível.
+    try {
+      if (NS.UI && typeof NS.UI.start === 'function') {
+        NS.UI.start();
+        return;
+      }
+
+      if (NS.UI && typeof NS.UI.init === 'function' && typeof NS.UI.go === 'function') {
+        const mount = document.getElementById('app');
+        NS.UI.init(mount);
+        NS.UI.go('home');
+      }
+    } catch (e) {
+      console.error('main.js fallback failed', e);
+    }
+  });
 })();
