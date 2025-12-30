@@ -4,28 +4,32 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Vale Futebol Manager 2026</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="app"></div>
 
-  <!-- 1) Namespace/Boot (apenas prepara BOOT_STEPS) -->
+  <!-- BOOT -->
   <script src="boot.js"></script>
 
-  <!-- 2) Engine (Fase 4: calendário/simulação básica) -->
+  <!-- ENGINE -->
   <script src="engine/index.js"></script>
   <script src="engine/gameCore.js"></script>
-  <script src="engine/calendar.js"></script>
-  <script src="engine/match.js"></script>
 
-  <!-- 3) UI -->
+  <!-- GAME -->
+  <script src="game.js"></script>
+
+  <!-- UI -->
   <script src="ui/ui.js"></script>
   <script src="ui/career-ui.js"></script>
   <script src="ui/lobby-ui.js"></script>
   <script src="ui/calendar-ui.js"></script>
+  <script src="ui/market-ui.js"></script>
+  <script src="ui/tactics-ui.js"></script>
+  <script src="ui/match-ui.js"></script>
+  <script src="ui/post-match-ui.js"></script>
 
-  <!-- 4) Game + Main -->
-  <script src="game.js"></script>
+  <!-- MAIN -->
   <script src="main.js"></script>
 </body>
 </html>
