@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "packs": [
+    {
+      "id": "brasil",
+      "name": "Brasil (Série A, Série B, Copa do Brasil, Estaduais)",
+      "region": "SA",
+      "file": "packs/brasil_pack.json",
+      "description": "Pack inicial do VFM26. Para expandir para o mundo, basta adicionar novos JSON em /packs e registrar aqui no catálogo."
+    }
+  ]
+}
