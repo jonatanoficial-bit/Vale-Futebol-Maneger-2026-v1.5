@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vale Futebol Manager 2026</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app"></div>
+
+  <!-- ORDEM INEGOCIÁVEL (sem defer / sem misturar) -->
+  <script src="engine.js"></script>
+  <script src="main.js"></script>
+
+  <!-- UI base (define NS.UI.init / NS.UI.go) -->
+  <script src="ui/ui.js"></script>
+
+  <!-- Telas/fluxo -->
+  <script src="ui/datapack-ui.js"></script>
+  <script src="ui/saves-ui.js"></script>
+  <script src="ui/career-ui.js"></script>
+  <script src="ui/lobby-ui.js"></script>
+  <script src="ui/calendar-ui.js"></script>
+
+  <!-- Boot por último (usa NS.UI.init / NS.UI.go) -->
+  <script src="boot.js"></script>
+</body>
+</html>
