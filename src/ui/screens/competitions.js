@@ -2,6 +2,7 @@ import { fmtDateBR } from "../../domain/competitions/dateUtils.js";
 import { generateSeasonAll } from "../../domain/competitions/seasonPlanner.js";
 import { getNextUserFixture, getCompetitionViewState, playFixtureAtCalendarIndex } from "../../domain/competitions/engine.js";
 import { sortedTableRows } from "../../domain/competitions/leagueTable.js";
+import { ensureEconomy } from "../../domain/economy/economy.js";
 
 export async function screenCompetitions({ shell, repos, store, navigate }) {
   const state = store.getState();
@@ -10,6 +11,9 @@ export async function screenCompetitions({ shell, repos, store, navigate }) {
 
   const pack = await repos.loadPack(state.app.selectedPackId);
   const userClubId = state.career.clubId;
+
+  // garante economia
+  store.setState(ensureEconomy(store.getState(), pack));
 
   const clubs = pack.content.clubs.clubs;
   const clubById = new Map(clubs.map(c => [c.id, c]));
@@ -66,14 +70,14 @@ export async function screenCompetitions({ shell, repos, store, navigate }) {
             <div class="card__body">
               <div style="font-weight:900">Próximo jogo do seu clube</div>
               <div class="muted" style="font-size:12px;margin-top:6px;line-height:1.35">
-                O calendário é unificado. Você pode jogar o próximo jogo (qualquer competição) ou simular o dia.
+                Ao jogar, você recebe receita de jogo e entra patrocínio mensal quando virar o mês no calendário.
               </div>
               <div style="height:12px"></div>
               <div id="nextMatch"></div>
               <div style="height:12px"></div>
               <div class="grid grid--2">
                 <button class="btn btn--primary" id="playNext">Jogar próximo</button>
-                <button class="btn" id="simDay">Simular próximo dia</button>
+                <button class="btn" id="simDay">Simular próximo jogo do calendário</button>
               </div>
             </div>
           </div>
@@ -140,7 +144,6 @@ export async function screenCompetitions({ shell, repos, store, navigate }) {
       opt.textContent = c.name;
       $competitionSelect.appendChild(opt);
     }
-    // default: Brasileirão da série do usuário se existir, senão Estadual
     const pick = season.competitions.find(c => c.id === "BR-A" && c.clubIds.includes(userClubId))
       || season.competitions.find(c => c.id === "BR-B" && c.clubIds.includes(userClubId))
       || season.competitions.find(c => c.id === "BR-C" && c.clubIds.includes(userClubId))
@@ -159,7 +162,7 @@ export async function screenCompetitions({ shell, repos, store, navigate }) {
           <div class="item__left">
             <div>
               <div style="font-weight:900">Sem jogos pendentes</div>
-              <div class="muted" style="font-size:12px">Temporada pode estar concluída.</div>
+              <div class="muted" style="font-size:12px">Calendário pode estar concluído.</div>
             </div>
           </div>
           <span class="badge">OK</span>
@@ -170,14 +173,13 @@ export async function screenCompetitions({ shell, repos, store, navigate }) {
 
     const f = nxt.fixture;
     const comp = season.competitions.find(c => c.id === f.competitionId);
-    const isUser = f.homeId === userClubId || f.awayId === userClubId;
     $nextMatch.innerHTML = `
       <div class="item">
         <div class="item__left" style="gap:10px">
           <img class="logo" src="${logoSrc(f.homeId)}" alt="home" onerror="this.style.opacity=.25" />
           <div>
             <div style="font-weight:900">${clubName(f.homeId)} x ${clubName(f.awayId)}</div>
-            <div class="muted" style="font-size:12px">${comp?.name || f.competitionId} • ${fmtDateBR(f.date)} • ${isUser ? "Seu jogo" : ""}</div>
+            <div class="muted" style="font-size:12px">${comp?.name || f.competitionId} • ${fmtDateBR(f.date)}</div>
           </div>
         </div>
         <span class="badge">Próximo</span>
@@ -225,7 +227,6 @@ export async function screenCompetitions({ shell, repos, store, navigate }) {
     wrap.className = "grid";
     wrap.style.gap = "12px";
 
-    // tabela se liga
     if (view.kind === "LEAGUE") {
       const rows = sortedTableRows(view.tableMap);
       const top = rows.slice(0, 14);
@@ -254,7 +255,6 @@ export async function screenCompetitions({ shell, repos, store, navigate }) {
       wrap.appendChild(tableList);
     }
 
-    // jogos (mostra últimos 6 + próximos 8)
     const fixtures = comp.fixtures.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
     const firstUnplayed = fixtures.findIndex(f => !f.played);
     const pivot = firstUnplayed >= 0 ? firstUnplayed : fixtures.length;
@@ -275,7 +275,7 @@ export async function screenCompetitions({ shell, repos, store, navigate }) {
           <img class="logo" src="${logoSrc(f.homeId)}" alt="home" onerror="this.style.opacity=.25" />
           <div>
             <div style="font-weight:900">${clubName(f.homeId)} ${score} ${clubName(f.awayId)}</div>
-            <div class="muted" style="font-size:12px">${fmtDateBR(f.date)} • ${f.stage || ""} ${f.round ? "• Rodada/Fase " + f.round : ""} ${isUser ? "• Seu jogo" : ""}</div>
+            <div class="muted" style="font-size:12px">${fmtDateBR(f.date)} • ${f.stage || ""} ${f.round ? "• Fase " + f.round : ""} ${isUser ? "• Seu jogo" : ""}</div>
           </div>
         </div>
         <span class="badge">${f.played ? "Final" : "Agendado"}</span>
@@ -330,11 +330,13 @@ export async function screenCompetitions({ shell, repos, store, navigate }) {
       userClubId,
       userLineup,
       squadsByClub: pack.indexes.playersByClub,
-      playersByIdGlobal: pack.indexes.playersById
+      playersByIdGlobal: pack.indexes.playersById,
+      state: store.getState(),
+      onStateUpdated: (st) => store.setState(st)
     });
 
     if (!sim) {
-      alert("Jogo não pôde ser iniciado (aguardando resolução de competição).");
+      alert("Jogo não pôde ser iniciado.");
       return;
     }
 
@@ -344,12 +346,10 @@ export async function screenCompetitions({ shell, repos, store, navigate }) {
     renderAll();
   }
 
-  function simNextDay() {
-    // Simula o próximo jogo do calendário (não necessariamente do usuário)
+  function simNextCalendarGame() {
     const season = getSeason();
     let i = season.calendarIndex || 0;
     while (i < season.calendar.length && season.calendar[i].played) i++;
-
     if (i >= season.calendar.length) { alert("Calendário concluído."); return; }
 
     const userLineup = store.getState().career.lineup;
@@ -361,12 +361,13 @@ export async function screenCompetitions({ shell, repos, store, navigate }) {
       userClubId,
       userLineup,
       squadsByClub: pack.indexes.playersByClub,
-      playersByIdGlobal: pack.indexes.playersById
+      playersByIdGlobal: pack.indexes.playersById,
+      state: store.getState(),
+      onStateUpdated: (st) => store.setState(st)
     });
 
-    // se for placeholder, apenas avisa
     if (!sim) {
-      alert("Próximo jogo ainda não está pronto (placeholder). Jogue mais Libertadores/Copas para liberar.");
+      alert("Jogo não pôde ser iniciado.");
       return;
     }
 
@@ -383,9 +384,8 @@ export async function screenCompetitions({ shell, repos, store, navigate }) {
   }
 
   el.querySelector("#playNext").addEventListener("click", playNextUser);
-  el.querySelector("#simDay").addEventListener("click", simNextDay);
+  el.querySelector("#simDay").addEventListener("click", simNextCalendarGame);
   el.querySelector("#back").addEventListener("click", () => navigate("#/hub"));
-
   $competitionSelect.addEventListener("change", () => renderAll());
 
   renderCompetitionSelect();
