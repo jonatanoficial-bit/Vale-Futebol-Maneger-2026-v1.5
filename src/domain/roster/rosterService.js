@@ -1,5 +1,6 @@
 import { rngFromString, int, shuffle } from "../competitions/rng.js";
 import { computeOverall } from "../playerModel.js";
+import { getPlayerStatus } from "../training/playerStatus.js";
 
 function tierHeuristic(clubId) {
   const A = new Set(["FLA","PAL","COR","SAO","SAN","SPT","GRE","INT","CAM","CRU","VAS","BOT","FLU","CAP"]);
@@ -22,7 +23,6 @@ function genName(rng) {
 }
 
 function genPositionsPlan() {
-  // 23 jogadores padrão (2 GK, 8 DEF, 8 MID, 5 ATT)
   return [
     "GK","GK",
     "RB","LB","CB","CB","CB","RB","LB","CB",
@@ -32,8 +32,6 @@ function genPositionsPlan() {
 }
 
 function wageForOverall(ovr) {
-  // salários mensais (MVP) em “créditos”
-  // 60~75 => 20k~60k, 76~84 => 70k~180k
   const base = Math.max(15000, Math.round((ovr - 50) * 5000));
   return Math.round(base / 1000) * 1000;
 }
@@ -53,7 +51,7 @@ export function makeGeneratedPlayer({ seedKey, clubId, idx, position, tier }) {
     overall,
     potential: Math.min(90, overall + int(rng, 0, 8)),
     wageMonthly: wageForOverall(overall),
-    value: Math.round((overall * overall) * 1200), // valor aproximado
+    value: Math.round((overall * overall) * 1200),
     faceAssetId: null,
     generated: true,
     clubId
@@ -72,11 +70,9 @@ export function deriveUserSquad({ pack, state }) {
     value: p.value ?? 0
   }));
 
-  // alterações do save
   const signed = state.career?.roster?.signedPlayers || [];
   const released = new Set(state.career?.roster?.releasedIds || []);
 
-  // se base estiver vazia, gera elenco base
   let squad = base.filter(p => !released.has(p.id));
 
   if (squad.length === 0) {
@@ -85,14 +81,17 @@ export function deriveUserSquad({ pack, state }) {
     squad = plan.map((pos, i) => makeGeneratedPlayer({ seedKey, clubId, idx: i + 1, position: pos, tier }));
   }
 
-  // aplica contratações do save
   const map = new Map(squad.map(p => [p.id, p]));
   for (const p of signed) map.set(p.id, p);
 
-  // remove dispensados
   for (const id of released) map.delete(id);
 
-  return Array.from(map.values());
+  const out = Array.from(map.values()).map(p => ({
+    ...p,
+    status: getPlayerStatus(state, p.id)
+  }));
+
+  return out;
 }
 
 export function rosterStats(squad) {
