@@ -25,60 +25,62 @@ import { createRepositories } from "../data/repositories.js";
 
 function migrateState(s) {
   const next = structuredClone(s || {});
-  if (!next.app) next.app = { build: "v0.9.0", ready: false, selectedPackId: null };
+  if (!next.app) next.app = { build: "v1.0.0", ready: false, selectedPackId: null };
   if (!next.career) next.career = { slot: null, coach: null, clubId: null };
 
-  if (!next.career.lineup) {
-    next.career.lineup = { formationId: "4-3-3", starters: {}, bench: [] };
-  } else {
-    if (!next.career.lineup.formationId) next.career.lineup.formationId = "4-3-3";
-    if (!next.career.lineup.starters) next.career.lineup.starters = {};
-    if (!Array.isArray(next.career.lineup.bench)) next.career.lineup.bench = [];
-  }
+  if (!next.career.lineup) next.career.lineup = { formationId: "4-3-3", starters: {}, bench: [] };
+  if (!next.career.lineup.formationId) next.career.lineup.formationId = "4-3-3";
+  if (!next.career.lineup.starters) next.career.lineup.starters = {};
+  if (!Array.isArray(next.career.lineup.bench)) next.career.lineup.bench = [];
 
-  if (!next.career.tactics) {
-    next.career.tactics = { style: "BALANCED", pressing: "NORMAL", tempo: "NORMAL" };
-  } else {
-    if (!next.career.tactics.style) next.career.tactics.style = "BALANCED";
-    if (!next.career.tactics.pressing) next.career.tactics.pressing = "NORMAL";
-    if (!next.career.tactics.tempo) next.career.tactics.tempo = "NORMAL";
-  }
+  if (!next.career.tactics) next.career.tactics = { style: "BALANCED", pressing: "NORMAL", tempo: "NORMAL" };
+  if (!next.career.tactics.style) next.career.tactics.style = "BALANCED";
+  if (!next.career.tactics.pressing) next.career.tactics.pressing = "NORMAL";
+  if (!next.career.tactics.tempo) next.career.tactics.tempo = "NORMAL";
 
-  if (!next.career.roster) {
-    next.career.roster = { signedPlayers: [], releasedIds: [], transactions: [] };
-  } else {
-    if (!Array.isArray(next.career.roster.signedPlayers)) next.career.roster.signedPlayers = [];
-    if (!Array.isArray(next.career.roster.releasedIds)) next.career.roster.releasedIds = [];
-    if (!Array.isArray(next.career.roster.transactions)) next.career.roster.transactions = [];
-  }
+  if (!next.career.roster) next.career.roster = { signedPlayers: [], releasedIds: [], transactions: [] };
+  if (!Array.isArray(next.career.roster.signedPlayers)) next.career.roster.signedPlayers = [];
+  if (!Array.isArray(next.career.roster.releasedIds)) next.career.roster.releasedIds = [];
+  if (!Array.isArray(next.career.roster.transactions)) next.career.roster.transactions = [];
 
   if (!next.career.economy) {
     next.career.economy = {
       balance: 15_000_000,
-      sponsor: { name: "Vale Bank (MVP)", monthly: 1_250_000 },
+      sponsor: { name: "Vale Bank (MVP)", monthly: 1_250_000, perfBonus: 75_000 },
       lastSponsorMonth: null,
       lastMatchIncome: 0,
-      ledger: []
+      ledger: [],
+      wageMonthlyEstimate: 0,
+      lastWageMonth: null
     };
   } else {
-    if (typeof next.career.economy.balance !== "number") next.career.economy.balance = 15_000_000;
-    if (!next.career.economy.sponsor) next.career.economy.sponsor = { name: "Vale Bank (MVP)", monthly: 1_250_000 };
-    if (!("lastSponsorMonth" in next.career.economy)) next.career.economy.lastSponsorMonth = null;
-    if (!("lastMatchIncome" in next.career.economy)) next.career.economy.lastMatchIncome = 0;
-    if (!Array.isArray(next.career.economy.ledger)) next.career.economy.ledger = [];
+    const e = next.career.economy;
+    if (typeof e.balance !== "number") e.balance = 15_000_000;
+    if (!e.sponsor) e.sponsor = { name: "Vale Bank (MVP)", monthly: 1_250_000, perfBonus: 75_000 };
+    if (typeof e.sponsor.monthly !== "number") e.sponsor.monthly = 1_250_000;
+    if (typeof e.sponsor.perfBonus !== "number") e.sponsor.perfBonus = 75_000;
+    if (!("lastSponsorMonth" in e)) e.lastSponsorMonth = null;
+    if (!("lastMatchIncome" in e)) e.lastMatchIncome = 0;
+    if (!Array.isArray(e.ledger)) e.ledger = [];
+    if (!("wageMonthlyEstimate" in e)) e.wageMonthlyEstimate = 0;
+    if (!("lastWageMonth" in e)) e.lastWageMonth = null;
   }
 
   if (!next.career.playerStatus) next.career.playerStatus = {};
-  if (!next.career.training) {
-    next.career.training = { plan: "BALANCED", focus: "GENERAL", lastAppliedIso: null };
+  if (!next.career.training) next.career.training = { plan: "BALANCED", focus: "GENERAL", lastAppliedIso: null };
+
+  // ✅ v1.0: transfers state
+  if (!next.career.transfers) {
+    next.career.transfers = { marketSeed: "GLOBAL", market: [], offers: [], inbox: [] };
   } else {
-    if (!next.career.training.plan) next.career.training.plan = "BALANCED";
-    if (!next.career.training.focus) next.career.training.focus = "GENERAL";
-    if (!("lastAppliedIso" in next.career.training)) next.career.training.lastAppliedIso = null;
+    if (!Array.isArray(next.career.transfers.market)) next.career.transfers.market = [];
+    if (!Array.isArray(next.career.transfers.offers)) next.career.transfers.offers = [];
+    if (!Array.isArray(next.career.transfers.inbox)) next.career.transfers.inbox = [];
+    if (!next.career.transfers.marketSeed) next.career.transfers.marketSeed = "GLOBAL";
   }
 
-  // ✅ novo: seasonV3
   if (!("seasonV3" in next.career)) next.career.seasonV3 = null;
+  if (!("seasonV4" in next.career)) next.career.seasonV4 = null;
 
   return next;
 }
@@ -115,7 +117,7 @@ function migrateState(s) {
 
   store.setState(
     migrateState({
-      app: { build: "v0.9.0", ready: false, selectedPackId: null },
+      app: { build: "v1.0.0", ready: false, selectedPackId: null },
       career: {
         slot: null,
         coach: null,
@@ -125,20 +127,24 @@ function migrateState(s) {
         roster: { signedPlayers: [], releasedIds: [], transactions: [] },
         economy: {
           balance: 15_000_000,
-          sponsor: { name: "Vale Bank (MVP)", monthly: 1_250_000 },
+          sponsor: { name: "Vale Bank (MVP)", monthly: 1_250_000, perfBonus: 75_000 },
           lastSponsorMonth: null,
           lastMatchIncome: 0,
-          ledger: []
+          ledger: [],
+          wageMonthlyEstimate: 0,
+          lastWageMonth: null
         },
         playerStatus: {},
         training: { plan: "BALANCED", focus: "GENERAL", lastAppliedIso: null },
-        seasonV3: null
+        transfers: { marketSeed: "GLOBAL", market: [], offers: [], inbox: [] },
+        seasonV3: null,
+        seasonV4: null
       }
     })
   );
 
   shell.setTopbar({ title: "Vale Futebol Manager", subtitle: "Carreira • Treinador" });
-  shell.setFooter({ left: "Offline • GitHub Pages", right: "v0.9.0" });
+  shell.setFooter({ left: "Offline • GitHub Pages", right: "v1.0.0" });
 
   store.setState({ ...store.getState(), app: { ...store.getState().app, ready: true } });
 
