@@ -1,56 +1,57 @@
-import { fmtDateBR } from "../../domain/competitions/dateUtils.js";
-import { generateSeasonAll } from "../../domain/competitions/seasonPlanner.js";
-import { getNextUserFixture, getCompetitionViewState, playFixtureAtCalendarIndex } from "../../domain/competitions/engine.js";
-import { sortedTableRows } from "../../domain/competitions/leagueTable.js";
-import { ensureEconomy } from "../../domain/economy/economy.js";
+import { buildSeasonV3 } from "../../domain/competitions/seasonBuilderV3.js";
+import { getNextUserFixture, playFixtureAtCalendarIndex, getCompetitionViewState } from "../../domain/competitions/engine.js";
+import { CompetitionType } from "../../domain/competitions/competitionTypes.js";
+import { tableFromSerialized } from "../../domain/competitions/leagueTable.js";
+
+function orderTable(map) {
+  const arr = Array.from(map.entries()).map(([teamId, r]) => ({
+    teamId,
+    pts: r.pts, gd: r.gd, gf: r.gf, p: r.p
+  }));
+  arr.sort((a, b) =>
+    (b.pts - a.pts) ||
+    (b.gd - a.gd) ||
+    (b.gf - a.gf) ||
+    String(a.teamId).localeCompare(String(b.teamId), "pt-BR")
+  );
+  return arr;
+}
+
+function renderTableRows(rows, resolveName) {
+  return rows.slice(0, 12).map((r, i) => `
+    <div class="item">
+      <div class="item__left">
+        <div style="font-weight:900">${i + 1}. ${resolveName(r.teamId)}</div>
+        <div class="muted" style="font-size:12px">P ${r.p} • Pts ${r.pts} • SG ${r.gd} • GP ${r.gf}</div>
+      </div>
+      <span class="badge">${r.pts}</span>
+    </div>
+  `).join("");
+}
 
 export async function screenCompetitions({ shell, repos, store, navigate }) {
-  const state = store.getState();
-  if (!state.app.selectedPackId) { navigate("#/dataPackSelect"); return { render() {} }; }
-  if (!state.career?.clubId) { navigate("#/hub"); return { render() {} }; }
+  const s0 = store.getState();
+  if (!s0.app.selectedPackId) { navigate("#/dataPackSelect"); return { render() {} }; }
+  if (!s0.career?.clubId) { navigate("#/hub"); return { render() {} }; }
 
-  const pack = await repos.loadPack(state.app.selectedPackId);
-  const userClubId = state.career.clubId;
+  const pack = await repos.loadPack(s0.app.selectedPackId);
 
-  // garante economia
-  store.setState(ensureEconomy(store.getState(), pack));
-
-  const clubs = pack.content.clubs.clubs;
-  const clubById = new Map(clubs.map(c => [c.id, c]));
-  const clubIdsAll = clubs.map(c => c.id);
-
-  function logoSrc(id) {
-    const c = clubById.get(id);
-    return repos.resolveLogoSrc(c?.logoAssetId || id);
-  }
-
-  function clubName(id) {
-    if (id === "EUR_CHAMP") return "Campeão da Europa (MVP)";
-    const c = clubById.get(id);
+  function resolveClubName(id) {
+    const c = pack.content.clubs.clubs.find(x => x.id === id);
     return c?.name || id;
   }
 
-  function ensureSeasonV2() {
+  function ensureSeason() {
     const s = store.getState();
-    if (!s.career.seasonV2 || !Array.isArray(s.career.seasonV2.calendar)) {
-      const seasonV2 = generateSeasonAll({
-        packId: s.app.selectedPackId,
-        userClubId,
-        clubIdsAll
-      });
-      store.update(st => ({ ...st, career: { ...st.career, seasonV2 } }));
+    if (!s.career.seasonV3) {
+      const season = buildSeasonV3({ pack, state: s });
+      const next = structuredClone(s);
+      next.career.seasonV3 = season;
+      store.setState(next);
     }
   }
 
-  ensureSeasonV2();
-
-  function getSeason() {
-    return store.getState().career.seasonV2;
-  }
-
-  function saveSeason(seasonV2) {
-    store.update(s => ({ ...s, career: { ...s.career, seasonV2 } }));
-  }
+  ensureSeason();
 
   const el = document.createElement("div");
   el.className = "grid";
@@ -59,63 +60,34 @@ export async function screenCompetitions({ shell, repos, store, navigate }) {
       <div class="card__header">
         <div>
           <div class="card__title">Competições</div>
-          <div class="card__subtitle">Regionais, Brasileirão, Copas e Internacionais • ${getSeason().seasonYear}</div>
+          <div class="card__subtitle">Temporada v3 • Brasil + CONMEBOL</div>
         </div>
-        <span class="badge">Pro</span>
+        <span class="badge">v0.9</span>
       </div>
 
       <div class="card__body">
         <div class="grid grid--2">
           <div class="card" style="border-radius:18px">
             <div class="card__body">
-              <div style="font-weight:900">Próximo jogo do seu clube</div>
-              <div class="muted" style="font-size:12px;margin-top:6px;line-height:1.35">
-                Ao jogar, você recebe receita de jogo e entra patrocínio mensal quando virar o mês no calendário.
-              </div>
+              <div style="font-weight:900">Próximo jogo</div>
+              <div style="height:10px"></div>
+              <div id="nextBox" class="muted" style="font-size:13px;line-height:1.35">-</div>
+
               <div style="height:12px"></div>
-              <div id="nextMatch"></div>
-              <div style="height:12px"></div>
-              <div class="grid grid--2">
-                <button class="btn btn--primary" id="playNext">Jogar próximo</button>
-                <button class="btn" id="simDay">Simular próximo jogo do calendário</button>
-              </div>
+              <button class="btn btn--primary" id="playNext">Jogar próximo</button>
+
+              <div style="height:10px"></div>
+              <button class="btn" id="rebuild">Recriar Temporada v3 (MVP)</button>
             </div>
           </div>
 
           <div class="card" style="border-radius:18px">
             <div class="card__body">
-              <div style="font-weight:900">Selecionar competição</div>
-              <div style="height:8px"></div>
-              <select class="select" id="competitionSelect"></select>
+              <div style="font-weight:900">Escolher competição</div>
+              <div style="height:10px"></div>
+              <select class="select" id="compSelect"></select>
               <div style="height:12px"></div>
-              <div id="compHeader"></div>
-            </div>
-          </div>
-        </div>
-
-        <div style="height:12px"></div>
-
-        <div class="card" style="border-radius:18px">
-          <div class="card__body">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-              <div>
-                <div style="font-weight:900" id="viewTitle">Visão da competição</div>
-                <div class="muted" style="font-size:12px" id="viewSubtitle">Tabela / Jogos</div>
-              </div>
-              <span class="badge" id="progressBadge">-</span>
-            </div>
-
-            <div style="height:12px"></div>
-            <div id="view"></div>
-
-            <div style="height:12px"></div>
-            <div class="card" style="border-radius:18px">
-              <div class="card__body">
-                <div style="font-weight:900">Calendário (próximos jogos)</div>
-                <div class="muted" style="font-size:12px;margin-top:6px">Lista unificada por data</div>
-                <div style="height:12px"></div>
-                <div class="list" id="calendar"></div>
-              </div>
+              <div id="view"></div>
             </div>
           </div>
         </div>
@@ -126,271 +98,136 @@ export async function screenCompetitions({ shell, repos, store, navigate }) {
     </div>
   `;
 
-  const $competitionSelect = el.querySelector("#competitionSelect");
-  const $nextMatch = el.querySelector("#nextMatch");
-  const $compHeader = el.querySelector("#compHeader");
+  const $nextBox = el.querySelector("#nextBox");
+  const $playNext = el.querySelector("#playNext");
+  const $rebuild = el.querySelector("#rebuild");
+  const $compSelect = el.querySelector("#compSelect");
   const $view = el.querySelector("#view");
-  const $viewTitle = el.querySelector("#viewTitle");
-  const $viewSubtitle = el.querySelector("#viewSubtitle");
-  const $progressBadge = el.querySelector("#progressBadge");
-  const $calendar = el.querySelector("#calendar");
 
-  function renderCompetitionSelect() {
-    const season = getSeason();
-    $competitionSelect.innerHTML = "";
-    for (const c of season.competitions) {
-      const opt = document.createElement("option");
-      opt.value = c.id;
-      opt.textContent = c.name;
-      $competitionSelect.appendChild(opt);
-    }
-    const pick = season.competitions.find(c => c.id === "BR-A" && c.clubIds.includes(userClubId))
-      || season.competitions.find(c => c.id === "BR-B" && c.clubIds.includes(userClubId))
-      || season.competitions.find(c => c.id === "BR-C" && c.clubIds.includes(userClubId))
-      || season.competitions.find(c => c.id === "BR-EST-MVP")
-      || season.competitions[0];
-    if (pick) $competitionSelect.value = pick.id;
-  }
+  function render() {
+    const st = store.getState();
+    const season = st.career.seasonV3;
 
-  function renderNextMatch() {
-    const season = getSeason();
-    const nxt = getNextUserFixture(season, userClubId);
-
-    if (!nxt) {
-      $nextMatch.innerHTML = `
-        <div class="item">
-          <div class="item__left">
-            <div>
-              <div style="font-weight:900">Sem jogos pendentes</div>
-              <div class="muted" style="font-size:12px">Calendário pode estar concluído.</div>
-            </div>
-          </div>
-          <span class="badge">OK</span>
-        </div>
+    const next = getNextUserFixture(season, st.career.clubId);
+    if (!next) {
+      $nextBox.innerHTML = `<div style="font-weight:900">Sem partidas futuras</div><div class="muted">Calendário acabou (MVP).</div>`;
+      $playNext.disabled = true;
+    } else {
+      const f = season.calendar[next.index];
+      $playNext.disabled = false;
+      $nextBox.innerHTML = `
+        <div style="font-weight:900">${resolveClubName(f.homeId)} vs ${resolveClubName(f.awayId)}</div>
+        <div class="muted">Comp: ${f.competitionId} • Stage: ${f.stage || "-"}${f.groupId ? ` • Grupo ${f.groupId}` : ""}</div>
       `;
-      return;
     }
 
-    const f = nxt.fixture;
-    const comp = season.competitions.find(c => c.id === f.competitionId);
-    $nextMatch.innerHTML = `
-      <div class="item">
-        <div class="item__left" style="gap:10px">
-          <img class="logo" src="${logoSrc(f.homeId)}" alt="home" onerror="this.style.opacity=.25" />
-          <div>
-            <div style="font-weight:900">${clubName(f.homeId)} x ${clubName(f.awayId)}</div>
-            <div class="muted" style="font-size:12px">${comp?.name || f.competitionId} • ${fmtDateBR(f.date)}</div>
-          </div>
-        </div>
-        <span class="badge">Próximo</span>
-      </div>
-    `;
-  }
+    // select comps
+    const comps = season.competitions;
+    const cur = $compSelect.value || comps[0]?.id;
+    $compSelect.innerHTML = comps.map(c => `<option value="${c.id}" ${c.id === cur ? "selected" : ""}>${c.name}</option>`).join("");
 
-  function renderCompetitionHeader(compId) {
-    const season = getSeason();
-    const comp = season.competitions.find(c => c.id === compId);
-    if (!comp) { $compHeader.innerHTML = ""; return; }
-
-    const total = comp.fixtures.length;
-    const played = comp.fixtures.filter(x => x.played).length;
-    const badge = `${played}/${total}`;
-
-    $compHeader.innerHTML = `
-      <div class="item" style="margin-top:12px">
-        <div class="item__left">
-          <div>
-            <div style="font-weight:900">${comp.name}</div>
-            <div class="muted" style="font-size:12px">${comp.type} • ${badge}</div>
-          </div>
-        </div>
-        <span class="badge">${badge}</span>
-      </div>
-    `;
+    renderCompetitionView($compSelect.value || comps[0]?.id);
   }
 
   function renderCompetitionView(compId) {
-    const season = getSeason();
-    const comp = season.competitions.find(c => c.id === compId);
-    if (!comp) return;
-
-    const played = comp.fixtures.filter(x => x.played).length;
-    $progressBadge.textContent = `${played}/${comp.fixtures.length}`;
-
+    const st = store.getState();
+    const season = st.career.seasonV3;
     const view = getCompetitionViewState(season, compId);
-    if (!view) return;
-
-    $viewTitle.textContent = comp.name;
-    $viewSubtitle.textContent = view.kind === "LEAGUE" ? "Tabela (liga) + Jogos" : "Jogos (mata-mata / final)";
-
-    const wrap = document.createElement("div");
-    wrap.className = "grid";
-    wrap.style.gap = "12px";
+    if (!view) { $view.innerHTML = `<div class="muted">Sem dados.</div>`; return; }
 
     if (view.kind === "LEAGUE") {
-      const rows = sortedTableRows(view.tableMap);
-      const top = rows.slice(0, 14);
-
-      const tableList = document.createElement("div");
-      tableList.className = "list";
-      for (let i = 0; i < top.length; i++) {
-        const r = top[i];
-        const isMe = r.clubId === userClubId;
-        const item = document.createElement("div");
-        item.className = "item";
-        item.style.outline = isMe ? "1px solid rgba(255,255,255,.18)" : "none";
-        item.innerHTML = `
-          <div class="item__left" style="gap:10px">
-            <span class="badge" style="min-width:34px;text-align:center">${i + 1}</span>
-            <img class="logo" src="${logoSrc(r.clubId)}" alt="logo" onerror="this.style.opacity=.25" />
-            <div>
-              <div style="font-weight:900">${clubName(r.clubId)}</div>
-              <div class="muted" style="font-size:12px">${r.points} pts • ${r.played}J • SG ${r.gd} • GP ${r.gf}</div>
-            </div>
-          </div>
-          <span class="badge">${isMe ? "Você" : ""}</span>
-        `;
-        tableList.appendChild(item);
-      }
-      wrap.appendChild(tableList);
-    }
-
-    const fixtures = comp.fixtures.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
-    const firstUnplayed = fixtures.findIndex(f => !f.played);
-    const pivot = firstUnplayed >= 0 ? firstUnplayed : fixtures.length;
-    const start = Math.max(0, pivot - 6);
-    const end = Math.min(fixtures.length, pivot + 8);
-    const slice = fixtures.slice(start, end);
-
-    const fxList = document.createElement("div");
-    fxList.className = "list";
-
-    for (const f of slice) {
-      const score = f.played ? `${f.result.homeGoals} - ${f.result.awayGoals}` : "vs";
-      const item = document.createElement("div");
-      item.className = "item";
-      const isUser = f.homeId === userClubId || f.awayId === userClubId;
-      item.innerHTML = `
-        <div class="item__left" style="gap:10px">
-          <img class="logo" src="${logoSrc(f.homeId)}" alt="home" onerror="this.style.opacity=.25" />
-          <div>
-            <div style="font-weight:900">${clubName(f.homeId)} ${score} ${clubName(f.awayId)}</div>
-            <div class="muted" style="font-size:12px">${fmtDateBR(f.date)} • ${f.stage || ""} ${f.round ? "• Fase " + f.round : ""} ${isUser ? "• Seu jogo" : ""}</div>
-          </div>
-        </div>
-        <span class="badge">${f.played ? "Final" : "Agendado"}</span>
+      const rows = orderTable(view.tableMap);
+      $view.innerHTML = `
+        <div class="muted" style="font-size:12px;margin-bottom:10px">Classificação (Top 12)</div>
+        <div class="list">${renderTableRows(rows, resolveClubName)}</div>
       `;
-      fxList.appendChild(item);
-    }
-
-    wrap.appendChild(fxList);
-
-    $view.innerHTML = "";
-    $view.appendChild(wrap);
-  }
-
-  function renderCalendar() {
-    const season = getSeason();
-    const idx = season.calendarIndex || 0;
-    const slice = season.calendar.slice(idx, Math.min(season.calendar.length, idx + 16));
-
-    $calendar.innerHTML = "";
-    for (const f of slice) {
-      const comp = season.competitions.find(c => c.id === f.competitionId);
-      const score = f.played ? `${f.result.homeGoals} - ${f.result.awayGoals}` : "vs";
-      const isUser = f.homeId === userClubId || f.awayId === userClubId;
-
-      const item = document.createElement("div");
-      item.className = "item";
-      item.innerHTML = `
-        <div class="item__left" style="gap:10px">
-          <img class="logo" src="${logoSrc(f.homeId)}" alt="home" onerror="this.style.opacity=.25" />
-          <div>
-            <div style="font-weight:900">${clubName(f.homeId)} ${score} ${clubName(f.awayId)}</div>
-            <div class="muted" style="font-size:12px">${comp?.name || f.competitionId} • ${fmtDateBR(f.date)} ${isUser ? "• Seu jogo" : ""}</div>
-          </div>
-        </div>
-        <span class="badge">${f.played ? "Final" : "Agendado"}</span>
-      `;
-      $calendar.appendChild(item);
-    }
-  }
-
-  function playNextUser() {
-    const season = getSeason();
-    const nxt = getNextUserFixture(season, userClubId);
-    if (!nxt) { alert("Sem jogos pendentes."); return; }
-
-    const userLineup = store.getState().career.lineup;
-
-    const { season: nextSeason, sim } = playFixtureAtCalendarIndex({
-      season,
-      calendarIndex: nxt.index,
-      packId: store.getState().app.selectedPackId,
-      userClubId,
-      userLineup,
-      squadsByClub: pack.indexes.playersByClub,
-      playersByIdGlobal: pack.indexes.playersById,
-      state: store.getState(),
-      onStateUpdated: (st) => store.setState(st)
-    });
-
-    if (!sim) {
-      alert("Jogo não pôde ser iniciado.");
       return;
     }
 
-    saveSeason(nextSeason);
-    alert(`${clubName(sim.homeId)} ${sim.homeGoals} x ${sim.awayGoals} ${clubName(sim.awayId)}\nOVR: ${sim.homeRating} - ${sim.awayRating}`);
+    if (view.kind === "GROUPS_CUP") {
+      // mostra grupos (Apenas 2 primeiros grupos no MVP da UI, sem quebrar)
+      const g1 = view.groups[0];
+      const g2 = view.groups[1];
 
-    renderAll();
-  }
+      const rows1 = orderTable(g1.tableMap);
+      const rows2 = orderTable(g2.tableMap);
 
-  function simNextCalendarGame() {
-    const season = getSeason();
-    let i = season.calendarIndex || 0;
-    while (i < season.calendar.length && season.calendar[i].played) i++;
-    if (i >= season.calendar.length) { alert("Calendário concluído."); return; }
+      const koCount = (view.knockout?.fixtures || []).length;
 
-    const userLineup = store.getState().career.lineup;
+      $view.innerHTML = `
+        <div class="muted" style="font-size:12px;margin-bottom:10px">Fase de Grupos (preview)</div>
 
-    const { season: nextSeason, sim } = playFixtureAtCalendarIndex({
-      season,
-      calendarIndex: i,
-      packId: store.getState().app.selectedPackId,
-      userClubId,
-      userLineup,
-      squadsByClub: pack.indexes.playersByClub,
-      playersByIdGlobal: pack.indexes.playersById,
-      state: store.getState(),
-      onStateUpdated: (st) => store.setState(st)
-    });
+        <div class="card" style="border-radius:18px;margin-bottom:10px">
+          <div class="card__body">
+            <div style="font-weight:900">Grupo 1</div>
+            <div style="height:8px"></div>
+            <div class="list">${renderTableRows(rows1, resolveClubName)}</div>
+          </div>
+        </div>
 
-    if (!sim) {
-      alert("Jogo não pôde ser iniciado.");
+        <div class="card" style="border-radius:18px;margin-bottom:10px">
+          <div class="card__body">
+            <div style="font-weight:900">Grupo 2</div>
+            <div style="height:8px"></div>
+            <div class="list">${renderTableRows(rows2, resolveClubName)}</div>
+          </div>
+        </div>
+
+        <div class="muted" style="font-size:12px">
+          Mata-mata: ${koCount ? `${koCount} jogo(s) gerado(s)` : "ainda não gerado (termina grupos primeiro)"}
+        </div>
+      `;
       return;
     }
 
-    saveSeason(nextSeason);
-    renderAll();
+    $view.innerHTML = `<div class="muted">Visualização de mata-mata (MVP) entra no próximo patch.</div>`;
   }
 
-  function renderAll() {
-    const compId = $competitionSelect.value;
-    renderNextMatch();
-    renderCompetitionHeader(compId);
-    renderCompetitionView(compId);
-    renderCalendar();
-  }
+  $compSelect.addEventListener("change", () => renderCompetitionView($compSelect.value));
 
-  el.querySelector("#playNext").addEventListener("click", playNextUser);
-  el.querySelector("#simDay").addEventListener("click", simNextCalendarGame);
+  $playNext.addEventListener("click", async () => {
+    const st = store.getState();
+    const season = st.career.seasonV3;
+
+    const next = getNextUserFixture(season, st.career.clubId);
+    if (!next) return;
+
+    // squadsByClub e playersByIdGlobal vêm do repos (já usado antes no projeto)
+    const squadsByClub = await repos.getSquadsByClub(pack, st);
+    const playersByIdGlobal = await repos.getPlayersById(pack, st);
+
+    const { season: nextSeason } = playFixtureAtCalendarIndex({
+      season,
+      calendarIndex: next.index,
+      packId: st.app.selectedPackId,
+      userClubId: st.career.clubId,
+      userLineup: st.career.lineup,
+      squadsByClub,
+      playersByIdGlobal,
+      state: st,
+      onStateUpdated: (newState) => store.setState(newState)
+    });
+
+    const nextState = structuredClone(store.getState());
+    nextState.career.seasonV3 = nextSeason;
+    store.setState(nextState);
+
+    render();
+    alert("Partida simulada.");
+  });
+
+  $rebuild.addEventListener("click", () => {
+    const st = store.getState();
+    const next = structuredClone(st);
+    next.career.seasonV3 = buildSeasonV3({ pack, state: st });
+    store.setState(next);
+    render();
+    alert("Temporada v3 recriada.");
+  });
+
   el.querySelector("#back").addEventListener("click", () => navigate("#/hub"));
-  $competitionSelect.addEventListener("change", () => renderAll());
 
-  renderCompetitionSelect();
   shell.mount(el);
-  renderAll();
-
-  return { render() {} };
+  render();
+  return { render: () => render() };
 }
