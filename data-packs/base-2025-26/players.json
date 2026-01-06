@@ -1,0 +1,56 @@
+{
+  "players": [
+    {
+      "id": "FLA_001",
+      "name": "Atacante Exemplo",
+      "nationalityId": "BRA",
+      "clubId": "FLA",
+      "birthDate": "2001-06-12",
+      "heightCm": 182,
+      "preferredFoot": "R",
+      "positions": ["ST"],
+      "attributes": {
+        "pac": 84, "sho": 82, "pas": 71, "dri": 79, "def": 38, "phy": 74
+      }
+    },
+    {
+      "id": "FLA_002",
+      "name": "Meia Exemplo",
+      "nationalityId": "BRA",
+      "clubId": "FLA",
+      "birthDate": "1999-02-03",
+      "heightCm": 176,
+      "preferredFoot": "L",
+      "positions": ["CAM","CM"],
+      "attributes": {
+        "pac": 76, "sho": 74, "pas": 84, "dri": 83, "def": 55, "phy": 64
+      }
+    },
+    {
+      "id": "PAL_001",
+      "name": "Zagueiro Exemplo",
+      "nationalityId": "BRA",
+      "clubId": "PAL",
+      "birthDate": "1997-10-21",
+      "heightCm": 189,
+      "preferredFoot": "R",
+      "positions": ["CB"],
+      "attributes": {
+        "pac": 70, "sho": 45, "pas": 62, "dri": 60, "def": 84, "phy": 83
+      }
+    },
+    {
+      "id": "PAL_002",
+      "name": "Goleiro Exemplo",
+      "nationalityId": "BRA",
+      "clubId": "PAL",
+      "birthDate": "1995-05-14",
+      "heightCm": 191,
+      "preferredFoot": "R",
+      "positions": ["GK"],
+      "attributes": {
+        "gk_div": 82, "gk_han": 80, "gk_kic": 78, "gk_ref": 84, "gk_spe": 46, "gk_pos": 81
+      }
+    }
+  ]
+}
