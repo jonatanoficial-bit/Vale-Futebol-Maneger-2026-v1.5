@@ -15,16 +15,17 @@ import { screenHub } from "../ui/screens/hub.js";
 import { screenSquad } from "../ui/screens/squad.js";
 import { screenPlayer } from "../ui/screens/player.js";
 import { screenTactics } from "../ui/screens/tactics.js";
+import { screenTraining } from "../ui/screens/training.js";
 import { screenCompetitions } from "../ui/screens/competitions.js";
 import { screenTransfers } from "../ui/screens/transfers.js";
 import { screenFinance } from "../ui/screens/finance.js";
-import { screenTraining } from "../ui/screens/training.js";
+import { screenAdmin } from "../ui/screens/admin.js";
 
 import { createRepositories } from "../data/repositories.js";
 
 function migrateState(s) {
   const next = structuredClone(s || {});
-  if (!next.app) next.app = { build: "v0.8.0", ready: false, selectedPackId: null };
+  if (!next.app) next.app = { build: "v0.9.0", ready: false, selectedPackId: null };
   if (!next.career) next.career = { slot: null, coach: null, clubId: null };
 
   if (!next.career.lineup) {
@@ -42,8 +43,6 @@ function migrateState(s) {
     if (!next.career.tactics.pressing) next.career.tactics.pressing = "NORMAL";
     if (!next.career.tactics.tempo) next.career.tactics.tempo = "NORMAL";
   }
-
-  if (!("seasonV2" in next.career)) next.career.seasonV2 = null;
 
   if (!next.career.roster) {
     next.career.roster = { signedPlayers: [], releasedIds: [], transactions: [] };
@@ -78,6 +77,9 @@ function migrateState(s) {
     if (!("lastAppliedIso" in next.career.training)) next.career.training.lastAppliedIso = null;
   }
 
+  // ✅ novo: seasonV3
+  if (!("seasonV3" in next.career)) next.career.seasonV3 = null;
+
   return next;
 }
 
@@ -104,6 +106,7 @@ function migrateState(s) {
   screens.add("competitions", screenCompetitions);
   screens.add("transfers", screenTransfers);
   screens.add("finance", screenFinance);
+  screens.add("admin", screenAdmin);
 
   const router = createRouter({
     onRoute: (route) => screens.show(route.name, route.params),
@@ -112,14 +115,13 @@ function migrateState(s) {
 
   store.setState(
     migrateState({
-      app: { build: "v0.8.0", ready: false, selectedPackId: null },
+      app: { build: "v0.9.0", ready: false, selectedPackId: null },
       career: {
         slot: null,
         coach: null,
         clubId: null,
         lineup: { formationId: "4-3-3", starters: {}, bench: [] },
         tactics: { style: "BALANCED", pressing: "NORMAL", tempo: "NORMAL" },
-        seasonV2: null,
         roster: { signedPlayers: [], releasedIds: [], transactions: [] },
         economy: {
           balance: 15_000_000,
@@ -129,13 +131,14 @@ function migrateState(s) {
           ledger: []
         },
         playerStatus: {},
-        training: { plan: "BALANCED", focus: "GENERAL", lastAppliedIso: null }
+        training: { plan: "BALANCED", focus: "GENERAL", lastAppliedIso: null },
+        seasonV3: null
       }
     })
   );
 
   shell.setTopbar({ title: "Vale Futebol Manager", subtitle: "Carreira • Treinador" });
-  shell.setFooter({ left: "Offline • GitHub Pages", right: "v0.8.0" });
+  shell.setFooter({ left: "Offline • GitHub Pages", right: "v0.9.0" });
 
   store.setState({ ...store.getState(), app: { ...store.getState().app, ready: true } });
 
