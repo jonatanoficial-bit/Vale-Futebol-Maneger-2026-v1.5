@@ -1,5 +1,15 @@
 import { calcAge } from "../../domain/playerModel.js";
 
+function fallbackSvg() {
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="120" height="120">
+      <rect width="100%" height="100%" rx="22" ry="22" fill="rgba(0,0,0,.35)"/>
+      <circle cx="60" cy="48" r="20" fill="rgba(255,255,255,.20)"/>
+      <rect x="26" y="74" width="68" height="30" rx="15" fill="rgba(255,255,255,.14)"/>
+    </svg>
+  `.trim();
+}
+
 function renderAttrTable(player) {
   const pos = (player.positions || [])[0] || "ST";
   const a = player.attributes || {};
@@ -72,7 +82,12 @@ export async function screenPlayer({ shell, repos, store, navigate, params }) {
         <div class="grid grid--2">
           <div class="card" style="border-radius:18px">
             <div class="card__body" style="display:flex; gap:12px; align-items:center;">
-              <img src="${faceSrc}" alt="face" style="width:84px;height:84px;border-radius:22px;border:1px solid rgba(255,255,255,.12);object-fit:cover;background:rgba(0,0,0,.22)" onerror="this.style.opacity=.25;this.src='data:image/svg+xml;utf8,${encodeURIComponent(fallbackSvg())}'" />
+              <img
+                src="${faceSrc}"
+                alt="face"
+                style="width:84px;height:84px;border-radius:22px;border:1px solid rgba(255,255,255,.12);object-fit:cover;background:rgba(0,0,0,.22)"
+                onerror="this.style.opacity=.25;this.src='data:image/svg+xml;utf8,${encodeURIComponent(fallbackSvg())}'"
+              />
               <div>
                 <div style="font-weight:900;font-size:16px">${p.name}</div>
                 <div class="muted" style="font-size:12px">${age ?? "?"} anos • ${p.heightCm ?? "?"} cm • ${p.preferredFoot === "L" ? "Canhoto" : "Destro"}</div>
@@ -89,8 +104,8 @@ export async function screenPlayer({ shell, repos, store, navigate, params }) {
             <div class="card__body">
               <div style="font-weight:900">Resumo</div>
               <div class="muted" style="font-size:12px; margin-top:6px; line-height:1.35">
-                Este é o MVP do modelo de jogador (estilo FIFA-like).  
-                No próximo milestone entra: forma, moral, stamina, contrato e potencial.
+                MVP do modelo de jogador (estilo FIFA-like). Próximo milestone:
+                forma, moral, stamina, contrato e potencial.
               </div>
               <div style="height:12px"></div>
               <button class="btn btn--primary" id="backSquad">Voltar ao Elenco</button>
@@ -111,14 +126,4 @@ export async function screenPlayer({ shell, repos, store, navigate, params }) {
 
   shell.mount(el);
   return { render() {} };
-
-  function fallbackSvg() {
-    return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="120" height="120">
-        <rect width="100%" height="100%" rx="22" ry="22" fill="rgba(0,0,0,.35)"/>
-        <circle cx="60" cy="48" r="20" fill="rgba(255,255,255,.20)"/>
-        <rect x="26" y="74" width="68" height="30" rx="15" fill="rgba(255,255,255,.14)"/>
-      </svg>
-    `.trim();
-  }
 }
