@@ -21,7 +21,7 @@ import { createRepositories } from "../data/repositories.js";
 
 function migrateState(s) {
   const next = structuredClone(s || {});
-  if (!next.app) next.app = { build: "v0.4.0", ready: false, selectedPackId: null };
+  if (!next.app) next.app = { build: "v0.5.0", ready: false, selectedPackId: null };
   if (!next.career) next.career = { slot: null, coach: null, clubId: null };
 
   if (!next.career.lineup) {
@@ -32,7 +32,9 @@ function migrateState(s) {
     if (!next.career.lineup.bench) next.career.lineup.bench = [];
   }
 
-  // season é criada na tela Competições se não existir (lazy init)
+  // seasonV2: lazy-init na tela Competições
+  if (!("seasonV2" in next.career)) next.career.seasonV2 = null;
+
   return next;
 }
 
@@ -64,13 +66,13 @@ function migrateState(s) {
   });
 
   const initial = migrateState({
-    app: { build: "v0.4.0", ready: false, selectedPackId: null },
+    app: { build: "v0.5.0", ready: false, selectedPackId: null },
     career: {
       slot: null,
       coach: null,
       clubId: null,
       lineup: { formationId: "4-3-3", starters: {}, bench: [] },
-      season: null
+      seasonV2: null
     }
   });
 
@@ -83,7 +85,7 @@ function migrateState(s) {
 
   shell.setFooter({
     left: "Offline • GitHub Pages",
-    right: "v0.4.0"
+    right: "v0.5.0"
   });
 
   store.setState({
