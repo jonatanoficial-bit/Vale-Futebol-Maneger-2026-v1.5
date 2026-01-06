@@ -1,10 +1,13 @@
 export async function screenHub({ shell, repos, store, navigate }) {
   const state = store.getState();
-  if (!state.career?.clubId) { navigate("#/splash"); return { render() {} }; }
+  if (!state.career?.clubId) {
+    navigate("#/splash");
+    return { render() {} };
+  }
 
   const pack = await repos.loadPack(state.app.selectedPackId);
   const clubs = pack.content.clubs.clubs;
-  const club = clubs.find(c => c.id === state.career.clubId);
+  const club = clubs.find((c) => c.id === state.career.clubId);
 
   const el = document.createElement("div");
   el.className = "grid";
@@ -12,14 +15,16 @@ export async function screenHub({ shell, repos, store, navigate }) {
     <div class="card">
       <div class="card__header">
         <div class="item__left" style="gap:12px">
-          <img class="logo" src="${repos.resolveLogoSrc(club?.logoAssetId || state.career.clubId)}" alt="logo" onerror="this.style.opacity=.25" />
+          <img class="logo" src="${repos.resolveLogoSrc(club?.logoAssetId || state.career.clubId)}" alt="logo"
+            onerror="this.style.opacity=.25" />
           <div>
-            <div class="card__title">${club?.name || "Clube"}</div>
+            <div class="card__title">${club?.name || state.career.clubId}</div>
             <div class="card__subtitle">Treinador: ${state.career.coach?.name || "-"}</div>
           </div>
         </div>
         <span class="badge">Hub</span>
       </div>
+
       <div class="card__body">
         <div class="grid grid--2">
           <button class="btn" id="squad">Elenco</button>
