@@ -1,0 +1,9 @@
+{
+  "clubs": [
+    { "id": "ACG", "name": "Atlético-GO", "shortName": "ACG", "nationId": "BRA", "logoAssetId": "ACG" },
+    { "id": "AME", "name": "América-MG", "shortName": "AME", "nationId": "BRA", "logoAssetId": "AME" },
+    { "id": "CAP", "name": "Athletico-PR", "shortName": "CAP", "nationId": "BRA", "logoAssetId": "CAP" },
+    { "id": "FLA", "name": "Flamengo", "shortName": "FLA", "nationId": "BRA", "logoAssetId": "FLA" },
+    { "id": "PAL", "name": "Palmeiras", "shortName": "PAL", "nationId": "BRA", "logoAssetId": "PAL" }
+  ]
+}
