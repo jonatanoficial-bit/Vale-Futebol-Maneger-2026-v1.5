@@ -26,8 +26,8 @@ export async function screenHub({ shell, repos, store, navigate }) {
           <button class="btn" id="tactics">Tática</button>
           <button class="btn" id="training">Treinos (em breve)</button>
           <button class="btn" id="competitions">Competições</button>
-          <button class="btn" id="transfers">Transferências (em breve)</button>
-          <button class="btn" id="finance">Finanças (em breve)</button>
+          <button class="btn" id="transfers">Transferências</button>
+          <button class="btn" id="finance">Finanças</button>
         </div>
 
         <div style="height:12px"></div>
@@ -60,12 +60,12 @@ export async function screenHub({ shell, repos, store, navigate }) {
   el.querySelector("#squad").addEventListener("click", () => navigate("#/squad"));
   el.querySelector("#tactics").addEventListener("click", () => navigate("#/tactics"));
   el.querySelector("#competitions").addEventListener("click", () => navigate("#/competitions"));
+  el.querySelector("#transfers").addEventListener("click", () => navigate("#/transfers"));
+  el.querySelector("#finance").addEventListener("click", () => navigate("#/finance"));
 
-  for (const id of ["training","transfers","finance"]) {
-    el.querySelector(`#${id}`).addEventListener("click", () => {
-      alert("Esse módulo entra nos próximos milestones. Base está sólida e salva corretamente.");
-    });
-  }
+  el.querySelector("#training").addEventListener("click", () => {
+    alert("Esse módulo entra nos próximos milestones. Base está sólida e salva corretamente.");
+  });
 
   shell.mount(el);
   return { render() {} };
