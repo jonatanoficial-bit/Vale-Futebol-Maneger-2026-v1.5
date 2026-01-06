@@ -7,7 +7,6 @@ export function validateManifest(manifest) {
 }
 
 export function validatePackData({ manifest, content }) {
-  // MVP: nations e clubs obrigatórios
   if (!content.nations?.nations || !Array.isArray(content.nations.nations)) {
     throw new Error("Pack inválido: nations.json ausente ou malformado.");
   }
@@ -25,7 +24,6 @@ export function validatePackData({ manifest, content }) {
     if (!c.logoAssetId || typeof c.logoAssetId !== "string") throw new Error(`Club ${c.id} logoAssetId inválido.`);
   }
 
-  // Players: opcional no pack (por enquanto), mas se existir deve ser válido
   if (content.players?.players) {
     if (!Array.isArray(content.players.players)) throw new Error("players.json malformado.");
     const playerIds = new Set();
@@ -37,7 +35,6 @@ export function validatePackData({ manifest, content }) {
       if (!p.name || typeof p.name !== "string") throw new Error(`Player ${p.id} name inválido.`);
       if (!nationIds.has(p.nationalityId)) throw new Error(`Player ${p.id} nationalityId inexistente: ${p.nationalityId}`);
       if (!p.clubId || typeof p.clubId !== "string") throw new Error(`Player ${p.id} clubId inválido.`);
-      // Nota: clubId pode ser auto-completado depois, então aqui só validamos tipo
       if (!Array.isArray(p.positions) || p.positions.length === 0) throw new Error(`Player ${p.id} positions inválido.`);
       if (!p.attributes || typeof p.attributes !== "object") throw new Error(`Player ${p.id} attributes inválido.`);
     }
