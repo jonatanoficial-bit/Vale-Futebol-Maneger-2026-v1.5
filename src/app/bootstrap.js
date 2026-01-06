@@ -16,12 +16,14 @@ import { screenSquad } from "../ui/screens/squad.js";
 import { screenPlayer } from "../ui/screens/player.js";
 import { screenTactics } from "../ui/screens/tactics.js";
 import { screenCompetitions } from "../ui/screens/competitions.js";
+import { screenTransfers } from "../ui/screens/transfers.js";
+import { screenFinance } from "../ui/screens/finance.js";
 
 import { createRepositories } from "../data/repositories.js";
 
 function migrateState(s) {
   const next = structuredClone(s || {});
-  if (!next.app) next.app = { build: "v0.5.0", ready: false, selectedPackId: null };
+  if (!next.app) next.app = { build: "v0.6.0", ready: false, selectedPackId: null };
   if (!next.career) next.career = { slot: null, coach: null, clubId: null };
 
   if (!next.career.lineup) {
@@ -32,8 +34,38 @@ function migrateState(s) {
     if (!next.career.lineup.bench) next.career.lineup.bench = [];
   }
 
-  // seasonV2: lazy-init na tela Competições
+  // seasonV2 (competições)
   if (!("seasonV2" in next.career)) next.career.seasonV2 = null;
+
+  // roster (contratações/dispensas)
+  if (!next.career.roster) {
+    next.career.roster = {
+      signedPlayers: [],
+      releasedIds: [],
+      transactions: []
+    };
+  } else {
+    if (!Array.isArray(next.career.roster.signedPlayers)) next.career.roster.signedPlayers = [];
+    if (!Array.isArray(next.career.roster.releasedIds)) next.career.roster.releasedIds = [];
+    if (!Array.isArray(next.career.roster.transactions)) next.career.roster.transactions = [];
+  }
+
+  // economy
+  if (!next.career.economy) {
+    next.career.economy = {
+      balance: 15_000_000,
+      sponsor: { name: "Vale Bank (MVP)", monthly: 1_250_000 },
+      lastSponsorMonth: null,
+      lastMatchIncome: 0,
+      ledger: []
+    };
+  } else {
+    if (typeof next.career.economy.balance !== "number") next.career.economy.balance = 15_000_000;
+    if (!next.career.economy.sponsor) next.career.economy.sponsor = { name: "Vale Bank (MVP)", monthly: 1_250_000 };
+    if (!("lastSponsorMonth" in next.career.economy)) next.career.economy.lastSponsorMonth = null;
+    if (!("lastMatchIncome" in next.career.economy)) next.career.economy.lastMatchIncome = 0;
+    if (!Array.isArray(next.career.economy.ledger)) next.career.economy.ledger = [];
+  }
 
   return next;
 }
@@ -59,6 +91,8 @@ function migrateState(s) {
   screens.add("player", screenPlayer);
   screens.add("tactics", screenTactics);
   screens.add("competitions", screenCompetitions);
+  screens.add("transfers", screenTransfers);
+  screens.add("finance", screenFinance);
 
   const router = createRouter({
     onRoute: (route) => screens.show(route.name, route.params),
@@ -66,13 +100,15 @@ function migrateState(s) {
   });
 
   const initial = migrateState({
-    app: { build: "v0.5.0", ready: false, selectedPackId: null },
+    app: { build: "v0.6.0", ready: false, selectedPackId: null },
     career: {
       slot: null,
       coach: null,
       clubId: null,
       lineup: { formationId: "4-3-3", starters: {}, bench: [] },
-      seasonV2: null
+      seasonV2: null,
+      roster: { signedPlayers: [], releasedIds: [], transactions: [] },
+      economy: { balance: 15_000_000, sponsor: { name: "Vale Bank (MVP)", monthly: 1_250_000 }, lastSponsorMonth: null, lastMatchIncome: 0, ledger: [] }
     }
   });
 
@@ -85,7 +121,7 @@ function migrateState(s) {
 
   shell.setFooter({
     left: "Offline • GitHub Pages",
-    right: "v0.5.0"
+    right: "v0.6.0"
   });
 
   store.setState({
