@@ -1,0 +1,18 @@
+{
+  "packId": "sa-2025-26-core",
+  "name": "Sul-América Core 2025/26",
+  "version": "1.0.0",
+  "content": {
+    "clubs": {
+      "clubs": [
+        { "id": "RIV", "name": "River Plate", "country": "Argentina", "confed": "CONMEBOL", "logoAssetId": "RIV", "tags": [] },
+        { "id": "BOC", "name": "Boca Juniors", "country": "Argentina", "confed": "CONMEBOL", "logoAssetId": "BOC", "tags": [] },
+        { "id": "NAC", "name": "Nacional", "country": "Uruguai", "confed": "CONMEBOL", "logoAssetId": "NAC", "tags": [] },
+        { "id": "PEN", "name": "Peñarol", "country": "Uruguai", "confed": "CONMEBOL", "logoAssetId": "PEN", "tags": [] },
+        { "id": "COL", "name": "Colo-Colo", "country": "Chile", "confed": "CONMEBOL", "logoAssetId": "COL", "tags": [] },
+        { "id": "LDU", "name": "LDU Quito", "country": "Equador", "confed": "CONMEBOL", "logoAssetId": "LDU", "tags": [] },
+        { "id": "ATM", "name": "Atlético Mineiro", "country": "Brasil", "confed": "CONMEBOL", "logoAssetId": "CAM", "tags": [] }
+      ]
+    }
+  }
+}
