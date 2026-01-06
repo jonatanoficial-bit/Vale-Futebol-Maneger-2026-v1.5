@@ -1,20 +1,36 @@
-export async function screenSplash({ shell, navigate, store }) {
+export async function screenSplash({ shell, store, navigate }) {
   const el = document.createElement("div");
-  el.className = "card";
+  el.className = "grid";
+
   el.innerHTML = `
-    <div class="card__body">
-      <div class="h1">Modo Carreira</div>
-      <div class="p">Construa sua história como <b>Treinador</b>. Atualizações de elenco e competições via <b>Pacotes de Dados</b> (DLC) sem mexer no código.</div>
-      <div style="height:12px"></div>
-      <button class="btn btn--primary" id="start">Iniciar</button>
-      <div style="height:10px"></div>
-      <button class="btn" id="admin">Admin (em breve)</button>
+    <div class="card">
+      <div class="card__header">
+        <div>
+          <div class="card__title">Modo Carreira</div>
+          <div class="card__subtitle">
+            Construa sua história como Treinador. Atualizações via Pacotes de Dados (DLC) sem mexer no código.
+          </div>
+        </div>
+      </div>
+
+      <div class="card__body">
+        <button class="btn btn--primary" id="start">Iniciar</button>
+        <div style="height:10px"></div>
+        <button class="btn" id="admin">Admin</button>
+      </div>
     </div>
   `;
 
-  el.querySelector("#start").addEventListener("click", () => navigate("#/dataPackSelect"));
+  el.querySelector("#start").addEventListener("click", () => {
+    const s = store.getState();
+    if (!s.app.selectedPackId) navigate("#/dataPackSelect");
+    else navigate("#/saveSlots");
+  });
+
   el.querySelector("#admin").addEventListener("click", () => {
-    alert("Admin entra no Milestone 12. Mantive o botão para o fluxo futuro.");
+    const s = store.getState();
+    if (!s.app.selectedPackId) navigate("#/dataPackSelect");
+    else navigate("#/admin");
   });
 
   shell.mount(el);
