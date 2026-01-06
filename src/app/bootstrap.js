@@ -14,6 +14,7 @@ import { screenTutorial } from "../ui/screens/tutorial.js";
 import { screenHub } from "../ui/screens/hub.js";
 import { screenSquad } from "../ui/screens/squad.js";
 import { screenPlayer } from "../ui/screens/player.js";
+import { screenTactics } from "../ui/screens/tactics.js";
 
 import { createRepositories } from "../data/repositories.js";
 
@@ -36,6 +37,7 @@ import { createRepositories } from "../data/repositories.js";
   screens.add("hub", screenHub);
   screens.add("squad", screenSquad);
   screens.add("player", screenPlayer);
+  screens.add("tactics", screenTactics);
 
   const router = createRouter({
     onRoute: (route) => screens.show(route.name, route.params),
@@ -44,14 +46,19 @@ import { createRepositories } from "../data/repositories.js";
 
   store.setState({
     app: {
-      build: "v0.2.0",
+      build: "v0.3.0",
       ready: false,
       selectedPackId: null
     },
     career: {
       slot: null,
       coach: null,
-      clubId: null
+      clubId: null,
+      lineup: {
+        formationId: "4-3-3",
+        starters: {},
+        bench: []
+      }
     }
   });
 
@@ -62,7 +69,7 @@ import { createRepositories } from "../data/repositories.js";
 
   shell.setFooter({
     left: "Offline • GitHub Pages",
-    right: "v0.2.0"
+    right: "v0.3.0"
   });
 
   store.setState({
