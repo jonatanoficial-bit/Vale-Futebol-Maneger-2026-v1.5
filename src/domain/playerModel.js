@@ -3,7 +3,6 @@ function clamp(n, a, b) {
 }
 
 function calcOutfieldOverall(attr) {
-  // estilo "FIFA-like" simplificado por 6 stats
   const pac = attr.pac ?? 50;
   const sho = attr.sho ?? 50;
   const pas = attr.pas ?? 50;
