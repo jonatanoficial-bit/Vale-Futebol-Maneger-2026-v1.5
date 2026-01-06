@@ -1,6 +1,4 @@
 function titleFromId(id) {
-  // fallback simples: "ACG" -> "ACG"
-  // (nomes reais continuam vindo do JSON quando existirem)
   return id;
 }
 
@@ -20,7 +18,6 @@ export function autoCompleteClubs({ clubsFromPack, logoIds, nationIdDefault = "B
         logoAssetId: id
       });
     } else {
-      // garante logoAssetId coerente
       const c = map.get(id);
       map.set(id, { ...c, logoAssetId: c.logoAssetId || id });
     }
