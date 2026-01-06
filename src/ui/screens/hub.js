@@ -23,7 +23,7 @@ export async function screenHub({ shell, repos, store, navigate }) {
       <div class="card__body">
         <div class="grid grid--2">
           <button class="btn" id="squad">Elenco</button>
-          <button class="btn" id="tactics">Tática (em breve)</button>
+          <button class="btn" id="tactics">Tática</button>
           <button class="btn" id="training">Treinos (em breve)</button>
           <button class="btn" id="competitions">Competições (em breve)</button>
           <button class="btn" id="transfers">Transferências (em breve)</button>
@@ -58,8 +58,9 @@ export async function screenHub({ shell, repos, store, navigate }) {
   el.querySelector("#exit").addEventListener("click", () => navigate("#/splash"));
 
   el.querySelector("#squad").addEventListener("click", () => navigate("#/squad"));
+  el.querySelector("#tactics").addEventListener("click", () => navigate("#/tactics"));
 
-  for (const id of ["tactics","training","competitions","transfers","finance"]) {
+  for (const id of ["training","competitions","transfers","finance"]) {
     el.querySelector(`#${id}`).addEventListener("click", () => {
       alert("Esse módulo entra nos próximos milestones. Base está sólida e salva corretamente.");
     });
