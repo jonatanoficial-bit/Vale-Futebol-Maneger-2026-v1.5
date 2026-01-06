@@ -1,3 +1,4 @@
+// /src/app/bootstrap.js
 import { createAppShell } from "../ui/appShell.js";
 import { createRouter } from "./router.js";
 import { createStore } from "./stateStore.js";
@@ -25,7 +26,7 @@ import { createRepositories } from "../data/repositories.js";
 
 function migrateState(s) {
   const next = structuredClone(s || {});
-  if (!next.app) next.app = { build: "v1.0.0", ready: false, selectedPackId: null };
+  if (!next.app) next.app = { build: "v1.0.1", ready: false, selectedPackId: null };
   if (!next.career) next.career = { slot: null, coach: null, clubId: null };
 
   if (!next.career.lineup) next.career.lineup = { formationId: "4-3-3", starters: {}, bench: [] };
@@ -69,7 +70,6 @@ function migrateState(s) {
   if (!next.career.playerStatus) next.career.playerStatus = {};
   if (!next.career.training) next.career.training = { plan: "BALANCED", focus: "GENERAL", lastAppliedIso: null };
 
-  // ✅ v1.0: transfers state
   if (!next.career.transfers) {
     next.career.transfers = { marketSeed: "GLOBAL", market: [], offers: [], inbox: [] };
   } else {
@@ -81,6 +81,7 @@ function migrateState(s) {
 
   if (!("seasonV3" in next.career)) next.career.seasonV3 = null;
   if (!("seasonV4" in next.career)) next.career.seasonV4 = null;
+  if (!("seasonV5" in next.career)) next.career.seasonV5 = null;
 
   return next;
 }
@@ -117,7 +118,7 @@ function migrateState(s) {
 
   store.setState(
     migrateState({
-      app: { build: "v1.0.0", ready: false, selectedPackId: null },
+      app: { build: "v1.0.1", ready: false, selectedPackId: null },
       career: {
         slot: null,
         coach: null,
@@ -138,13 +139,14 @@ function migrateState(s) {
         training: { plan: "BALANCED", focus: "GENERAL", lastAppliedIso: null },
         transfers: { marketSeed: "GLOBAL", market: [], offers: [], inbox: [] },
         seasonV3: null,
-        seasonV4: null
+        seasonV4: null,
+        seasonV5: null
       }
     })
   );
 
   shell.setTopbar({ title: "Vale Futebol Manager", subtitle: "Carreira • Treinador" });
-  shell.setFooter({ left: "Offline • GitHub Pages", right: "v1.0.0" });
+  shell.setFooter({ left: "Offline • GitHub Pages", right: "v1.0.1" });
 
   store.setState({ ...store.getState(), app: { ...store.getState().app, ready: true } });
 
