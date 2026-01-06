@@ -9,6 +9,7 @@ import {
 } from "../training/playerStatus.js";
 import { formationById, roleSpec } from "../tactics/formations.js";
 import { computeTacticsTeamModifier } from "../tactics/lineupService.js";
+import { applyGroupsCupResult, generateKnockoutIfReady } from "./groupsCup.js";
 
 function clamp(n, a, b) {
   return Math.max(a, Math.min(b, n));
@@ -37,10 +38,21 @@ export function getNextUserFixture(season, userClubId) {
 export function getCompetitionViewState(season, competitionId) {
   const comp = competitionById(season, competitionId);
   if (!comp) return null;
+
   if (comp.type === CompetitionType.LEAGUE) {
     const map = tableFromSerialized(comp.table);
     return { kind: "LEAGUE", tableMap: map, fixtures: comp.fixtures };
   }
+
+  if (comp.type === CompetitionType.GROUPS_CUP) {
+    // devolve grupos + KO
+    const groups = comp.groups.map(g => ({
+      ...g,
+      tableMap: tableFromSerialized(g.table)
+    }));
+    return { kind: "GROUPS_CUP", groups, knockout: comp.knockout, fixtures: comp.fixtures };
+  }
+
   return { kind: "CUP", bracket: comp.bracket, fixtures: comp.fixtures };
 }
 
@@ -53,7 +65,7 @@ function chemistryPenaltyOverall({ formationId, roleKey, player }) {
   const spec = roleSpec(formationId, roleKey);
   if (!spec) return 0;
   const ok = hasAnyPosition(player.positions || [], spec.allowed);
-  return ok ? 0 : 6; // penalidade padrão
+  return ok ? 0 : 6;
 }
 
 function collectUserPlayersUsedWithBench(userLineup, formationId) {
@@ -63,8 +75,6 @@ function collectUserPlayersUsedWithBench(userLineup, formationId) {
   const starters = userLineup.starters || {};
   for (const k of Object.keys(starters)) if (starters[k]) ids.push(starters[k]);
 
-  // “substituições automáticas simples” (MVP v0.8):
-  // considera até 3 do banco como “usados” (afeta fadiga/moral pós-jogo).
   const bench = (userLineup.bench || []).filter(Boolean);
   const f = formationById(formationId);
   const maxSubs = clamp(3, 0, f.benchSize);
@@ -104,16 +114,13 @@ function withEffectiveOverallsForUserClub({ state, playersByClub, userClubId, us
     const st = getPlayerStatus(state, p.id);
     let eff = effectiveOverall(base, st);
 
-    // Penalidade de posição só para titulares (faz sentido)
     const roleKey = starterRoleByPlayerId.get(p.id);
     if (roleKey) {
       const pen = chemistryPenaltyOverall({ formationId, roleKey, player: p });
       eff = clamp(eff - pen, 1, 99);
     }
 
-    // Modificador tático leve (aplicado no elenco inteiro para “sentir” diferença)
-    // Mantém sutil para não quebrar realismo.
-    const tDelta = tacMod.atk + tacMod.def + tacMod.pace; // -9..+9, mas limitado abaixo
+    const tDelta = tacMod.atk + tacMod.def + tacMod.pace;
     eff = clamp(eff + clamp(tDelta, -2, 2), 1, 99);
 
     return { ...p, overall: eff, _baseOverall: base };
@@ -140,7 +147,6 @@ export function playFixtureAtCalendarIndex({
   const homeId = resolvePlaceholder(f.homeId, season);
   const awayId = resolvePlaceholder(f.awayId, season);
 
-  // ✅ aplica status+química+tática no clube do usuário
   const adjustedSquads = state
     ? withEffectiveOverallsForUserClub({ state, playersByClub: squadsByClub, userClubId, userLineup })
     : squadsByClub;
@@ -171,7 +177,7 @@ export function playFixtureAtCalendarIndex({
     }
   };
 
-  const nextCompetitions = season.competitions.map(c => {
+  let nextCompetitions = season.competitions.map(c => {
     if (c.id !== f.competitionId) return c;
 
     const idx = c.fixtures.findIndex(x => x.id === f.id);
@@ -184,8 +190,32 @@ export function playFixtureAtCalendarIndex({
       return { ...c, fixtures: nextFixtures, table: Array.from(tableMap.entries()) };
     }
 
+    if (c.type === CompetitionType.GROUPS_CUP) {
+      let next = { ...c, fixtures: nextFixtures };
+      // aplica resultado no grupo
+      if (f.stage === "GROUP") next = applyGroupsCupResult(next, f, sim.homeGoals, sim.awayGoals);
+      // se terminou fase de grupos, gera KO
+      next = generateKnockoutIfReady(next);
+      return next;
+    }
+
+    // CUP clássico (mata-mata simples MVP)
     return { ...c, fixtures: nextFixtures, bracket: { fixtures: nextFixtures } };
   });
+
+  // ✅ se algum GROUPS_CUP gerou KO, precisamos garantir que fixtures KO entrem no calendário
+  // Estratégia MVP: quando gerar, adiciona no fim do calendário (datas serão refinadas depois).
+  let extraFixtures = [];
+  for (const c of nextCompetitions) {
+    if (c.type === CompetitionType.GROUPS_CUP && c.knockout?.generated) {
+      const ko = c.knockout.fixtures || [];
+      const missing = ko.filter(k => !nextCalendar.some(cf => cf.id === k.id));
+      extraFixtures.push(...missing.map(x => ({ ...x, date: null })));
+    }
+  }
+  if (extraFixtures.length) {
+    nextCalendar.push(...extraFixtures);
+  }
 
   let nextIndex = season.calendarIndex || 0;
   while (nextIndex < nextCalendar.length && nextCalendar[nextIndex].played) nextIndex++;
@@ -198,7 +228,6 @@ export function playFixtureAtCalendarIndex({
     lastMatch: sim
   };
 
-  // ✅ ECONOMIA + ✅ pós-jogo (inclui “uso” de banco)
   if (typeof onStateUpdated === "function" && state) {
     let st = structuredClone(state);
 
