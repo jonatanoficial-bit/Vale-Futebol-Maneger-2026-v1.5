@@ -1,0 +1,10 @@
+{
+  "packs": [
+    {
+      "id": "base-2025-26",
+      "name": "Base 2025/2026 (Brasil MVP)",
+      "path": "./data-packs/base-2025-26",
+      "recommended": true
+    }
+  ]
+}
