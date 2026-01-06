@@ -1,0 +1,11 @@
+{
+  "id": "base-2025-26",
+  "name": "Base 2025/2026",
+  "version": "1.0.0",
+  "gameDataVersion": 1,
+  "priority": 0,
+  "content": {
+    "nations": "nations.json",
+    "clubs": "clubs.json"
+  }
+}
