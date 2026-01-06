@@ -1,11 +1,11 @@
 import { tableFromSerialized, applyResult } from "./leagueTable.js";
 import { CompetitionType } from "./competitionTypes.js";
 import { simulateMatch } from "../matchSim.js";
+import { applyMatchEconomy, applyMonthlySponsorIfNeeded } from "../economy/economy.js";
 
 // Resolve placeholders simples
 function resolvePlaceholder(teamId, season) {
   if (!teamId) return teamId;
-  if (!String(teamId).startsWith("LIB_CHAMP")) return teamId;
   return teamId;
 }
 
@@ -41,16 +41,15 @@ export function playFixtureAtCalendarIndex({
   userClubId,
   userLineup,
   squadsByClub,
-  playersByIdGlobal
+  playersByIdGlobal,
+  state,            // NEW: estado completo para economia
+  onStateUpdated    // NEW: callback para salvar economia/ledger
 }) {
   const f = season.calendar[calendarIndex];
   if (!f || f.played) return { season, sim: null };
 
   const homeId = resolvePlaceholder(f.homeId, season);
   const awayId = resolvePlaceholder(f.awayId, season);
-
-  // Se placeholder ainda não resolvido, não joga
-  if (String(homeId).includes("LIB_CHAMP")) return { season, sim: null };
 
   const sim = simulateMatch({
     packId,
@@ -80,7 +79,6 @@ export function playFixtureAtCalendarIndex({
   };
 
   // Atualiza fixture dentro da competição
-  const comp = competitionById(season, f.competitionId);
   const nextCompetitions = season.competitions.map(c => {
     if (c.id !== f.competitionId) return c;
 
@@ -89,13 +87,13 @@ export function playFixtureAtCalendarIndex({
     if (idx >= 0) nextFixtures[idx] = nextCalendar[calendarIndex];
 
     // Liga -> tabela
-    if (c.type === "LEAGUE") {
+    if (c.type === CompetitionType.LEAGUE) {
       const tableMap = tableFromSerialized(c.table);
       applyResult(tableMap, homeId, awayId, sim.homeGoals, sim.awayGoals);
       return { ...c, fixtures: nextFixtures, table: Array.from(tableMap.entries()) };
     }
 
-    // Copa/Super -> só mantém fixtures com resultado; vencedor pode ser usado no futuro
+    // Copa/Super
     return { ...c, fixtures: nextFixtures, bracket: { fixtures: nextFixtures } };
   });
 
@@ -103,44 +101,26 @@ export function playFixtureAtCalendarIndex({
   let nextIndex = season.calendarIndex || 0;
   while (nextIndex < nextCalendar.length && nextCalendar[nextIndex].played) nextIndex++;
 
-  // Se Libertadores terminou, define LIB_CHAMP para Intercontinental (MVP):
-  // Para MVP, consideramos “campeão” o 1º da tabela (após todos jogos da lib jogados).
-  let finalCompetitions = nextCompetitions.slice();
-  const lib = finalCompetitions.find(c => c.id === "CONMEBOL-LIB");
-  if (lib && lib.table) {
-    const libAllPlayed = lib.fixtures.every(x => x.played);
-    if (libAllPlayed) {
-      const map = tableFromSerialized(lib.table);
-      const rows = Array.from(map.values()).sort((a,b)=> (b.points-a.points) || (b.gd-a.gd) || (b.gf-a.gf));
-      const champ = rows[0]?.clubId || null;
-      if (champ) {
-        // resolve placeholders no Intercontinental
-        finalCompetitions = finalCompetitions.map(c => {
-          if (c.id !== "WORLD-INTER") return c;
-          const fix = c.fixtures.map(m => ({
-            ...m,
-            homeId: m.homeId === "LIB_CHAMP" ? champ : m.homeId
-          }));
-          return { ...c, fixtures: fix, bracket: { fixtures: fix }, clubIds: [champ, "EUR_CHAMP"] };
-        });
-
-        // também resolve no calendário
-        const cal2 = nextCalendar.map(m => ({
-          ...m,
-          homeId: (m.competitionId === "WORLD-INTER" && m.homeId === "LIB_CHAMP") ? champ : m.homeId
-        }));
-        nextCalendar.splice(0, nextCalendar.length, ...cal2);
-      }
-    }
-  }
-
   const nextSeason = {
     ...season,
-    competitions: finalCompetitions,
+    competitions: nextCompetitions,
     calendar: nextCalendar,
     calendarIndex: nextIndex,
     lastMatch: sim
   };
+
+  // ECONOMIA: patrocínio mensal + receita do jogo (se for do usuário)
+  if (typeof onStateUpdated === "function" && state) {
+    let st = structuredClone(state);
+
+    // sponsor mensal baseado na data do fixture
+    st = applyMonthlySponsorIfNeeded(st, f.date);
+
+    // receita do jogo se usuário participou
+    st = applyMatchEconomy({ state: st, match: sim, fixture: nextCalendar[calendarIndex] });
+
+    onStateUpdated(st);
+  }
 
   return { season: nextSeason, sim };
 }
