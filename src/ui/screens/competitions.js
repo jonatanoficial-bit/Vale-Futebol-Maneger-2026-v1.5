@@ -1,12 +1,7 @@
-import { generateSeason, tableFromSerialized } from "../../domain/seasonGenerator.js";
-import { applyResult, sortedTableRows } from "../../domain/leagueTable.js";
-import { simulateMatch } from "../../domain/matchSim.js";
-
-function fmtDate(iso) {
-  if (!iso) return "-";
-  const [y,m,d] = iso.split("-");
-  return `${d}/${m}/${y}`;
-}
+import { fmtDateBR } from "../../domain/competitions/dateUtils.js";
+import { generateSeasonAll } from "../../domain/competitions/seasonPlanner.js";
+import { getNextUserFixture, getCompetitionViewState, playFixtureAtCalendarIndex } from "../../domain/competitions/engine.js";
+import { sortedTableRows } from "../../domain/competitions/leagueTable.js";
 
 export async function screenCompetitions({ shell, repos, store, navigate }) {
   const state = store.getState();
@@ -14,32 +9,11 @@ export async function screenCompetitions({ shell, repos, store, navigate }) {
   if (!state.career?.clubId) { navigate("#/hub"); return { render() {} }; }
 
   const pack = await repos.loadPack(state.app.selectedPackId);
-  const clubId = state.career.clubId;
-  const clubs = pack.content.clubs.clubs;
+  const userClubId = state.career.clubId;
 
+  const clubs = pack.content.clubs.clubs;
   const clubById = new Map(clubs.map(c => [c.id, c]));
   const clubIdsAll = clubs.map(c => c.id);
-
-  // Season: cria se não existir (ou se faltando)
-  let season = state.career?.season;
-  if (!season || !Array.isArray(season.fixtures) || !Array.isArray(season.table)) {
-    season = generateSeason({ packId: state.app.selectedPackId, clubId, clubIdsAll });
-    store.update(s => ({
-      ...s,
-      career: { ...s.career, season }
-    }));
-  }
-
-  function getSeason() {
-    return store.getState().career.season;
-  }
-
-  function saveSeason(nextSeason) {
-    store.update(s => ({
-      ...s,
-      career: { ...s.career, season: nextSeason }
-    }));
-  }
 
   function logoSrc(id) {
     const c = clubById.get(id);
@@ -47,27 +21,31 @@ export async function screenCompetitions({ shell, repos, store, navigate }) {
   }
 
   function clubName(id) {
-    return clubById.get(id)?.name || id;
+    if (id === "EUR_CHAMP") return "Campeão da Europa (MVP)";
+    const c = clubById.get(id);
+    return c?.name || id;
   }
 
-  function nextFixtureForUser(seasonObj) {
-    const fixtures = seasonObj.fixtures || [];
-    // encontra o próximo jogo do usuário que não foi jogado
-    for (let i = seasonObj.currentIndex || 0; i < fixtures.length; i++) {
-      const f = fixtures[i];
-      if (f.played) continue;
-      if (f.homeId === clubId || f.awayId === clubId) {
-        return { fixture: f, index: i };
-      }
+  function ensureSeasonV2() {
+    const s = store.getState();
+    if (!s.career.seasonV2 || !Array.isArray(s.career.seasonV2.calendar)) {
+      const seasonV2 = generateSeasonAll({
+        packId: s.app.selectedPackId,
+        userClubId,
+        clubIdsAll
+      });
+      store.update(st => ({ ...st, career: { ...st.career, seasonV2 } }));
     }
-    return null;
   }
 
-  function currentRound(seasonObj) {
-    const fixtures = seasonObj.fixtures || [];
-    const idx = seasonObj.currentIndex || 0;
-    const f = fixtures[idx];
-    return f?.round || 1;
+  ensureSeasonV2();
+
+  function getSeason() {
+    return store.getState().career.seasonV2;
+  }
+
+  function saveSeason(seasonV2) {
+    store.update(s => ({ ...s, career: { ...s.career, seasonV2 } }));
   }
 
   const el = document.createElement("div");
@@ -77,9 +55,9 @@ export async function screenCompetitions({ shell, repos, store, navigate }) {
       <div class="card__header">
         <div>
           <div class="card__title">Competições</div>
-          <div class="card__subtitle">${getSeason().name} • ${getSeason().seasonYear}</div>
+          <div class="card__subtitle">Regionais, Brasileirão, Copas e Internacionais • ${getSeason().seasonYear}</div>
         </div>
-        <span class="badge">Liga</span>
+        <span class="badge">Pro</span>
       </div>
 
       <div class="card__body">
@@ -88,24 +66,25 @@ export async function screenCompetitions({ shell, repos, store, navigate }) {
             <div class="card__body">
               <div style="font-weight:900">Próximo jogo do seu clube</div>
               <div class="muted" style="font-size:12px;margin-top:6px;line-height:1.35">
-                Jogar a próxima partida atualiza a tabela e avança a temporada.
+                O calendário é unificado. Você pode jogar o próximo jogo (qualquer competição) ou simular o dia.
               </div>
               <div style="height:12px"></div>
               <div id="nextMatch"></div>
               <div style="height:12px"></div>
               <div class="grid grid--2">
-                <button class="btn btn--primary" id="playNext">Jogar próxima</button>
-                <button class="btn" id="simRound">Simular rodada</button>
+                <button class="btn btn--primary" id="playNext">Jogar próximo</button>
+                <button class="btn" id="simDay">Simular próximo dia</button>
               </div>
             </div>
           </div>
 
           <div class="card" style="border-radius:18px">
             <div class="card__body">
-              <div style="font-weight:900">Tabela</div>
-              <div class="muted" style="font-size:12px;margin-top:6px">Pontos, saldo, gols pró</div>
+              <div style="font-weight:900">Selecionar competição</div>
+              <div style="height:8px"></div>
+              <select class="select" id="competitionSelect"></select>
               <div style="height:12px"></div>
-              <div id="table"></div>
+              <div id="compHeader"></div>
             </div>
           </div>
         </div>
@@ -116,14 +95,24 @@ export async function screenCompetitions({ shell, repos, store, navigate }) {
           <div class="card__body">
             <div style="display:flex;justify-content:space-between;align-items:center;">
               <div>
-                <div style="font-weight:900">Calendário</div>
-                <div class="muted" style="font-size:12px">Rodada atual: <span id="roundNum">-</span></div>
+                <div style="font-weight:900" id="viewTitle">Visão da competição</div>
+                <div class="muted" style="font-size:12px" id="viewSubtitle">Tabela / Jogos</div>
               </div>
               <span class="badge" id="progressBadge">-</span>
             </div>
 
             <div style="height:12px"></div>
-            <div class="list" id="fixtures"></div>
+            <div id="view"></div>
+
+            <div style="height:12px"></div>
+            <div class="card" style="border-radius:18px">
+              <div class="card__body">
+                <div style="font-weight:900">Calendário (próximos jogos)</div>
+                <div class="muted" style="font-size:12px;margin-top:6px">Lista unificada por data</div>
+                <div style="height:12px"></div>
+                <div class="list" id="calendar"></div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -133,216 +122,275 @@ export async function screenCompetitions({ shell, repos, store, navigate }) {
     </div>
   `;
 
+  const $competitionSelect = el.querySelector("#competitionSelect");
   const $nextMatch = el.querySelector("#nextMatch");
-  const $table = el.querySelector("#table");
-  const $fixtures = el.querySelector("#fixtures");
-  const $roundNum = el.querySelector("#roundNum");
+  const $compHeader = el.querySelector("#compHeader");
+  const $view = el.querySelector("#view");
+  const $viewTitle = el.querySelector("#viewTitle");
+  const $viewSubtitle = el.querySelector("#viewSubtitle");
   const $progressBadge = el.querySelector("#progressBadge");
+  const $calendar = el.querySelector("#calendar");
 
-  function render() {
-    const seasonObj = getSeason();
+  function renderCompetitionSelect() {
+    const season = getSeason();
+    $competitionSelect.innerHTML = "";
+    for (const c of season.competitions) {
+      const opt = document.createElement("option");
+      opt.value = c.id;
+      opt.textContent = c.name;
+      $competitionSelect.appendChild(opt);
+    }
+    // default: Brasileirão da série do usuário se existir, senão Estadual
+    const pick = season.competitions.find(c => c.id === "BR-A" && c.clubIds.includes(userClubId))
+      || season.competitions.find(c => c.id === "BR-B" && c.clubIds.includes(userClubId))
+      || season.competitions.find(c => c.id === "BR-C" && c.clubIds.includes(userClubId))
+      || season.competitions.find(c => c.id === "BR-EST-MVP")
+      || season.competitions[0];
+    if (pick) $competitionSelect.value = pick.id;
+  }
 
-    // badges
-    const played = seasonObj.fixtures.filter(f => f.played).length;
-    $progressBadge.textContent = `${played}/${seasonObj.fixtures.length}`;
-    $roundNum.textContent = String(currentRound(seasonObj));
+  function renderNextMatch() {
+    const season = getSeason();
+    const nxt = getNextUserFixture(season, userClubId);
 
-    // next match
-    const nxt = nextFixtureForUser(seasonObj);
     if (!nxt) {
       $nextMatch.innerHTML = `
         <div class="item">
           <div class="item__left">
             <div>
-              <div style="font-weight:900">Temporada concluída</div>
-              <div class="muted" style="font-size:12px">Nenhuma partida pendente.</div>
+              <div style="font-weight:900">Sem jogos pendentes</div>
+              <div class="muted" style="font-size:12px">Temporada pode estar concluída.</div>
             </div>
           </div>
-          <span class="badge">Fim</span>
+          <span class="badge">OK</span>
         </div>
       `;
-    } else {
-      const f = nxt.fixture;
-      $nextMatch.innerHTML = `
-        <div class="item">
+      return;
+    }
+
+    const f = nxt.fixture;
+    const comp = season.competitions.find(c => c.id === f.competitionId);
+    const isUser = f.homeId === userClubId || f.awayId === userClubId;
+    $nextMatch.innerHTML = `
+      <div class="item">
+        <div class="item__left" style="gap:10px">
+          <img class="logo" src="${logoSrc(f.homeId)}" alt="home" onerror="this.style.opacity=.25" />
+          <div>
+            <div style="font-weight:900">${clubName(f.homeId)} x ${clubName(f.awayId)}</div>
+            <div class="muted" style="font-size:12px">${comp?.name || f.competitionId} • ${fmtDateBR(f.date)} • ${isUser ? "Seu jogo" : ""}</div>
+          </div>
+        </div>
+        <span class="badge">Próximo</span>
+      </div>
+    `;
+  }
+
+  function renderCompetitionHeader(compId) {
+    const season = getSeason();
+    const comp = season.competitions.find(c => c.id === compId);
+    if (!comp) { $compHeader.innerHTML = ""; return; }
+
+    const total = comp.fixtures.length;
+    const played = comp.fixtures.filter(x => x.played).length;
+    const badge = `${played}/${total}`;
+
+    $compHeader.innerHTML = `
+      <div class="item" style="margin-top:12px">
+        <div class="item__left">
+          <div>
+            <div style="font-weight:900">${comp.name}</div>
+            <div class="muted" style="font-size:12px">${comp.type} • ${badge}</div>
+          </div>
+        </div>
+        <span class="badge">${badge}</span>
+      </div>
+    `;
+  }
+
+  function renderCompetitionView(compId) {
+    const season = getSeason();
+    const comp = season.competitions.find(c => c.id === compId);
+    if (!comp) return;
+
+    const played = comp.fixtures.filter(x => x.played).length;
+    $progressBadge.textContent = `${played}/${comp.fixtures.length}`;
+
+    const view = getCompetitionViewState(season, compId);
+    if (!view) return;
+
+    $viewTitle.textContent = comp.name;
+    $viewSubtitle.textContent = view.kind === "LEAGUE" ? "Tabela (liga) + Jogos" : "Jogos (mata-mata / final)";
+
+    const wrap = document.createElement("div");
+    wrap.className = "grid";
+    wrap.style.gap = "12px";
+
+    // tabela se liga
+    if (view.kind === "LEAGUE") {
+      const rows = sortedTableRows(view.tableMap);
+      const top = rows.slice(0, 14);
+
+      const tableList = document.createElement("div");
+      tableList.className = "list";
+      for (let i = 0; i < top.length; i++) {
+        const r = top[i];
+        const isMe = r.clubId === userClubId;
+        const item = document.createElement("div");
+        item.className = "item";
+        item.style.outline = isMe ? "1px solid rgba(255,255,255,.18)" : "none";
+        item.innerHTML = `
           <div class="item__left" style="gap:10px">
-            <img class="logo" src="${logoSrc(f.homeId)}" alt="home" onerror="this.style.opacity=.25" />
+            <span class="badge" style="min-width:34px;text-align:center">${i + 1}</span>
+            <img class="logo" src="${logoSrc(r.clubId)}" alt="logo" onerror="this.style.opacity=.25" />
             <div>
-              <div style="font-weight:900">${clubName(f.homeId)} x ${clubName(f.awayId)}</div>
-              <div class="muted" style="font-size:12px">${fmtDate(f.date)} • Rodada ${f.round}</div>
+              <div style="font-weight:900">${clubName(r.clubId)}</div>
+              <div class="muted" style="font-size:12px">${r.points} pts • ${r.played}J • SG ${r.gd} • GP ${r.gf}</div>
             </div>
           </div>
-          <span class="badge">Próximo</span>
-        </div>
-      `;
+          <span class="badge">${isMe ? "Você" : ""}</span>
+        `;
+        tableList.appendChild(item);
+      }
+      wrap.appendChild(tableList);
     }
 
-    // table
-    const tableMap = tableFromSerialized(seasonObj.table);
-    const rows = sortedTableRows(tableMap);
+    // jogos (mostra últimos 6 + próximos 8)
+    const fixtures = comp.fixtures.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    const firstUnplayed = fixtures.findIndex(f => !f.played);
+    const pivot = firstUnplayed >= 0 ? firstUnplayed : fixtures.length;
+    const start = Math.max(0, pivot - 6);
+    const end = Math.min(fixtures.length, pivot + 8);
+    const slice = fixtures.slice(start, end);
 
-    const top = rows.slice(0, 12); // mostra 12 pra ficar bonito no mobile
-    const myIndex = rows.findIndex(r => r.clubId === clubId);
+    const fxList = document.createElement("div");
+    fxList.className = "list";
 
-    const list = document.createElement("div");
-    list.className = "list";
-    for (let i = 0; i < top.length; i++) {
-      const r = top[i];
-      const isMe = r.clubId === clubId;
-      const item = document.createElement("div");
-      item.className = "item";
-      item.style.outline = isMe ? "1px solid rgba(255,255,255,.18)" : "none";
-      item.innerHTML = `
-        <div class="item__left" style="gap:10px">
-          <span class="badge" style="min-width:34px;text-align:center">${i + 1}</span>
-          <img class="logo" src="${logoSrc(r.clubId)}" alt="logo" onerror="this.style.opacity=.25" />
-          <div>
-            <div style="font-weight:900">${clubName(r.clubId)}</div>
-            <div class="muted" style="font-size:12px">${r.points} pts • ${r.played}J • SG ${r.gd} • GP ${r.gf}</div>
-          </div>
-        </div>
-        <span class="badge">${isMe ? "Você" : ""}</span>
-      `;
-      list.appendChild(item);
-    }
-
-    if (myIndex >= 12) {
-      const r = rows[myIndex];
-      const item = document.createElement("div");
-      item.className = "item";
-      item.style.outline = "1px solid rgba(255,255,255,.18)";
-      item.innerHTML = `
-        <div class="item__left" style="gap:10px">
-          <span class="badge" style="min-width:34px;text-align:center">${myIndex + 1}</span>
-          <img class="logo" src="${logoSrc(r.clubId)}" alt="logo" onerror="this.style.opacity=.25" />
-          <div>
-            <div style="font-weight:900">${clubName(r.clubId)}</div>
-            <div class="muted" style="font-size:12px">${r.points} pts • ${r.played}J • SG ${r.gd} • GP ${r.gf}</div>
-          </div>
-        </div>
-        <span class="badge">Você</span>
-      `;
-      list.appendChild(item);
-    }
-
-    $table.innerHTML = "";
-    $table.appendChild(list);
-
-    // fixtures (mostra 8 próximos + 6 anteriores)
-    const idx = seasonObj.currentIndex || 0;
-    const start = Math.max(0, idx - 6);
-    const end = Math.min(seasonObj.fixtures.length, idx + 8);
-    const slice = seasonObj.fixtures.slice(start, end);
-
-    $fixtures.innerHTML = "";
     for (const f of slice) {
+      const score = f.played ? `${f.result.homeGoals} - ${f.result.awayGoals}` : "vs";
       const item = document.createElement("div");
       item.className = "item";
-      const isUser = f.homeId === clubId || f.awayId === clubId;
-      const score = f.played ? `${f.result.homeGoals} - ${f.result.awayGoals}` : "vs";
+      const isUser = f.homeId === userClubId || f.awayId === userClubId;
       item.innerHTML = `
         <div class="item__left" style="gap:10px">
           <img class="logo" src="${logoSrc(f.homeId)}" alt="home" onerror="this.style.opacity=.25" />
           <div>
             <div style="font-weight:900">${clubName(f.homeId)} ${score} ${clubName(f.awayId)}</div>
-            <div class="muted" style="font-size:12px">${fmtDate(f.date)} • Rodada ${f.round} ${isUser ? "• Seu jogo" : ""}</div>
+            <div class="muted" style="font-size:12px">${fmtDateBR(f.date)} • ${f.stage || ""} ${f.round ? "• Rodada/Fase " + f.round : ""} ${isUser ? "• Seu jogo" : ""}</div>
           </div>
         </div>
         <span class="badge">${f.played ? "Final" : "Agendado"}</span>
       `;
-      $fixtures.appendChild(item);
+      fxList.appendChild(item);
+    }
+
+    wrap.appendChild(fxList);
+
+    $view.innerHTML = "";
+    $view.appendChild(wrap);
+  }
+
+  function renderCalendar() {
+    const season = getSeason();
+    const idx = season.calendarIndex || 0;
+    const slice = season.calendar.slice(idx, Math.min(season.calendar.length, idx + 16));
+
+    $calendar.innerHTML = "";
+    for (const f of slice) {
+      const comp = season.competitions.find(c => c.id === f.competitionId);
+      const score = f.played ? `${f.result.homeGoals} - ${f.result.awayGoals}` : "vs";
+      const isUser = f.homeId === userClubId || f.awayId === userClubId;
+
+      const item = document.createElement("div");
+      item.className = "item";
+      item.innerHTML = `
+        <div class="item__left" style="gap:10px">
+          <img class="logo" src="${logoSrc(f.homeId)}" alt="home" onerror="this.style.opacity=.25" />
+          <div>
+            <div style="font-weight:900">${clubName(f.homeId)} ${score} ${clubName(f.awayId)}</div>
+            <div class="muted" style="font-size:12px">${comp?.name || f.competitionId} • ${fmtDateBR(f.date)} ${isUser ? "• Seu jogo" : ""}</div>
+          </div>
+        </div>
+        <span class="badge">${f.played ? "Final" : "Agendado"}</span>
+      `;
+      $calendar.appendChild(item);
     }
   }
 
-  function playFixture(fIndex) {
-    const seasonObj = getSeason();
-    const f = seasonObj.fixtures[fIndex];
-    if (!f || f.played) return;
+  function playNextUser() {
+    const season = getSeason();
+    const nxt = getNextUserFixture(season, userClubId);
+    if (!nxt) { alert("Sem jogos pendentes."); return; }
 
-    const squadsByClub = pack.indexes.playersByClub;
     const userLineup = store.getState().career.lineup;
 
-    const sim = simulateMatch({
-      packId: state.app.selectedPackId,
-      fixtureId: f.id,
-      homeId: f.homeId,
-      awayId: f.awayId,
-      squadsByClub,
-      userClubId: clubId,
+    const { season: nextSeason, sim } = playFixtureAtCalendarIndex({
+      season,
+      calendarIndex: nxt.index,
+      packId: store.getState().app.selectedPackId,
+      userClubId,
       userLineup,
+      squadsByClub: pack.indexes.playersByClub,
       playersByIdGlobal: pack.indexes.playersById
     });
 
-    // aplica na tabela
-    const tableMap = tableFromSerialized(seasonObj.table);
-    applyResult(tableMap, f.homeId, f.awayId, sim.homeGoals, sim.awayGoals);
-
-    // marca fixture como jogado
-    const nextFixtures = seasonObj.fixtures.slice();
-    nextFixtures[fIndex] = {
-      ...f,
-      played: true,
-      result: {
-        homeGoals: sim.homeGoals,
-        awayGoals: sim.awayGoals,
-        homeRating: sim.homeRating,
-        awayRating: sim.awayRating,
-        events: sim.events
-      }
-    };
-
-    // avança currentIndex até o próximo não jogado
-    let nextIndex = seasonObj.currentIndex || 0;
-    while (nextIndex < nextFixtures.length && nextFixtures[nextIndex].played) nextIndex++;
-
-    const nextSeason = {
-      ...seasonObj,
-      fixtures: nextFixtures,
-      table: Array.from(tableMap.entries()),
-      currentIndex: nextIndex,
-      lastMatch: sim
-    };
+    if (!sim) {
+      alert("Jogo não pôde ser iniciado (aguardando resolução de competição).");
+      return;
+    }
 
     saveSeason(nextSeason);
+    alert(`${clubName(sim.homeId)} ${sim.homeGoals} x ${sim.awayGoals} ${clubName(sim.awayId)}\nOVR: ${sim.homeRating} - ${sim.awayRating}`);
 
-    // mostra resumo rápido
-    alert(`${clubName(f.homeId)} ${sim.homeGoals} x ${sim.awayGoals} ${clubName(f.awayId)}\nOVR: ${sim.homeRating} - ${sim.awayRating}`);
-
-    render();
+    renderAll();
   }
 
-  function simulateRoundOf(indexStart) {
-    // simula todos os jogos da rodada do fixture indexStart
-    const seasonObj = getSeason();
-    const fixtures = seasonObj.fixtures;
-    const f0 = fixtures[indexStart];
-    if (!f0) return;
-    const round = f0.round;
+  function simNextDay() {
+    // Simula o próximo jogo do calendário (não necessariamente do usuário)
+    const season = getSeason();
+    let i = season.calendarIndex || 0;
+    while (i < season.calendar.length && season.calendar[i].played) i++;
 
-    for (let i = 0; i < fixtures.length; i++) {
-      const f = fixtures[i];
-      if (!f || f.played) continue;
-      if (f.round !== round) continue;
-      playFixture(i);
+    if (i >= season.calendar.length) { alert("Calendário concluído."); return; }
+
+    const userLineup = store.getState().career.lineup;
+
+    const { season: nextSeason, sim } = playFixtureAtCalendarIndex({
+      season,
+      calendarIndex: i,
+      packId: store.getState().app.selectedPackId,
+      userClubId,
+      userLineup,
+      squadsByClub: pack.indexes.playersByClub,
+      playersByIdGlobal: pack.indexes.playersById
+    });
+
+    // se for placeholder, apenas avisa
+    if (!sim) {
+      alert("Próximo jogo ainda não está pronto (placeholder). Jogue mais Libertadores/Copas para liberar.");
+      return;
     }
+
+    saveSeason(nextSeason);
+    renderAll();
   }
 
-  el.querySelector("#playNext").addEventListener("click", () => {
-    const seasonObj = getSeason();
-    const nxt = nextFixtureForUser(seasonObj);
-    if (!nxt) { alert("Temporada concluída."); return; }
-    playFixture(nxt.index);
-  });
+  function renderAll() {
+    const compId = $competitionSelect.value;
+    renderNextMatch();
+    renderCompetitionHeader(compId);
+    renderCompetitionView(compId);
+    renderCalendar();
+  }
 
-  el.querySelector("#simRound").addEventListener("click", () => {
-    const seasonObj = getSeason();
-    const idx = seasonObj.currentIndex || 0;
-    simulateRoundOf(idx);
-  });
-
+  el.querySelector("#playNext").addEventListener("click", playNextUser);
+  el.querySelector("#simDay").addEventListener("click", simNextDay);
   el.querySelector("#back").addEventListener("click", () => navigate("#/hub"));
 
+  $competitionSelect.addEventListener("change", () => renderAll());
+
+  renderCompetitionSelect();
   shell.mount(el);
-  render();
+  renderAll();
+
   return { render() {} };
 }
