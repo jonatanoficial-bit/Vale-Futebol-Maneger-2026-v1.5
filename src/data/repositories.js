@@ -18,7 +18,6 @@ export async function createRepositories({ logger }) {
 
     const loaded = await loadPackByPath(meta.path, logger);
 
-    // auto-complete clubes com base nos escudos existentes
     const clubsFromPack = loaded.content?.clubs?.clubs || [];
     const completedClubs = autoCompleteClubs({
       clubsFromPack,
@@ -27,11 +26,9 @@ export async function createRepositories({ logger }) {
     });
     loaded.content.clubs.clubs = completedClubs;
 
-    // players: se não existir, vira vazio (sem quebrar)
     const players = loaded.content?.players?.players || [];
     loaded.content.players = { players };
 
-    // cria índices para performance
     const playersByClub = new Map();
     const playersById = new Map();
 
@@ -60,7 +57,6 @@ export async function createRepositories({ logger }) {
   }
 
   function resolveFaceSrc(playerId) {
-    // se tiver index, usa; senão tenta direto e deixa o onerror cuidar
     if (faceIds.has(playerId)) return `./assets/face/${playerId}.png`;
     return `./assets/face/${playerId}.png`;
   }
