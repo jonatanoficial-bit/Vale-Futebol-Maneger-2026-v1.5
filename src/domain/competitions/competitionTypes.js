@@ -1,14 +1,9 @@
+// /src/domain/competitions/competitionTypes.js
+// Tipos oficiais de competição no motor do jogo.
+// v0.9.0 adiciona suporte a competições com Fase de Grupos + Mata-mata (Libertadores/Sul-Americana).
+
 export const CompetitionType = Object.freeze({
-  LEAGUE: "LEAGUE",
-  CUP: "CUP",
-  SUPERCUP: "SUPERCUP",
-  INTERNATIONAL: "INTERNATIONAL"
+  LEAGUE: "LEAGUE",          // pontos corridos
+  CUP: "CUP",                // mata-mata simples
+  GROUPS_CUP: "GROUPS_CUP"   // ✅ fase de grupos + mata-mata
 });
-
-export function isLeague(c) {
-  return c?.type === CompetitionType.LEAGUE;
-}
-
-export function isCup(c) {
-  return c?.type === CompetitionType.CUP || c?.type === CompetitionType.SUPERCUP || c?.type === CompetitionType.INTERNATIONAL;
-}
