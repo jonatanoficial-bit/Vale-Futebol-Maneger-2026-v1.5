@@ -5,18 +5,12 @@ async function fetchJSON(url) {
 }
 
 function normalizeIdFromFilename(filename) {
-  // "ACG.png" -> "ACG"
   return String(filename).replace(/\.[^.]+$/, "").trim();
 }
 
 export async function loadLogoIndex() {
-  // arquivo estático obrigatório no GitHub Pages
   const idx = await fetchJSON("./assets/logos/index.json");
   const logos = Array.isArray(idx?.logos) ? idx.logos : [];
-  const ids = logos
-    .map(normalizeIdFromFilename)
-    .filter(Boolean);
-
-  // remove duplicados
+  const ids = logos.map(normalizeIdFromFilename).filter(Boolean);
   return Array.from(new Set(ids));
 }
