@@ -7,7 +7,6 @@ export async function screenClubSelect({ shell, repos, store, navigate }) {
   const pack = await repos.loadPack(state.app.selectedPackId);
   let clubs = pack.content.clubs.clubs.slice();
 
-  // ordenação padrão A-Z por nome
   clubs.sort((a, b) => String(a.name).localeCompare(String(b.name), "pt-BR"));
 
   const el = document.createElement("div");
@@ -16,7 +15,7 @@ export async function screenClubSelect({ shell, repos, store, navigate }) {
     <div class="card__header">
       <div>
         <div class="card__title">Escolha seu Clube</div>
-        <div class="card__subtitle">Busca, ordenação e suporte a todos os escudos disponíveis</div>
+        <div class="card__subtitle">Busca e ordenação • Auto-complete por escudos</div>
       </div>
       <span class="badge" id="count">${clubs.length} clubes</span>
     </div>
@@ -62,7 +61,6 @@ export async function screenClubSelect({ shell, repos, store, navigate }) {
     list.innerHTML = "";
     count.textContent = `${items.length} clubes`;
 
-    // proteção básica para lista muito grande
     const MAX_RENDER = 180;
     const slice = items.slice(0, MAX_RENDER);
 
@@ -81,7 +79,10 @@ export async function screenClubSelect({ shell, repos, store, navigate }) {
         <button class="btn btn--primary" style="width:auto;padding:10px 12px">Escolher</button>
       `;
       item.querySelector("button").addEventListener("click", () => {
-        store.update(s => ({ ...s, career: { ...s.career, clubId: c.id } }));
+        store.update(s => ({
+          ...s,
+          career: { ...s.career, clubId: c.id }
+        }));
         navigate("#/tutorial");
       });
       list.appendChild(item);
