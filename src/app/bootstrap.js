@@ -18,12 +18,13 @@ import { screenTactics } from "../ui/screens/tactics.js";
 import { screenCompetitions } from "../ui/screens/competitions.js";
 import { screenTransfers } from "../ui/screens/transfers.js";
 import { screenFinance } from "../ui/screens/finance.js";
+import { screenTraining } from "../ui/screens/training.js";
 
 import { createRepositories } from "../data/repositories.js";
 
 function migrateState(s) {
   const next = structuredClone(s || {});
-  if (!next.app) next.app = { build: "v0.6.0", ready: false, selectedPackId: null };
+  if (!next.app) next.app = { build: "v0.7.0", ready: false, selectedPackId: null };
   if (!next.career) next.career = { slot: null, coach: null, clubId: null };
 
   if (!next.career.lineup) {
@@ -60,6 +61,16 @@ function migrateState(s) {
     if (!Array.isArray(next.career.economy.ledger)) next.career.economy.ledger = [];
   }
 
+  // ✅ novo: status por jogador
+  if (!next.career.playerStatus) next.career.playerStatus = {};
+  if (!next.career.training) {
+    next.career.training = { plan: "BALANCED", focus: "GENERAL", lastAppliedIso: null };
+  } else {
+    if (!next.career.training.plan) next.career.training.plan = "BALANCED";
+    if (!next.career.training.focus) next.career.training.focus = "GENERAL";
+    if (!("lastAppliedIso" in next.career.training)) next.career.training.lastAppliedIso = null;
+  }
+
   return next;
 }
 
@@ -83,10 +94,11 @@ function migrateState(s) {
   screens.add("player", screenPlayer);
   screens.add("tactics", screenTactics);
   screens.add("competitions", screenCompetitions);
-
-  // ✅ NOVAS TELAS (garante que rotas existem)
   screens.add("transfers", screenTransfers);
   screens.add("finance", screenFinance);
+
+  // ✅ novo
+  screens.add("training", screenTraining);
 
   const router = createRouter({
     onRoute: (route) => screens.show(route.name, route.params),
@@ -95,7 +107,7 @@ function migrateState(s) {
 
   store.setState(
     migrateState({
-      app: { build: "v0.6.0", ready: false, selectedPackId: null },
+      app: { build: "v0.7.0", ready: false, selectedPackId: null },
       career: {
         slot: null,
         coach: null,
@@ -109,13 +121,15 @@ function migrateState(s) {
           lastSponsorMonth: null,
           lastMatchIncome: 0,
           ledger: []
-        }
+        },
+        playerStatus: {},
+        training: { plan: "BALANCED", focus: "GENERAL", lastAppliedIso: null }
       }
     })
   );
 
   shell.setTopbar({ title: "Vale Futebol Manager", subtitle: "Carreira • Treinador" });
-  shell.setFooter({ left: "Offline • GitHub Pages", right: "v0.6.0" });
+  shell.setFooter({ left: "Offline • GitHub Pages", right: "v0.7.0" });
 
   store.setState({ ...store.getState(), app: { ...store.getState().app, ready: true } });
 
