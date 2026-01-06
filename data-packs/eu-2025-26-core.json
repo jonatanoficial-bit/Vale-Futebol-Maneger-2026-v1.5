@@ -1,0 +1,14 @@
+{
+  "packId": "eu-2025-26-core",
+  "name": "Europa Core 2025/26",
+  "version": "1.0.0",
+  "content": {
+    "clubs": {
+      "clubs": [
+        { "id": "RMA", "name": "Real Madrid", "country": "Espanha", "confed": "UEFA", "logoAssetId": "RMA", "tags": ["UEFA_CHAMPION_2026"] },
+        { "id": "MCI", "name": "Manchester City", "country": "Inglaterra", "confed": "UEFA", "logoAssetId": "MCI", "tags": [] },
+        { "id": "BAY", "name": "Bayern München", "country": "Alemanha", "confed": "UEFA", "logoAssetId": "BAY", "tags": [] }
+      ]
+    }
+  }
+}
