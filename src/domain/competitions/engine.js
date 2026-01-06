@@ -2,7 +2,17 @@ import { tableFromSerialized, applyResult } from "./leagueTable.js";
 import { CompetitionType } from "./competitionTypes.js";
 import { simulateMatch } from "../matchSim.js";
 import { applyMatchEconomy, applyMonthlySponsorIfNeeded } from "../economy/economy.js";
-import { effectiveOverall, getPlayerStatus, applyMatchDayFatigueAndMorale } from "../training/playerStatus.js";
+import {
+  effectiveOverall,
+  getPlayerStatus,
+  applyMatchDayFatigueAndMorale
+} from "../training/playerStatus.js";
+import { formationById, roleSpec } from "../tactics/formations.js";
+import { computeTacticsTeamModifier } from "../tactics/lineupService.js";
+
+function clamp(n, a, b) {
+  return Math.max(a, Math.min(b, n));
+}
 
 function resolvePlaceholder(teamId, season) {
   if (!teamId) return teamId;
@@ -34,22 +44,34 @@ export function getCompetitionViewState(season, competitionId) {
   return { kind: "CUP", bracket: comp.bracket, fixtures: comp.fixtures };
 }
 
-function withEffectiveOverallsForClub({ state, playersByClub, clubId }) {
-  // playersByClub é Map<clubId, players[]>
-  // retornamos um Map novo, mas só ajustamos o clube do usuário
-  const next = new Map(playersByClub);
-  const list = next.get(clubId);
-  if (!Array.isArray(list) || list.length === 0) return next;
+function hasAnyPosition(playerPositions, allowedPositions) {
+  if (!Array.isArray(playerPositions) || playerPositions.length === 0) return false;
+  return playerPositions.some(p => allowedPositions.includes(p));
+}
 
-  const adjusted = list.map(p => {
-    const base = p.overall ?? p.ovr ?? 70;
-    const st = getPlayerStatus(state, p.id);
-    const eff = effectiveOverall(base, st);
-    return { ...p, overall: eff, _baseOverall: base };
-  });
+function chemistryPenaltyOverall({ formationId, roleKey, player }) {
+  const spec = roleSpec(formationId, roleKey);
+  if (!spec) return 0;
+  const ok = hasAnyPosition(player.positions || [], spec.allowed);
+  return ok ? 0 : 6; // penalidade padrão
+}
 
-  next.set(clubId, adjusted);
-  return next;
+function collectUserPlayersUsedWithBench(userLineup, formationId) {
+  const ids = [];
+  if (!userLineup) return ids;
+
+  const starters = userLineup.starters || {};
+  for (const k of Object.keys(starters)) if (starters[k]) ids.push(starters[k]);
+
+  // “substituições automáticas simples” (MVP v0.8):
+  // considera até 3 do banco como “usados” (afeta fadiga/moral pós-jogo).
+  const bench = (userLineup.bench || []).filter(Boolean);
+  const f = formationById(formationId);
+  const maxSubs = clamp(3, 0, f.benchSize);
+
+  for (let i = 0; i < Math.min(maxSubs, bench.length); i++) ids.push(bench[i]);
+
+  return Array.from(new Set(ids));
 }
 
 function guessOutcomeForUser(sim, userClubId) {
@@ -61,18 +83,44 @@ function guessOutcomeForUser(sim, userClubId) {
   return "DRAW";
 }
 
-function collectUserPlayersUsed(userLineup) {
-  // MVP: se lineup vazio, não aplica pós-jogo (evita quebrar)
-  const ids = [];
-  if (!userLineup) return ids;
-  const starters = userLineup.starters || {};
-  for (const k of Object.keys(starters)) {
-    if (starters[k]) ids.push(starters[k]);
+function withEffectiveOverallsForUserClub({ state, playersByClub, userClubId, userLineup }) {
+  const next = new Map(playersByClub);
+  const list = next.get(userClubId);
+  if (!Array.isArray(list) || list.length === 0) return next;
+
+  const formationId = userLineup?.formationId || state?.career?.lineup?.formationId || "4-3-3";
+  const starters = userLineup?.starters || state?.career?.lineup?.starters || {};
+  const tactics = state?.career?.tactics || {};
+  const tacMod = computeTacticsTeamModifier(tactics);
+
+  const starterRoleByPlayerId = new Map();
+  for (const roleKey of Object.keys(starters)) {
+    const pid = starters[roleKey];
+    if (pid) starterRoleByPlayerId.set(pid, roleKey);
   }
-  const bench = userLineup.bench || [];
-  for (const id of bench) if (id) ids.push(id);
-  // remove duplicados
-  return Array.from(new Set(ids));
+
+  const adjusted = list.map(p => {
+    const base = p.overall ?? p.ovr ?? 70;
+    const st = getPlayerStatus(state, p.id);
+    let eff = effectiveOverall(base, st);
+
+    // Penalidade de posição só para titulares (faz sentido)
+    const roleKey = starterRoleByPlayerId.get(p.id);
+    if (roleKey) {
+      const pen = chemistryPenaltyOverall({ formationId, roleKey, player: p });
+      eff = clamp(eff - pen, 1, 99);
+    }
+
+    // Modificador tático leve (aplicado no elenco inteiro para “sentir” diferença)
+    // Mantém sutil para não quebrar realismo.
+    const tDelta = tacMod.atk + tacMod.def + tacMod.pace; // -9..+9, mas limitado abaixo
+    eff = clamp(eff + clamp(tDelta, -2, 2), 1, 99);
+
+    return { ...p, overall: eff, _baseOverall: base };
+  });
+
+  next.set(userClubId, adjusted);
+  return next;
 }
 
 export function playFixtureAtCalendarIndex({
@@ -92,8 +140,10 @@ export function playFixtureAtCalendarIndex({
   const homeId = resolvePlaceholder(f.homeId, season);
   const awayId = resolvePlaceholder(f.awayId, season);
 
-  // ✅ aplica treino/status no OVR do clube do usuário (sem mexer nos outros)
-  const adjustedSquads = state ? withEffectiveOverallsForClub({ state, playersByClub: squadsByClub, clubId: userClubId }) : squadsByClub;
+  // ✅ aplica status+química+tática no clube do usuário
+  const adjustedSquads = state
+    ? withEffectiveOverallsForUserClub({ state, playersByClub: squadsByClub, userClubId, userLineup })
+    : squadsByClub;
 
   const sim = simulateMatch({
     packId,
@@ -148,17 +198,17 @@ export function playFixtureAtCalendarIndex({
     lastMatch: sim
   };
 
-  // ✅ ECONOMIA + ✅ pós-jogo (fadiga/moral)
+  // ✅ ECONOMIA + ✅ pós-jogo (inclui “uso” de banco)
   if (typeof onStateUpdated === "function" && state) {
     let st = structuredClone(state);
 
     st = applyMonthlySponsorIfNeeded(st, f.date);
     st = applyMatchEconomy({ state: st, match: sim, fixture: nextCalendar[calendarIndex] });
 
-    // pós-jogo para elenco do usuário (se o usuário participou)
     const involved = sim.homeId === userClubId || sim.awayId === userClubId;
     if (involved) {
-      const used = collectUserPlayersUsed(userLineup);
+      const formationId = st.career?.lineup?.formationId || "4-3-3";
+      const used = collectUserPlayersUsedWithBench(userLineup || st.career?.lineup, formationId);
       const outcome = guessOutcomeForUser(sim, userClubId);
       st = applyMatchDayFatigueAndMorale(st, used, outcome);
     }
