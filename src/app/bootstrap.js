@@ -15,8 +15,26 @@ import { screenHub } from "../ui/screens/hub.js";
 import { screenSquad } from "../ui/screens/squad.js";
 import { screenPlayer } from "../ui/screens/player.js";
 import { screenTactics } from "../ui/screens/tactics.js";
+import { screenCompetitions } from "../ui/screens/competitions.js";
 
 import { createRepositories } from "../data/repositories.js";
+
+function migrateState(s) {
+  const next = structuredClone(s || {});
+  if (!next.app) next.app = { build: "v0.4.0", ready: false, selectedPackId: null };
+  if (!next.career) next.career = { slot: null, coach: null, clubId: null };
+
+  if (!next.career.lineup) {
+    next.career.lineup = { formationId: "4-3-3", starters: {}, bench: [] };
+  } else {
+    if (!next.career.lineup.formationId) next.career.lineup.formationId = "4-3-3";
+    if (!next.career.lineup.starters) next.career.lineup.starters = {};
+    if (!next.career.lineup.bench) next.career.lineup.bench = [];
+  }
+
+  // season é criada na tela Competições se não existir (lazy init)
+  return next;
+}
 
 (async function main() {
   const root = document.getElementById("app");
@@ -38,29 +56,25 @@ import { createRepositories } from "../data/repositories.js";
   screens.add("squad", screenSquad);
   screens.add("player", screenPlayer);
   screens.add("tactics", screenTactics);
+  screens.add("competitions", screenCompetitions);
 
   const router = createRouter({
     onRoute: (route) => screens.show(route.name, route.params),
     logger
   });
 
-  store.setState({
-    app: {
-      build: "v0.3.0",
-      ready: false,
-      selectedPackId: null
-    },
+  const initial = migrateState({
+    app: { build: "v0.4.0", ready: false, selectedPackId: null },
     career: {
       slot: null,
       coach: null,
       clubId: null,
-      lineup: {
-        formationId: "4-3-3",
-        starters: {},
-        bench: []
-      }
+      lineup: { formationId: "4-3-3", starters: {}, bench: [] },
+      season: null
     }
   });
+
+  store.setState(initial);
 
   shell.setTopbar({
     title: "Vale Futebol Manager",
@@ -69,7 +83,7 @@ import { createRepositories } from "../data/repositories.js";
 
   shell.setFooter({
     left: "Offline • GitHub Pages",
-    right: "v0.3.0"
+    right: "v0.4.0"
   });
 
   store.setState({
