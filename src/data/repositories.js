@@ -2,12 +2,15 @@ import { listAvailablePacks, loadPackByPath } from "./dlcLoader.js";
 import { createSaveManager } from "./saveManager.js";
 import { loadLogoIndex } from "./assetIndex.js";
 import { autoCompleteClubs } from "./clubAutoComplete.js";
+import { tryLoadFaceIndex } from "./faceIndex.js";
+import { computeOverall } from "../domain/playerModel.js";
 
 export async function createRepositories({ logger }) {
   const saves = createSaveManager(logger);
 
   const packs = await listAvailablePacks();
   const logoIds = await loadLogoIndex();
+  const faceIds = await tryLoadFaceIndex(logger);
 
   async function loadPack(packId) {
     const meta = packs.find(p => p.id === packId) || packs.find(p => p.recommended);
@@ -22,9 +25,32 @@ export async function createRepositories({ logger }) {
       logoIds,
       nationIdDefault: "BRA"
     });
-
-    // substitui no pack em runtime (sem alterar arquivos)
     loaded.content.clubs.clubs = completedClubs;
+
+    // players: se não existir, vira vazio (sem quebrar)
+    const players = loaded.content?.players?.players || [];
+    loaded.content.players = { players };
+
+    // cria índices para performance
+    const playersByClub = new Map();
+    const playersById = new Map();
+
+    for (const p of players) {
+      const overall = computeOverall({ positions: p.positions, attributes: p.attributes });
+      const enriched = { ...p, overall };
+
+      playersById.set(enriched.id, enriched);
+
+      const clubId = enriched.clubId;
+      if (!playersByClub.has(clubId)) playersByClub.set(clubId, []);
+      playersByClub.get(clubId).push(enriched);
+    }
+
+    for (const arr of playersByClub.values()) {
+      arr.sort((a, b) => (b.overall - a.overall) || String(a.name).localeCompare(String(b.name), "pt-BR"));
+    }
+
+    loaded.indexes = { playersByClub, playersById };
 
     return loaded;
   }
@@ -33,10 +59,17 @@ export async function createRepositories({ logger }) {
     return `./assets/logos/${logoAssetId}.png`;
   }
 
+  function resolveFaceSrc(playerId) {
+    // se tiver index, usa; senão tenta direto e deixa o onerror cuidar
+    if (faceIds.has(playerId)) return `./assets/face/${playerId}.png`;
+    return `./assets/face/${playerId}.png`;
+  }
+
   return {
     packs,
     loadPack,
     resolveLogoSrc,
+    resolveFaceSrc,
     saves,
     logoIds
   };
