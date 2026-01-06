@@ -2,8 +2,8 @@ import { tableFromSerialized, applyResult } from "./leagueTable.js";
 import { CompetitionType } from "./competitionTypes.js";
 import { simulateMatch } from "../matchSim.js";
 import { applyMatchEconomy, applyMonthlySponsorIfNeeded } from "../economy/economy.js";
+import { effectiveOverall, getPlayerStatus, applyMatchDayFatigueAndMorale } from "../training/playerStatus.js";
 
-// Resolve placeholders simples
 function resolvePlaceholder(teamId, season) {
   if (!teamId) return teamId;
   return teamId;
@@ -34,6 +34,47 @@ export function getCompetitionViewState(season, competitionId) {
   return { kind: "CUP", bracket: comp.bracket, fixtures: comp.fixtures };
 }
 
+function withEffectiveOverallsForClub({ state, playersByClub, clubId }) {
+  // playersByClub é Map<clubId, players[]>
+  // retornamos um Map novo, mas só ajustamos o clube do usuário
+  const next = new Map(playersByClub);
+  const list = next.get(clubId);
+  if (!Array.isArray(list) || list.length === 0) return next;
+
+  const adjusted = list.map(p => {
+    const base = p.overall ?? p.ovr ?? 70;
+    const st = getPlayerStatus(state, p.id);
+    const eff = effectiveOverall(base, st);
+    return { ...p, overall: eff, _baseOverall: base };
+  });
+
+  next.set(clubId, adjusted);
+  return next;
+}
+
+function guessOutcomeForUser(sim, userClubId) {
+  const isHome = sim.homeId === userClubId;
+  const gf = isHome ? sim.homeGoals : sim.awayGoals;
+  const ga = isHome ? sim.awayGoals : sim.homeGoals;
+  if (gf > ga) return "WIN";
+  if (gf < ga) return "LOSS";
+  return "DRAW";
+}
+
+function collectUserPlayersUsed(userLineup) {
+  // MVP: se lineup vazio, não aplica pós-jogo (evita quebrar)
+  const ids = [];
+  if (!userLineup) return ids;
+  const starters = userLineup.starters || {};
+  for (const k of Object.keys(starters)) {
+    if (starters[k]) ids.push(starters[k]);
+  }
+  const bench = userLineup.bench || [];
+  for (const id of bench) if (id) ids.push(id);
+  // remove duplicados
+  return Array.from(new Set(ids));
+}
+
 export function playFixtureAtCalendarIndex({
   season,
   calendarIndex,
@@ -42,8 +83,8 @@ export function playFixtureAtCalendarIndex({
   userLineup,
   squadsByClub,
   playersByIdGlobal,
-  state,            // NEW: estado completo para economia
-  onStateUpdated    // NEW: callback para salvar economia/ledger
+  state,
+  onStateUpdated
 }) {
   const f = season.calendar[calendarIndex];
   if (!f || f.played) return { season, sim: null };
@@ -51,18 +92,20 @@ export function playFixtureAtCalendarIndex({
   const homeId = resolvePlaceholder(f.homeId, season);
   const awayId = resolvePlaceholder(f.awayId, season);
 
+  // ✅ aplica treino/status no OVR do clube do usuário (sem mexer nos outros)
+  const adjustedSquads = state ? withEffectiveOverallsForClub({ state, playersByClub: squadsByClub, clubId: userClubId }) : squadsByClub;
+
   const sim = simulateMatch({
     packId,
     fixtureId: f.id,
     homeId,
     awayId,
-    squadsByClub,
+    squadsByClub: adjustedSquads,
     userClubId,
     userLineup,
     playersByIdGlobal
   });
 
-  // Atualiza fixture no calendário
   const nextCalendar = season.calendar.slice();
   nextCalendar[calendarIndex] = {
     ...f,
@@ -78,7 +121,6 @@ export function playFixtureAtCalendarIndex({
     }
   };
 
-  // Atualiza fixture dentro da competição
   const nextCompetitions = season.competitions.map(c => {
     if (c.id !== f.competitionId) return c;
 
@@ -86,18 +128,15 @@ export function playFixtureAtCalendarIndex({
     const nextFixtures = c.fixtures.slice();
     if (idx >= 0) nextFixtures[idx] = nextCalendar[calendarIndex];
 
-    // Liga -> tabela
     if (c.type === CompetitionType.LEAGUE) {
       const tableMap = tableFromSerialized(c.table);
       applyResult(tableMap, homeId, awayId, sim.homeGoals, sim.awayGoals);
       return { ...c, fixtures: nextFixtures, table: Array.from(tableMap.entries()) };
     }
 
-    // Copa/Super
     return { ...c, fixtures: nextFixtures, bracket: { fixtures: nextFixtures } };
   });
 
-  // Avança calendarIndex
   let nextIndex = season.calendarIndex || 0;
   while (nextIndex < nextCalendar.length && nextCalendar[nextIndex].played) nextIndex++;
 
@@ -109,15 +148,20 @@ export function playFixtureAtCalendarIndex({
     lastMatch: sim
   };
 
-  // ECONOMIA: patrocínio mensal + receita do jogo (se for do usuário)
+  // ✅ ECONOMIA + ✅ pós-jogo (fadiga/moral)
   if (typeof onStateUpdated === "function" && state) {
     let st = structuredClone(state);
 
-    // sponsor mensal baseado na data do fixture
     st = applyMonthlySponsorIfNeeded(st, f.date);
-
-    // receita do jogo se usuário participou
     st = applyMatchEconomy({ state: st, match: sim, fixture: nextCalendar[calendarIndex] });
+
+    // pós-jogo para elenco do usuário (se o usuário participou)
+    const involved = sim.homeId === userClubId || sim.awayId === userClubId;
+    if (involved) {
+      const used = collectUserPlayersUsed(userLineup);
+      const outcome = guessOutcomeForUser(sim, userClubId);
+      st = applyMatchDayFatigueAndMorale(st, used, outcome);
+    }
 
     onStateUpdated(st);
   }
