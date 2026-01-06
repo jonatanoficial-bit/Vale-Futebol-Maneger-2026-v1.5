@@ -12,6 +12,8 @@ import { screenCareerCreate } from "../ui/screens/careerCreate.js";
 import { screenClubSelect } from "../ui/screens/clubSelect.js";
 import { screenTutorial } from "../ui/screens/tutorial.js";
 import { screenHub } from "../ui/screens/hub.js";
+import { screenSquad } from "../ui/screens/squad.js";
+import { screenPlayer } from "../ui/screens/player.js";
 
 import { createRepositories } from "../data/repositories.js";
 
@@ -22,10 +24,8 @@ import { createRepositories } from "../data/repositories.js";
   const shell = createAppShell(root);
   const store = createStore();
 
-  // Repositórios (dados/saves)
   const repos = await createRepositories({ logger });
 
-  // Screens
   const screens = registerScreens(shell, store, repos, logger);
   screens.add("splash", screenSplash);
   screens.add("dataPackSelect", screenDataPackSelect);
@@ -34,17 +34,17 @@ import { createRepositories } from "../data/repositories.js";
   screens.add("clubSelect", screenClubSelect);
   screens.add("tutorial", screenTutorial);
   screens.add("hub", screenHub);
+  screens.add("squad", screenSquad);
+  screens.add("player", screenPlayer);
 
-  // Router
   const router = createRouter({
     onRoute: (route) => screens.show(route.name, route.params),
     logger
   });
 
-  // Estado inicial
   store.setState({
     app: {
-      build: "v0.1.0",
+      build: "v0.2.0",
       ready: false,
       selectedPackId: null
     },
@@ -55,7 +55,6 @@ import { createRepositories } from "../data/repositories.js";
     }
   });
 
-  // Boot
   shell.setTopbar({
     title: "Vale Futebol Manager",
     subtitle: "Carreira • Treinador",
@@ -63,7 +62,7 @@ import { createRepositories } from "../data/repositories.js";
 
   shell.setFooter({
     left: "Offline • GitHub Pages",
-    right: "v0.1.0"
+    right: "v0.2.0"
   });
 
   store.setState({
@@ -71,6 +70,5 @@ import { createRepositories } from "../data/repositories.js";
     app: { ...store.getState().app, ready: true }
   });
 
-  // rota inicial
   router.start({ defaultRoute: "#/splash" });
 })();
