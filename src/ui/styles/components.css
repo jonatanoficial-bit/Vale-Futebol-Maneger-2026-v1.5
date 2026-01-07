@@ -1,5 +1,11 @@
 #app{ min-height:100%; padding: 18px; padding-top: 16px; }
 
+.main{
+  max-width: 980px;
+  margin: 18px auto;
+  padding-bottom: 80px;
+}
+
 .topbar{
   position: sticky; top: 0; z-index: 2;
   padding: 14px 18px;
@@ -44,7 +50,6 @@
 }
 .card__title{ font-weight: 900; font-size: 20px; letter-spacing: .2px; }
 .card__subtitle{ color: var(--muted); font-size: 13px; margin-top: 4px; }
-
 .card__body{ padding: 16px; }
 
 .badge{
@@ -72,7 +77,6 @@
   cursor:pointer;
   transition: transform .08s ease, background .12s ease, border-color .12s ease;
 }
-
 .btn:hover{ background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.18); }
 .btn:active{ transform: translateY(1px); }
 
@@ -81,8 +85,9 @@
   background: linear-gradient(135deg, rgba(255,43,43,.92), rgba(214,177,91,.92));
 }
 
-.list{ display:flex; flex-direction: column; gap: 12px; }
+.btn--block{ margin-top: 12px; }
 
+.list{ display:flex; flex-direction: column; gap: 12px; }
 .list .card{ border-radius: 18px; }
 
 .logo{
@@ -136,4 +141,36 @@
   border-radius: 14px;
   border: 1px solid rgba(255,43,43,.35);
   background: rgba(255,43,43,.08);
+}
+
+/* Overlay de erro fatal (AAA) */
+.fatal{
+  position: fixed;
+  inset: 0;
+  padding: 18px;
+  background: rgba(0,0,0,.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .12s ease;
+  z-index: 50;
+}
+.fatal--show{
+  opacity: 1;
+  pointer-events: auto;
+}
+.fatal__card{
+  width: min(820px, 100%);
+}
+.fatal__pre{
+  margin: 0;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.35);
+  color: rgba(255,255,255,.85);
+  overflow: auto;
+  max-height: 38vh;
 }
