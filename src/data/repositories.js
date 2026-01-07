@@ -1,3 +1,4 @@
+// /src/data/repositories.js
 import { listAvailablePacks, loadPackByPath } from "./dlcLoader.js";
 import { createSaveManager } from "./saveManager.js";
 import { loadLogoIndex } from "./assetIndex.js";
@@ -10,7 +11,7 @@ export async function createRepositories({ logger }) {
   const saves = createSaveManager(logger);
 
   const packs = await listAvailablePacks();
-  const logoIds = await loadLogoIndex();
+  const logoIds = await loadLogoIndex(logger);
   const faceIds = await tryLoadFaceIndex(logger);
 
   async function loadPack(packId) {
@@ -21,68 +22,36 @@ export async function createRepositories({ logger }) {
 
     // Clubs auto-complete a partir dos escudos
     const clubsFromPack = loaded.content?.clubs?.clubs || [];
-    const completedClubs = autoCompleteClubs({
+    loaded.content.clubs = autoCompleteClubs({
       clubsFromPack,
-      logoIds,
-      nationIdDefault: "BRA"
+      logoIds
     });
-    loaded.content.clubs.clubs = completedClubs;
 
-    // Players do pack (se não existir, vira vazio)
-    const packPlayers = loaded.content?.players?.players || [];
-    loaded.content.players = { players: packPlayers };
+    // Jogadores: compute overall + fallback roster (se pack vier incompleto)
+    const players = Array.isArray(loaded.content?.players?.players) ? loaded.content.players.players : [];
+    const normalizedPlayers = players.map(p => ({
+      ...p,
+      overall: typeof p.overall === "number" ? p.overall : computeOverall(p)
+    }));
+    loaded.content.players = { players: normalizedPlayers };
 
-    // Index base
-    const playersById = new Map();
-    const playersByClub = new Map();
+    // Roster automático (MVP) para não ficar 0 jogadores por clube
+    // Se no futuro você tiver rosters completos no pack, isso pode ser desligado por flag.
+    loaded.content.rosters = generateAutoRoster({
+      clubs: loaded.content.clubs.clubs,
+      players: loaded.content.players.players
+    });
 
-    function pushPlayer(p) {
-      const overall = computeOverall({ positions: p.positions, attributes: p.attributes });
-      const enriched = { ...p, overall };
-      playersById.set(enriched.id, enriched);
+    loaded.content.faces = { ids: Array.from(faceIds) };
 
-      const clubId = enriched.clubId;
-      if (!playersByClub.has(clubId)) playersByClub.set(clubId, []);
-      playersByClub.get(clubId).push(enriched);
-    }
-
-    // Carrega players do pack
-    for (const p of packPlayers) pushPlayer(p);
-
-    // Auto-elenco: todo clube sem players recebe um elenco completo
-    for (const c of completedClubs) {
-      const has = (playersByClub.get(c.id) || []).length > 0;
-      if (!has) {
-        const auto = generateAutoRoster({ packId: meta.id, clubId: c.id, nationalityIdDefault: c.nationId || "BRA" });
-        for (const p of auto) pushPlayer(p);
-        logger?.info?.("AUTO_ROSTER", `Elenco automático gerado: ${c.id} (${auto.length} jogadores)`);
-      }
-    }
-
-    // Ordena por overall
-    for (const arr of playersByClub.values()) {
-      arr.sort((a, b) => (b.overall - a.overall) || String(a.name).localeCompare(String(b.name), "pt-BR"));
-    }
-
-    loaded.indexes = { playersByClub, playersById };
     return loaded;
   }
 
-  function resolveLogoSrc(logoAssetId) {
-    return `./assets/logos/${logoAssetId}.png`;
-  }
-
-  function resolveFaceSrc(playerId) {
-    if (faceIds.has(playerId)) return `./assets/face/${playerId}.png`;
-    return `./assets/face/${playerId}.png`;
-  }
-
   return {
-    packs,
-    loadPack,
-    resolveLogoSrc,
-    resolveFaceSrc,
     saves,
-    logoIds
+    packs: {
+      list: async () => packs
+    },
+    loadPack
   };
 }
