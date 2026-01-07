@@ -1,3 +1,8 @@
+// /src/data/faceIndex.js
+function toAbs(relFromProjectRoot) {
+  return new URL(`../../${relFromProjectRoot}`.replace(/^\.\//, ""), import.meta.url).toString();
+}
+
 async function fetchJSON(url) {
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) throw new Error(`Falha ao carregar JSON: ${url} (${res.status})`);
@@ -10,7 +15,8 @@ function normalizeIdFromFilename(filename) {
 
 export async function tryLoadFaceIndex(logger) {
   try {
-    const idx = await fetchJSON("./assets/face/index.json");
+    const idxUrl = toAbs("assets/face/index.json");
+    const idx = await fetchJSON(idxUrl);
     const faces = Array.isArray(idx?.faces) ? idx.faces : [];
     const ids = faces.map(normalizeIdFromFilename).filter(Boolean);
     return new Set(ids);
