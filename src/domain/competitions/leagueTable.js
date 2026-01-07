@@ -1,3 +1,5 @@
+// /src/domain/competitions/leagueTable.js
+
 function emptyRow(clubId) {
   return {
     clubId,
@@ -18,6 +20,14 @@ export function createTable(clubIds) {
   return map;
 }
 
+/**
+ * Compat: alguns módulos (ex: groupsCup.js) esperam essa função.
+ * Ela retorna um Map<teamId, row> com a tabela zerada.
+ */
+export function makeEmptyTableForTeams(teamIds) {
+  return createTable(teamIds);
+}
+
 export function applyResult(tableMap, homeId, awayId, homeGoals, awayGoals) {
   const h = tableMap.get(homeId) || emptyRow(homeId);
   const a = tableMap.get(awayId) || emptyRow(awayId);
@@ -31,14 +41,18 @@ export function applyResult(tableMap, homeId, awayId, homeGoals, awayGoals) {
   a.ga += homeGoals;
 
   if (homeGoals > awayGoals) {
-    h.wins += 1; h.points += 3;
+    h.wins += 1;
+    h.points += 3;
     a.losses += 1;
   } else if (homeGoals < awayGoals) {
-    a.wins += 1; a.points += 3;
+    a.wins += 1;
+    a.points += 3;
     h.losses += 1;
   } else {
-    h.draws += 1; h.points += 1;
-    a.draws += 1; a.points += 1;
+    h.draws += 1;
+    h.points += 1;
+    a.draws += 1;
+    a.points += 1;
   }
 
   h.gd = h.gf - h.ga;
