@@ -1,9 +1,10 @@
+// /src/ui/appShell.js
 export function createAppShell(root) {
   root.innerHTML = `
     <div class="app">
       <header class="topbar">
         <div class="topbar__left">
-          <div class="brandMark"></div>
+          <div class="appicon"></div>
           <div>
             <div class="topbar__title" id="topbarTitle"></div>
             <div class="topbar__subtitle" id="topbarSubtitle"></div>
@@ -16,23 +17,31 @@ export function createAppShell(root) {
 
       <main class="main" id="main"></main>
 
-      <footer class="footer">
-        <div class="footer__left" id="footerLeft"></div>
-        <div class="footer__right" id="footerRight"></div>
+      <footer class="footerbar">
+        <div id="footerLeft"></div>
+        <div id="footerRight"></div>
       </footer>
 
       <div class="fatal" id="fatal" aria-hidden="true">
-        <div class="fatal__card">
-          <div class="fatal__title">Ocorreu um erro</div>
-          <div class="fatal__desc">Copie o log abaixo e me envie.</div>
-          <pre class="fatal__pre" id="fatalPre"></pre>
-          <button class="btn btn--primary" id="fatalReload">Recarregar</button>
+        <div class="fatal__card card">
+          <div class="card__header">
+            <div>
+              <div class="card__title">Ocorreu um erro</div>
+              <div class="card__subtitle">Copie o log abaixo e me envie.</div>
+            </div>
+            <span class="badge">Erro</span>
+          </div>
+          <div class="card__body">
+            <pre class="fatal__pre" id="fatalPre"></pre>
+            <div style="height:10px"></div>
+            <button class="btn btn--primary" id="fatalReload">Recarregar</button>
+          </div>
         </div>
       </div>
     </div>
   `;
 
-  const $ = (id) => root.querySelector(id);
+  const $ = (sel) => root.querySelector(sel);
 
   const main = $("#main");
   const fatal = $("#fatal");
@@ -61,9 +70,11 @@ export function createAppShell(root) {
 
   function showFatal(err) {
     const payload = {
+      type: "runtime",
       message: err?.message || String(err),
       stack: err?.stack || null,
-      href: window.location.href
+      href: window.location.href,
+      ua: navigator.userAgent
     };
     fatalPre.textContent = JSON.stringify(payload, null, 2);
     fatal.setAttribute("aria-hidden", "false");
