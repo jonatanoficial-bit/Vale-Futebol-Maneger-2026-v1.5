@@ -25,7 +25,6 @@ import { screenAdmin } from "../ui/screens/admin.js";
 import { createRepositories } from "../data/repositories.js";
 
 function structuredCloneSafe(obj) {
-  // Alguns webviews antigos podem não ter structuredClone.
   if (typeof globalThis.structuredClone === "function") return globalThis.structuredClone(obj);
   return JSON.parse(JSON.stringify(obj));
 }
@@ -98,10 +97,8 @@ function migrateState(s) {
 
   const shell = createAppShell(root);
 
-  // Se algo der errado em qualquer ponto do boot, mostramos fatal (sem tela vazia)
   try {
     const store = createStore();
-
     const repos = await createRepositories({ logger });
 
     const screens = registerScreens(shell, store, repos, logger);
@@ -163,6 +160,16 @@ function migrateState(s) {
     router.start({ defaultRoute: "#/splash" });
   } catch (err) {
     logger.error("BOOT_FATAL", err);
-    shell.showFatal(err);
+    try { shell.showFatal(err); } catch (e) {}
+    if (typeof window !== "undefined" && typeof window.__BOOT_FATAL__ === "function") {
+      window.__BOOT_FATAL__({
+        type: "bootstrap_runtime",
+        message: err && err.message ? err.message : String(err),
+        stack: err && err.stack ? err.stack : null,
+        href: window.location.href,
+        ua: navigator.userAgent
+      });
+    }
+    throw err;
   }
 })();
