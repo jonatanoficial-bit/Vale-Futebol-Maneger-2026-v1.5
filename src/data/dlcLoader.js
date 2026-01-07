@@ -1,4 +1,10 @@
+// /src/data/dlcLoader.js
 import { validateManifest, validatePackData } from "./dlcValidator.js";
+
+function toAbs(relFromProjectRoot) {
+  // dlcLoader está em /src/data → volta 2 níveis até a raiz do projeto
+  return new URL(`../../${relFromProjectRoot}`.replace(/^\.\//, ""), import.meta.url).toString();
+}
 
 async function fetchJSON(url) {
   const res = await fetch(url, { cache: "no-store" });
@@ -7,19 +13,26 @@ async function fetchJSON(url) {
 }
 
 export async function listAvailablePacks() {
-  const index = await fetchJSON("./data-packs/index.json");
+  const indexUrl = toAbs("data-packs/index.json");
+  const index = await fetchJSON(indexUrl);
   if (!index?.packs?.length) return [];
   return index.packs;
 }
 
 export async function loadPackByPath(packPath, logger) {
-  const manifest = await fetchJSON(`${packPath}/manifest.json`);
+  // packPath no index.json vem como "./data-packs/base-2025-26"
+  // Vamos converter para absoluto de forma segura
+  const packBase = packPath.startsWith("http")
+    ? packPath
+    : toAbs(packPath.replace(/^\.\//, ""));
+
+  const manifest = await fetchJSON(`${packBase}/manifest.json`);
   validateManifest(manifest);
 
   const content = {};
   const entries = Object.entries(manifest.content || {});
   for (const [key, file] of entries) {
-    content[key] = await fetchJSON(`${packPath}/${file}`);
+    content[key] = await fetchJSON(`${packBase}/${file}`);
   }
 
   validatePackData({ manifest, content });
