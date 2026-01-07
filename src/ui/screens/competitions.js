@@ -1,61 +1,76 @@
 // /src/ui/screens/competitions.js
-import { closeSeasonAndComputeQualifications } from "../../domain/competitions/seasonClosure.js";
-import { buildSeasonV5 } from "../../domain/competitions/seasonBuilderV5.js";
+import { generateSeason } from "../../domain/season/seasonGenerator.js";
 
-function prettyClubName(pack, id) {
-  const c = pack.content.clubs.clubs.find(x => x.id === id);
-  return c?.name || id || "-";
+function safeText(v) {
+  return String(v ?? "").replace(/[<>&"]/g, (c) => ({
+    "<": "&lt;",
+    ">": "&gt;",
+    "&": "&amp;",
+    '"': "&quot;"
+  }[c]));
 }
 
-function renderList(pack, ids) {
-  const arr = (ids || []).filter(Boolean);
-  if (!arr.length) return "-";
-  return arr.map(id => prettyClubName(pack, id)).join(", ");
+function fmtList(ids, limit = 12) {
+  const a = Array.isArray(ids) ? ids : [];
+  const shown = a.slice(0, limit);
+  const more = a.length > limit ? ` +${a.length - limit}` : "";
+  return shown.join(", ") + more;
 }
 
-export async function screenCompetitions({ shell, repos, store, navigate }) {
+export async function screenCompetitions({ shell, store, navigate, repos }) {
   const s0 = store.getState();
-  if (!s0.app.selectedPackId) { navigate("#/dataPackSelect"); return { render() {} }; }
-  if (!s0.career?.clubId) { navigate("#/hub"); return { render() {} }; }
-
-  const pack = await repos.loadPack(s0.app.selectedPackId);
+  if (!s0?.career?.clubId) { navigate("#/clubSelect"); return { render() {} }; }
+  if (!s0?.app?.selectedPackId) { navigate("#/dataPackSelect"); return { render() {} }; }
 
   const el = document.createElement("div");
   el.className = "grid";
+
   el.innerHTML = `
     <div class="card">
       <div class="card__header">
         <div>
           <div class="card__title">Competições</div>
-          <div class="card__subtitle">Encerramento • Vagas • Acesso/Rebaixamento</div>
+          <div class="card__subtitle">Temporada • Vagas • Acesso/Rebaixamento</div>
         </div>
-        <span class="badge">v1.0.1</span>
+        <span class="badge">v1.1.2</span>
       </div>
 
       <div class="card__body">
-        <div class="grid grid--2">
+        <div class="grid grid--2" style="gap:12px">
           <div class="card" style="border-radius:18px">
             <div class="card__body">
-              <div style="font-weight:900">Temporada ativa</div>
-              <div style="height:10px"></div>
-              <div class="muted" style="font-size:13px;line-height:1.5" id="active">-</div>
-
-              <div style="height:12px"></div>
-              <button class="btn btn--primary" id="close">Encerrar Temporada (gerar próxima)</button>
+              <div style="font-weight:900;margin-bottom:6px">Temporada ativa</div>
+              <div class="muted" id="seasonInfo" style="font-size:12px;line-height:1.35">—</div>
 
               <div style="height:10px"></div>
+
+              <button class="btn btn--primary" id="gen">Gerar Temporada 2025/2026</button>
+              <div style="height:8px"></div>
               <button class="btn" id="back">Voltar</button>
             </div>
           </div>
 
           <div class="card" style="border-radius:18px">
             <div class="card__body">
-              <div style="font-weight:900">Resumo do encerramento</div>
-              <div class="muted" style="font-size:12px;margin-top:6px;line-height:1.35">
-                Campeões, vagas e movimentação de divisões (A/B/C).
+              <div style="font-weight:900;margin-bottom:6px">Competições criadas</div>
+              <div class="muted" style="font-size:12px;line-height:1.35;margin-bottom:10px">
+                Lista e participantes (MVP).
               </div>
-              <div style="height:12px"></div>
-              <pre class="muted" style="font-size:12px;white-space:pre-wrap" id="log">-</pre>
+              <div id="list" class="muted" style="font-size:12px;line-height:1.4">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="height:12px"></div>
+
+        <div class="card" style="border-radius:18px">
+          <div class="card__body">
+            <div style="font-weight:900;margin-bottom:6px">Regras (Brasil + CONMEBOL)</div>
+            <div class="muted" style="font-size:12px;line-height:1.45">
+              • Brasileirão A: top 6 → Libertadores • 7º ao 12º → Sul-Americana • 4 últimos → rebaixamento (MVP).<br/>
+              • Copa do Brasil: campeão → Libertadores (MVP).<br/>
+              • Libertadores/Sula: incluem placeholders para times fora do Brasil (você completa via Admin/DLC sem mexer no código).<br/>
+              • Intercontinental: campeão Libertadores vs campeão Europa (placeholder).
             </div>
           </div>
         </div>
@@ -63,70 +78,90 @@ export async function screenCompetitions({ shell, repos, store, navigate }) {
     </div>
   `;
 
-  const $active = el.querySelector("#active");
-  const $log = el.querySelector("#log");
-
-  function getActiveSeason(state) {
-    // ordem: a mais nova primeiro
-    return state.career.seasonV5 || state.career.seasonV4 || state.career.seasonV3 || null;
-  }
-
-  function renderActive() {
-    const st = store.getState();
-    const season = getActiveSeason(st);
-    $active.textContent = season ? `${season.id}` : "Nenhuma temporada ativa.";
-  }
-
-  function formatClosure(closure) {
-    const champs = closure.champions || {};
-    const q = closure.qualifications?.BRA || {};
-    const mv = closure.movement;
-
-    const lines = [];
-    lines.push(`Campeão Série A: ${prettyClubName(pack, champs.BRA_A)}`);
-    lines.push(`Campeão Copa do Brasil: ${prettyClubName(pack, champs.CDB)}`);
-    lines.push(`Campeão Libertadores: ${prettyClubName(pack, champs.LIB)}`);
-    lines.push("");
-    lines.push(`Vagas Libertadores (Brasil): ${renderList(pack, q.libertadores)}`);
-    lines.push(`Vagas Sul-Americana (Brasil): ${renderList(pack, q.sulamericana)}`);
-    lines.push("");
-
-    if (mv?.ok) {
-      lines.push("Acesso/Rebaixamento (4 vagas):");
-      lines.push(`Rebaixados Série A: ${renderList(pack, mv.A.relegated)}`);
-      lines.push(`Promovidos Série B: ${renderList(pack, mv.B.promoted)}`);
-      lines.push(`Rebaixados Série B: ${renderList(pack, mv.B.relegated)}`);
-      lines.push(`Promovidos Série C: ${renderList(pack, mv.C.promoted)}`);
-    } else {
-      lines.push("Acesso/Rebaixamento: não aplicado (BRA_B/BRA_C ausentes ou temporada incompleta).");
-    }
-
-    return lines.join("\n");
-  }
-
-  el.querySelector("#close").addEventListener("click", () => {
-    const state = store.getState();
-    const season = getActiveSeason(state);
-    if (!season) return alert("Nenhuma temporada ativa para encerrar.");
-
-    const closure = closeSeasonAndComputeQualifications({ season });
-    if (!closure) return alert("Erro: não foi possível encerrar (verifique BRA_A e CDB).");
-
-    const nextSeason = buildSeasonV5({ pack, prevClosure: closure });
-
-    const next = structuredClone(state);
-    next.career.seasonV5 = nextSeason;
-
-    store.setState(next);
-
-    $log.textContent = formatClosure(closure);
-
-    alert("Temporada encerrada. Nova temporada criada com A/B/C atualizadas!");
-  });
+  shell.mount(el);
 
   el.querySelector("#back").addEventListener("click", () => navigate("#/hub"));
 
-  shell.mount(el);
-  renderActive();
-  return { render: () => renderActive() };
+  const $seasonInfo = el.querySelector("#seasonInfo");
+  const $list = el.querySelector("#list");
+  const $gen = el.querySelector("#gen");
+
+  async function getClubsFromPack() {
+    const st = store.getState();
+    const pack = await repos.loadPack(st.app.selectedPackId);
+    const clubs =
+      pack?.content?.clubs?.clubs ||
+      pack?.content?.clubs ||
+      pack?.clubs?.clubs ||
+      pack?.clubs ||
+      [];
+    return Array.isArray(clubs) ? clubs : [];
+  }
+
+  function render() {
+    const st = store.getState();
+    const season = st?.career?.season || null;
+
+    if (!season) {
+      $seasonInfo.textContent = "Nenhuma temporada ativa.";
+      $list.textContent = "—";
+      $gen.textContent = "Gerar Temporada 2025/2026";
+      return;
+    }
+
+    $seasonInfo.textContent = `Temporada: ${safeText(season.id)} • Competições: ${season.competitions?.length || 0}`;
+    $gen.textContent = "Regerar Temporada (substituir atual)";
+
+    const comps = Array.isArray(season.competitions) ? season.competitions : [];
+    if (!comps.length) {
+      $list.textContent = "Nenhuma competição gerada.";
+      return;
+    }
+
+    $list.innerHTML = comps.map(c => {
+      const parts = Array.isArray(c.participants) ? c.participants : [];
+      const kind = safeText(c.type || "competition");
+      const name = safeText(c.name || c.id);
+      const id = safeText(c.id);
+      const meta = c.meta?.note ? ` <span class="badge">${safeText(c.meta.note)}</span>` : "";
+      return `
+        <div class="card" style="border-radius:16px;margin-bottom:8px">
+          <div class="card__body">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+              <div style="min-width:0">
+                <div style="font-weight:900">${name} <span class="badge">${id}</span> <span class="badge">${kind}</span>${meta}</div>
+                <div class="muted" style="font-size:12px;margin-top:6px">
+                  Participantes (${parts.length}): ${safeText(fmtList(parts))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  $gen.addEventListener("click", async () => {
+    try {
+      const clubs = await getClubsFromPack();
+
+      const st = store.getState();
+      const next = structuredClone(st);
+
+      next.career.season = generateSeason({
+        clubs,
+        seasonId: "2025-2026",
+        seed: next.app.selectedPackId || "base"
+      });
+
+      store.setState(next);
+      alert("Temporada gerada! (MVP) Use 'Salvar' no Hub para gravar no slot.");
+      render();
+    } catch (err) {
+      alert(`Falha ao gerar temporada: ${err?.message || err}`);
+    }
+  });
+
+  render();
+  return { render };
 }
