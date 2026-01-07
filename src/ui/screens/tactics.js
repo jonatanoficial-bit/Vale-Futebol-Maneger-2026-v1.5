@@ -1,32 +1,72 @@
-import { formationById, FORMATIONS } from "../../domain/tactics/formations.js";
-import {
-  ensureLineup,
-  autoPickLineup,
-  validateLineup
-} from "../../domain/tactics/lineupService.js";
-import { deriveUserSquad } from "../../domain/roster/rosterService.js";
+// /src/ui/screens/tactics.js
 
-function opt(label, value, selected) {
-  return `<option value="${value}" ${selected ? "selected" : ""}>${label}</option>`;
+function safeText(v) {
+  return String(v ?? "").replace(/[<>&"]/g, (c) => ({
+    "<": "&lt;",
+    ">": "&gt;",
+    "&": "&amp;",
+    '"': "&quot;"
+  }[c]));
 }
 
-function playerLabel(p) {
-  const pos = (p.positions && p.positions[0]) ? p.positions[0] : "-";
-  return `${p.name} • ${pos} • OVR ${p.overall}`;
+function clamp(n, a, b) {
+  return Math.max(a, Math.min(b, n));
 }
 
-export async function screenTactics({ shell, repos, store, navigate }) {
+const FORMATIONS = [
+  { id: "4-3-3", name: "4-3-3 (Ofensivo)" },
+  { id: "4-2-3-1", name: "4-2-3-1 (Equilibrado)" },
+  { id: "4-4-2", name: "4-4-2 (Clássico)" },
+  { id: "3-5-2", name: "3-5-2 (Meio forte)" },
+  { id: "5-3-2", name: "5-3-2 (Defensivo)" }
+];
+
+const STYLE = [
+  { id: "BALANCED", name: "Equilibrado" },
+  { id: "POSSESSION", name: "Posse" },
+  { id: "COUNTER", name: "Contra-ataque" },
+  { id: "HIGH_PRESS", name: "Pressão Alta" }
+];
+
+const PRESSING = [
+  { id: "LOW", name: "Baixa" },
+  { id: "NORMAL", name: "Normal" },
+  { id: "HIGH", name: "Alta" }
+];
+
+const TEMPO = [
+  { id: "SLOW", name: "Lento" },
+  { id: "NORMAL", name: "Normal" },
+  { id: "FAST", name: "Rápido" }
+];
+
+function ensureCareerDefaults(state) {
+  const next = structuredClone(state);
+
+  if (!next.career) next.career = {};
+  if (!next.career.lineup) next.career.lineup = { formationId: "4-3-3", starters: {}, bench: [] };
+  if (!next.career.lineup.formationId) next.career.lineup.formationId = "4-3-3";
+
+  if (!next.career.tactics) next.career.tactics = { style: "BALANCED", pressing: "NORMAL", tempo: "NORMAL", width: 50, depth: 50 };
+  if (!next.career.tactics.style) next.career.tactics.style = "BALANCED";
+  if (!next.career.tactics.pressing) next.career.tactics.pressing = "NORMAL";
+  if (!next.career.tactics.tempo) next.career.tactics.tempo = "NORMAL";
+  if (typeof next.career.tactics.width !== "number") next.career.tactics.width = 50;
+  if (typeof next.career.tactics.depth !== "number") next.career.tactics.depth = 50;
+
+  next.career.tactics.width = clamp(next.career.tactics.width, 0, 100);
+  next.career.tactics.depth = clamp(next.career.tactics.depth, 0, 100);
+
+  return next;
+}
+
+export async function screenTactics({ shell, store, navigate }) {
+  // Guard rails de fluxo
   const state0 = store.getState();
-  if (!state0.app.selectedPackId) { navigate("#/dataPackSelect"); return { render() {} }; }
-  if (!state0.career?.clubId) { navigate("#/hub"); return { render() {} }; }
+  if (!state0?.career?.clubId) { navigate("#/clubSelect"); return { render() {} }; }
 
-  const pack = await repos.loadPack(state0.app.selectedPackId);
-  store.setState(ensureLineup(store.getState()));
-
-  const state = store.getState();
-  const clubId = state.career.clubId;
-  const clubs = pack.content.clubs.clubs;
-  const club = clubs.find(c => c.id === clubId);
+  // garante defaults
+  store.setState(ensureCareerDefaults(state0));
 
   const el = document.createElement("div");
   el.className = "grid";
@@ -36,260 +76,182 @@ export async function screenTactics({ shell, repos, store, navigate }) {
       <div class="card__header">
         <div>
           <div class="card__title">Tática</div>
-          <div class="card__subtitle">${club?.name || clubId} • Escalação 11 + 7</div>
+          <div class="card__subtitle">Ajuste formação e estilo do time (MVP)</div>
         </div>
-        <span class="badge">v0.8</span>
+        <span class="badge">Tactics</span>
       </div>
 
       <div class="card__body">
-        <div class="grid grid--2">
-
+        <div class="grid grid--2" style="margin-bottom:10px">
           <div class="card" style="border-radius:18px">
             <div class="card__body">
-              <div style="font-weight:900">Filosofia</div>
-              <div style="height:8px"></div>
-
-              <div style="font-weight:900">Estilo</div>
-              <div style="height:6px"></div>
-              <select class="select" id="style">
-                <option value="DEFENSIVE">Defensivo</option>
-                <option value="BALANCED">Balanceado</option>
-                <option value="ATTACKING">Ofensivo</option>
-              </select>
-
-              <div style="height:10px"></div>
-
-              <div style="font-weight:900">Pressão</div>
-              <div style="height:6px"></div>
-              <select class="select" id="pressing">
-                <option value="LOW">Baixa</option>
-                <option value="NORMAL">Normal</option>
-                <option value="HIGH">Alta</option>
-              </select>
-
-              <div style="height:10px"></div>
-
-              <div style="font-weight:900">Ritmo</div>
-              <div style="height:6px"></div>
-              <select class="select" id="tempo">
-                <option value="SLOW">Lento</option>
-                <option value="NORMAL">Normal</option>
-                <option value="FAST">Rápido</option>
-              </select>
-
-              <div style="height:14px"></div>
-
-              <div style="font-weight:900">Formação</div>
-              <div style="height:6px"></div>
-              <select class="select" id="formation"></select>
-
-              <div style="height:12px"></div>
-              <div class="grid grid--2">
-                <button class="btn" id="autopick">Auto-escalar</button>
-                <button class="btn btn--primary" id="save">Salvar</button>
-              </div>
-
-              <div style="height:10px"></div>
-              <div class="muted" style="font-size:12px;line-height:1.35" id="validation"></div>
+              <div class="muted" style="font-size:12px;margin-bottom:6px">Formação</div>
+              <select id="formation" class="select"></select>
             </div>
           </div>
 
           <div class="card" style="border-radius:18px">
             <div class="card__body">
-              <div style="font-weight:900">Titulares</div>
-              <div class="muted" style="font-size:12px;margin-top:6px">Fora de posição gera penalidade no desempenho.</div>
-              <div style="height:10px"></div>
-              <div class="list" id="starters"></div>
-
-              <div style="height:14px"></div>
-              <div style="font-weight:900">Banco (7)</div>
-              <div style="height:10px"></div>
-              <div class="list" id="bench"></div>
+              <div class="muted" style="font-size:12px;margin-bottom:6px">Estilo</div>
+              <select id="style" class="select"></select>
             </div>
           </div>
-
         </div>
 
-        <div style="height:12px"></div>
+        <div class="grid grid--2" style="margin-bottom:10px">
+          <div class="card" style="border-radius:18px">
+            <div class="card__body">
+              <div class="muted" style="font-size:12px;margin-bottom:6px">Pressão</div>
+              <select id="pressing" class="select"></select>
+            </div>
+          </div>
+
+          <div class="card" style="border-radius:18px">
+            <div class="card__body">
+              <div class="muted" style="font-size:12px;margin-bottom:6px">Velocidade</div>
+              <select id="tempo" class="select"></select>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="border-radius:18px;margin-bottom:10px">
+          <div class="card__body">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+              <div style="min-width:0">
+                <div style="font-weight:900">Largura do time</div>
+                <div class="muted" style="font-size:12px;opacity:.85">0 = fechado • 100 = bem aberto</div>
+              </div>
+              <div style="min-width:120px;text-align:right">
+                <span class="badge" id="widthVal">50</span>
+              </div>
+            </div>
+            <input id="width" type="range" min="0" max="100" value="50" style="width:100%;margin-top:10px" />
+          </div>
+        </div>
+
+        <div class="card" style="border-radius:18px">
+          <div class="card__body">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+              <div style="min-width:0">
+                <div style="font-weight:900">Altura da linha</div>
+                <div class="muted" style="font-size:12px;opacity:.85">0 = recuado • 100 = avançado</div>
+              </div>
+              <div style="min-width:120px;text-align:right">
+                <span class="badge" id="depthVal">50</span>
+              </div>
+            </div>
+            <input id="depth" type="range" min="0" max="100" value="50" style="width:100%;margin-top:10px" />
+          </div>
+        </div>
+
+        <div style="height:10px"></div>
+
+        <div class="card" style="border-radius:18px">
+          <div class="card__body">
+            <div style="font-weight:900;margin-bottom:6px">Resumo</div>
+            <div class="muted" id="summary" style="font-size:12px;line-height:1.35"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card__footer" style="display:flex;gap:10px;justify-content:space-between">
         <button class="btn" id="back">Voltar</button>
+        <button class="btn btn--primary" id="save">Salvar</button>
       </div>
     </div>
   `;
+
+  shell.mount(el);
 
   const $formation = el.querySelector("#formation");
   const $style = el.querySelector("#style");
   const $pressing = el.querySelector("#pressing");
   const $tempo = el.querySelector("#tempo");
-  const $starters = el.querySelector("#starters");
-  const $bench = el.querySelector("#bench");
-  const $validation = el.querySelector("#validation");
+  const $width = el.querySelector("#width");
+  const $depth = el.querySelector("#depth");
+  const $widthVal = el.querySelector("#widthVal");
+  const $depthVal = el.querySelector("#depthVal");
+  const $summary = el.querySelector("#summary");
 
-  // elenco (gerado/pack) já vem com status no rosterService
-  function getSquad() {
-    return deriveUserSquad({ pack, state: store.getState() });
+  function fillSelect(selectEl, items, selectedId) {
+    selectEl.innerHTML = items.map(it => {
+      const sel = it.id === selectedId ? "selected" : "";
+      return `<option value="${safeText(it.id)}" ${sel}>${safeText(it.name)}</option>`;
+    }).join("");
   }
 
-  function fillFormationOptions() {
-    const current = store.getState().career.lineup.formationId;
-    $formation.innerHTML = FORMATIONS.map(f => opt(f.name, f.id, f.id === current)).join("");
+  function getStateNow() {
+    return ensureCareerDefaults(store.getState());
   }
 
-  function syncTacticsSelects() {
-    const t = store.getState().career.tactics || {};
-    $style.value = t.style || "BALANCED";
-    $pressing.value = t.pressing || "NORMAL";
-    $tempo.value = t.tempo || "NORMAL";
+  function renderFromState() {
+    const st = getStateNow();
+    const formationId = st.career.lineup.formationId;
+    const tactics = st.career.tactics;
+
+    fillSelect($formation, FORMATIONS, formationId);
+    fillSelect($style, STYLE, tactics.style);
+    fillSelect($pressing, PRESSING, tactics.pressing);
+    fillSelect($tempo, TEMPO, tactics.tempo);
+
+    $width.value = String(tactics.width);
+    $depth.value = String(tactics.depth);
+    $widthVal.textContent = String(tactics.width);
+    $depthVal.textContent = String(tactics.depth);
+
+    const fName = FORMATIONS.find(f => f.id === formationId)?.name || formationId;
+    const sName = STYLE.find(x => x.id === tactics.style)?.name || tactics.style;
+    const pName = PRESSING.find(x => x.id === tactics.pressing)?.name || tactics.pressing;
+    const tName = TEMPO.find(x => x.id === tactics.tempo)?.name || tactics.tempo;
+
+    $summary.textContent =
+      `Formação: ${fName} • Estilo: ${sName} • Pressão: ${pName} • Velocidade: ${tName} • Largura: ${tactics.width} • Linha: ${tactics.depth}`;
   }
 
-  function makePlayerSelect({ squad, selectedId, onChange }) {
-    const sel = document.createElement("select");
-    sel.className = "select";
-    const options = [opt("— vazio —", "", !selectedId)]
-      .concat(squad.map(p => opt(playerLabel(p), p.id, p.id === selectedId)));
-    sel.innerHTML = options.join("");
-    sel.addEventListener("change", () => onChange(sel.value || null));
-    return sel;
+  function patchState(mutator) {
+    const st = getStateNow();
+    const next = structuredClone(st);
+    mutator(next);
+    store.setState(ensureCareerDefaults(next));
+    renderFromState();
   }
-
-  function renderAll() {
-    const s = store.getState();
-    const lineup = s.career.lineup;
-    const tactics = s.career.tactics || {};
-    const squad = getSquad();
-    const squadById = new Map(squad.map(p => [p.id, p]));
-    const f = formationById(lineup.formationId);
-
-    // validação
-    const val = validateLineup({ formationId: lineup.formationId, squadById, lineup });
-    $validation.textContent = val.ok
-      ? "OK: escalação válida."
-      : `Ajustes necessários:\n• ${val.issues.join("\n• ")}`;
-
-    // titulares
-    $starters.innerHTML = "";
-    for (const role of f.roles) {
-      const card = document.createElement("div");
-      card.className = "item";
-      const currentId = lineup.starters[role.key] || "";
-
-      const left = document.createElement("div");
-      left.className = "item__left";
-      left.innerHTML = `
-        <div>
-          <div style="font-weight:900">${role.label} <span class="muted" style="font-weight:700">(${role.key})</span></div>
-          <div class="muted" style="font-size:12px">Permitido: ${role.allowed.join(", ")}</div>
-        </div>
-      `;
-
-      const right = document.createElement("div");
-      right.style.minWidth = "260px";
-      right.appendChild(
-        makePlayerSelect({
-          squad,
-          selectedId: currentId,
-          onChange: (pid) => {
-            const next = structuredClone(store.getState());
-            next.career.lineup.starters[role.key] = pid || null;
-            store.setState(next);
-            renderAll();
-          }
-        })
-      );
-
-      card.appendChild(left);
-      card.appendChild(right);
-      $starters.appendChild(card);
-    }
-
-    // banco
-    $bench.innerHTML = "";
-    const benchSize = f.benchSize;
-    for (let i = 0; i < benchSize; i++) {
-      const card = document.createElement("div");
-      card.className = "item";
-
-      const left = document.createElement("div");
-      left.className = "item__left";
-      left.innerHTML = `
-        <div>
-          <div style="font-weight:900">Banco ${i + 1}</div>
-          <div class="muted" style="font-size:12px">Recomendado: 1 GK, 2 DEF, 2 MID, 2 ATA</div>
-        </div>
-      `;
-
-      const currentId = (lineup.bench[i] || "");
-      const right = document.createElement("div");
-      right.style.minWidth = "260px";
-      right.appendChild(
-        makePlayerSelect({
-          squad,
-          selectedId: currentId,
-          onChange: (pid) => {
-            const next = structuredClone(store.getState());
-            const b = next.career.lineup.bench.slice();
-            b[i] = pid || null;
-            next.career.lineup.bench = b;
-            store.setState(next);
-            renderAll();
-          }
-        })
-      );
-
-      card.appendChild(left);
-      card.appendChild(right);
-      $bench.appendChild(card);
-    }
-
-    // sincroniza selects de filosofia
-    syncTacticsSelects();
-  }
-
-  el.querySelector("#back").addEventListener("click", () => navigate("#/hub"));
 
   $formation.addEventListener("change", () => {
-    const next = structuredClone(store.getState());
-    next.career.lineup.formationId = $formation.value;
-    // reseta titulares/banco ao trocar formação (evita lixo e duplicação)
-    next.career.lineup.starters = {};
-    next.career.lineup.bench = [];
-    store.setState(next);
-    renderAll();
+    patchState((s) => { s.career.lineup.formationId = $formation.value; });
   });
 
   $style.addEventListener("change", () => {
-    const next = structuredClone(store.getState());
-    next.career.tactics.style = $style.value;
-    store.setState(next);
-  });
-  $pressing.addEventListener("change", () => {
-    const next = structuredClone(store.getState());
-    next.career.tactics.pressing = $pressing.value;
-    store.setState(next);
-  });
-  $tempo.addEventListener("change", () => {
-    const next = structuredClone(store.getState());
-    next.career.tactics.tempo = $tempo.value;
-    store.setState(next);
+    patchState((s) => { s.career.tactics.style = $style.value; });
   });
 
-  el.querySelector("#autopick").addEventListener("click", () => {
-    const squad = getSquad();
-    const nextLineup = autoPickLineup({ formationId: store.getState().career.lineup.formationId, squad });
-    const next = structuredClone(store.getState());
-    next.career.lineup = { ...next.career.lineup, ...nextLineup };
-    store.setState(next);
-    renderAll();
-    alert("Auto-escalar aplicado.");
+  $pressing.addEventListener("change", () => {
+    patchState((s) => { s.career.tactics.pressing = $pressing.value; });
   });
+
+  $tempo.addEventListener("change", () => {
+    patchState((s) => { s.career.tactics.tempo = $tempo.value; });
+  });
+
+  $width.addEventListener("input", () => {
+    const v = clamp(Number($width.value), 0, 100);
+    $widthVal.textContent = String(v);
+    patchState((s) => { s.career.tactics.width = v; });
+  });
+
+  $depth.addEventListener("input", () => {
+    const v = clamp(Number($depth.value), 0, 100);
+    $depthVal.textContent = String(v);
+    patchState((s) => { s.career.tactics.depth = v; });
+  });
+
+  el.querySelector("#back").addEventListener("click", () => navigate("#/hub"));
 
   el.querySelector("#save").addEventListener("click", () => {
-    repos.saves.writeSlot(store.getState().career.slot, store.getState());
-    alert("Tática salva.");
+    // aqui só salva no state (persistência fica no botão salvar do hub)
+    alert("Tática salva no seu progresso. Use 'Salvar' no Hub para gravar no slot.");
+    navigate("#/hub");
   });
 
-  fillFormationOptions();
-  shell.mount(el);
-  renderAll();
-
-  return { render() {} };
+  renderFromState();
+  return { render: renderFromState };
 }
