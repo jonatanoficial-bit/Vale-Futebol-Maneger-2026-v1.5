@@ -24,8 +24,14 @@ import { screenAdmin } from "../ui/screens/admin.js";
 
 import { createRepositories } from "../data/repositories.js";
 
+function structuredCloneSafe(obj) {
+  // Alguns webviews antigos podem não ter structuredClone.
+  if (typeof globalThis.structuredClone === "function") return globalThis.structuredClone(obj);
+  return JSON.parse(JSON.stringify(obj));
+}
+
 function migrateState(s) {
-  const next = structuredClone(s || {});
+  const next = structuredCloneSafe(s || {});
   if (!next.app) next.app = { build: "v1.0.1", ready: false, selectedPackId: null };
   if (!next.career) next.career = { slot: null, coach: null, clubId: null };
 
@@ -46,8 +52,8 @@ function migrateState(s) {
 
   if (!next.career.economy) {
     next.career.economy = {
-      balance: 15_000_000,
-      sponsor: { name: "Vale Bank (MVP)", monthly: 1_250_000, perfBonus: 75_000 },
+      balance: 15000000,
+      sponsor: { name: "Vale Bank (MVP)", monthly: 1250000, perfBonus: 75000 },
       lastSponsorMonth: null,
       lastMatchIncome: 0,
       ledger: [],
@@ -56,10 +62,10 @@ function migrateState(s) {
     };
   } else {
     const e = next.career.economy;
-    if (typeof e.balance !== "number") e.balance = 15_000_000;
-    if (!e.sponsor) e.sponsor = { name: "Vale Bank (MVP)", monthly: 1_250_000, perfBonus: 75_000 };
-    if (typeof e.sponsor.monthly !== "number") e.sponsor.monthly = 1_250_000;
-    if (typeof e.sponsor.perfBonus !== "number") e.sponsor.perfBonus = 75_000;
+    if (typeof e.balance !== "number") e.balance = 15000000;
+    if (!e.sponsor) e.sponsor = { name: "Vale Bank (MVP)", monthly: 1250000, perfBonus: 75000 };
+    if (typeof e.sponsor.monthly !== "number") e.sponsor.monthly = 1250000;
+    if (typeof e.sponsor.perfBonus !== "number") e.sponsor.perfBonus = 75000;
     if (!("lastSponsorMonth" in e)) e.lastSponsorMonth = null;
     if (!("lastMatchIncome" in e)) e.lastMatchIncome = 0;
     if (!Array.isArray(e.ledger)) e.ledger = [];
@@ -91,64 +97,72 @@ function migrateState(s) {
   if (!root) throw new Error("Elemento #app não encontrado.");
 
   const shell = createAppShell(root);
-  const store = createStore();
-  const repos = await createRepositories({ logger });
 
-  const screens = registerScreens(shell, store, repos, logger);
-  screens.add("splash", screenSplash);
-  screens.add("dataPackSelect", screenDataPackSelect);
-  screens.add("saveSlots", screenSaveSlots);
-  screens.add("careerCreate", screenCareerCreate);
-  screens.add("clubSelect", screenClubSelect);
-  screens.add("tutorial", screenTutorial);
-  screens.add("hub", screenHub);
-  screens.add("squad", screenSquad);
-  screens.add("player", screenPlayer);
-  screens.add("tactics", screenTactics);
-  screens.add("training", screenTraining);
-  screens.add("competitions", screenCompetitions);
-  screens.add("transfers", screenTransfers);
-  screens.add("finance", screenFinance);
-  screens.add("admin", screenAdmin);
+  // Se algo der errado em qualquer ponto do boot, mostramos fatal (sem tela vazia)
+  try {
+    const store = createStore();
 
-  const router = createRouter({
-    onRoute: (route) => screens.show(route.name, route.params),
-    logger
-  });
+    const repos = await createRepositories({ logger });
 
-  store.setState(
-    migrateState({
-      app: { build: "v1.0.1", ready: false, selectedPackId: null },
-      career: {
-        slot: null,
-        coach: null,
-        clubId: null,
-        lineup: { formationId: "4-3-3", starters: {}, bench: [] },
-        tactics: { style: "BALANCED", pressing: "NORMAL", tempo: "NORMAL" },
-        roster: { signedPlayers: [], releasedIds: [], transactions: [] },
-        economy: {
-          balance: 15_000_000,
-          sponsor: { name: "Vale Bank (MVP)", monthly: 1_250_000, perfBonus: 75_000 },
-          lastSponsorMonth: null,
-          lastMatchIncome: 0,
-          ledger: [],
-          wageMonthlyEstimate: 0,
-          lastWageMonth: null
-        },
-        playerStatus: {},
-        training: { plan: "BALANCED", focus: "GENERAL", lastAppliedIso: null },
-        transfers: { marketSeed: "GLOBAL", market: [], offers: [], inbox: [] },
-        seasonV3: null,
-        seasonV4: null,
-        seasonV5: null
-      }
-    })
-  );
+    const screens = registerScreens(shell, store, repos, logger);
+    screens.add("splash", screenSplash);
+    screens.add("dataPackSelect", screenDataPackSelect);
+    screens.add("saveSlots", screenSaveSlots);
+    screens.add("careerCreate", screenCareerCreate);
+    screens.add("clubSelect", screenClubSelect);
+    screens.add("tutorial", screenTutorial);
+    screens.add("hub", screenHub);
+    screens.add("squad", screenSquad);
+    screens.add("player", screenPlayer);
+    screens.add("tactics", screenTactics);
+    screens.add("training", screenTraining);
+    screens.add("competitions", screenCompetitions);
+    screens.add("transfers", screenTransfers);
+    screens.add("finance", screenFinance);
+    screens.add("admin", screenAdmin);
 
-  shell.setTopbar({ title: "Vale Futebol Manager", subtitle: "Carreira • Treinador" });
-  shell.setFooter({ left: "Offline • GitHub Pages", right: "v1.0.1" });
+    const router = createRouter({
+      onRoute: (route) => screens.show(route.name, route.params),
+      logger
+    });
 
-  store.setState({ ...store.getState(), app: { ...store.getState().app, ready: true } });
+    store.setState(
+      migrateState({
+        app: { build: "v1.0.1", ready: false, selectedPackId: null },
+        career: {
+          slot: null,
+          coach: null,
+          clubId: null,
+          lineup: { formationId: "4-3-3", starters: {}, bench: [] },
+          tactics: { style: "BALANCED", pressing: "NORMAL", tempo: "NORMAL" },
+          roster: { signedPlayers: [], releasedIds: [], transactions: [] },
+          economy: {
+            balance: 15000000,
+            sponsor: { name: "Vale Bank (MVP)", monthly: 1250000, perfBonus: 75000 },
+            lastSponsorMonth: null,
+            lastMatchIncome: 0,
+            ledger: [],
+            wageMonthlyEstimate: 0,
+            lastWageMonth: null
+          },
+          playerStatus: {},
+          training: { plan: "BALANCED", focus: "GENERAL", lastAppliedIso: null },
+          transfers: { marketSeed: "GLOBAL", market: [], offers: [], inbox: [] },
+          seasonV3: null,
+          seasonV4: null,
+          seasonV5: null
+        }
+      })
+    );
 
-  router.start({ defaultRoute: "#/splash" });
+    shell.setTopbar({ title: "Vale Futebol Manager", subtitle: "Carreira • Treinador" });
+    shell.setFooter({ left: "Offline • GitHub Pages", right: "v1.0.1" });
+
+    store.setState({ ...store.getState(), app: { ...store.getState().app, ready: true } });
+
+    router.start({ defaultRoute: "#/splash" });
+  } catch (err) {
+    logger.error("BOOT_FATAL", err);
+    shell.showFatal(err);
+  }
 })();
