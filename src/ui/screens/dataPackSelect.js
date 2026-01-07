@@ -1,47 +1,65 @@
-// /src/ui/screens/dataPackSelect.js
+// src/ui/screens/dataPackSelect.js
 
-export async function screenDataPackSelect({ el, store, repos, navigate }) {
-  const packs = Array.isArray(repos?.dataPacks) ? repos.dataPacks : [];
+import { escapeHtml } from "../util/escapeHtml.js";
 
-  el.innerHTML = `
-    <div class="card">
-      <h2>Escolha o Pacote de Dados</h2>
-      <p>Atualizações (elenco/competições) virão por DLC</p>
-      <p>${packs.length} pack(s)</p>
+export async function screenDataPackSelect({ store, repos, navigate }) {
+  const packsRaw =
+    (typeof repos?.listPacks === "function" ? await repos.listPacks() : null) ??
+    repos?.dataPacks ??
+    [];
 
-      <div class="list">
-        ${
-          packs.length === 0
-            ? `<div class="muted">Nenhum pacote disponível.</div>`
-            : packs
-                .map(
-                  (p) => `
-          <div class="card">
-            <strong>${p.name}</strong><br/>
-            ${p.recommended ? "<em>Recomendado</em><br/>" : ""}
-            <small>ID: ${p.id}</small><br/>
-            <button data-id="${p.id}">Selecionar</button>
+  const packs = Array.isArray(packsRaw) ? packsRaw : (packsRaw?.packs ?? []);
+
+  const items = packs
+    .map((p) => {
+      const title = escapeHtml(p.title ?? p.name ?? p.id ?? "Pack");
+      const desc = escapeHtml(p.description ?? "");
+      const id = escapeHtml(p.id ?? "");
+
+      return `
+        <div class="card card--pad">
+          <div class="row row--between row--center">
+            <div>
+              <div class="title">${title}</div>
+              ${desc ? `<div class="muted">${desc}</div>` : ""}
+              <div class="muted">ID: <span class="mono">${id}</span></div>
+            </div>
+            <button class="btn btn--primary" data-pack="${id}">Selecionar</button>
           </div>
-        `
-                )
-                .join("")
-        }
+        </div>
+      `;
+    })
+    .join("");
+
+  const el = document.createElement("div");
+  el.className = "screen";
+  el.innerHTML = `
+    <div class="panel">
+      <div class="panel__head">
+        <div class="panel__title">Escolha o Pacote de Dados</div>
+        <div class="panel__subtitle">Atualizações (elenco/competições) virão por DLC</div>
       </div>
 
-      <button id="back">Voltar</button>
+      <div class="panel__body">
+        <div class="muted">${packs.length} pack(s)</div>
+        <div class="stack">${items || `<div class="card card--pad"><div class="muted">Nenhum pack encontrado.</div></div>`}</div>
+
+        <div class="row row--between" style="margin-top:12px">
+          <button class="btn" id="back">Voltar</button>
+        </div>
+      </div>
     </div>
   `;
 
-  el.querySelectorAll("button[data-id]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const packId = btn.dataset.id;
-      store.setState({
-        ...store.getState(),
-        app: { ...store.getState().app, selectedPackId: packId },
-      });
+  el.querySelectorAll("[data-pack]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const packId = btn.getAttribute("data-pack") || "";
+      store.set((s) => ({ ...s, selectedPackId: packId }));
       navigate("#/saveSlots");
     });
   });
 
-  el.querySelector("#back").addEventListener("click", () => navigate("#/splash"));
+  el.querySelector("#back").addEventListener("click", () => navigate("#/"));
+
+  return el;
 }

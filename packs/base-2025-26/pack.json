@@ -1,0 +1,21 @@
+{
+  "id": "base-2025-26",
+  "name": "Base 2025/2026 (Brasil MVP)",
+  "content": {
+    "clubs": [
+      {"id":"FLA","name":"Flamengo"},
+      {"id":"PAL","name":"Palmeiras"},
+      {"id":"COR","name":"Corinthians"},
+      {"id":"SAO","name":"São Paulo"},
+      {"id":"SAN","name":"Santos"},
+      {"id":"CAM","name":"Atlético-MG"},
+      {"id":"CRU","name":"Cruzeiro"},
+      {"id":"GRE","name":"Grêmio"},
+      {"id":"INT","name":"Internacional"},
+      {"id":"VAS","name":"Vasco"},
+      {"id":"BOT","name":"Botafogo"},
+      {"id":"FLU","name":"Fluminense"}
+    ],
+    "players": []
+  }
+}
