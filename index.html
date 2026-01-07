@@ -10,9 +10,139 @@
   <link rel="stylesheet" href="./src/ui/styles/tokens.css" />
   <link rel="stylesheet" href="./src/ui/styles/theme.css" />
   <link rel="stylesheet" href="./src/ui/styles/components.css" />
+
+  <style>
+    /* Fallback de erro caso o módulo não carregue */
+    .boot-fatal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(0,0,0,.70);
+      z-index: 999999;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    }
+    .boot-fatal--show { display: flex; }
+    .boot-fatal__card {
+      width: min(920px, 100%);
+      background: rgba(18,18,24,.92);
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 18px;
+      padding: 16px;
+      color: #fff;
+      box-shadow: 0 20px 80px rgba(0,0,0,.45);
+    }
+    .boot-fatal__title { font-weight: 900; font-size: 18px; margin: 0 0 6px; }
+    .boot-fatal__sub { opacity: .85; margin: 0 0 12px; font-size: 13px; line-height: 1.35; }
+    .boot-fatal__pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: rgba(0,0,0,.35);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 12px;
+      line-height: 1.35;
+      max-height: 50vh;
+      overflow: auto;
+      color: #e7e7e7;
+    }
+    .boot-fatal__row { display:flex; gap:10px; flex-wrap:wrap; margin-top: 12px; }
+    .boot-fatal__btn {
+      appearance: none;
+      border: 0;
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-weight: 800;
+      cursor: pointer;
+      background: rgba(255,255,255,.12);
+      color: white;
+    }
+  </style>
 </head>
 <body>
   <div id="app"></div>
-  <script type="module" src="./src/app/bootstrap.js"></script>
+
+  <div class="boot-fatal" id="bootFatal" aria-hidden="true">
+    <div class="boot-fatal__card">
+      <div class="boot-fatal__title">Falha ao iniciar o jogo</div>
+      <div class="boot-fatal__sub">
+        O JavaScript falhou antes de renderizar a interface. Copie o erro abaixo e me envie.
+      </div>
+      <pre class="boot-fatal__pre" id="bootFatalPre">-</pre>
+      <div class="boot-fatal__row">
+        <button class="boot-fatal__btn" id="bootCopy">Copiar erro</button>
+        <button class="boot-fatal__btn" id="bootReload">Recarregar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var fatal = document.getElementById("bootFatal");
+      var pre = document.getElementById("bootFatalPre");
+      var copyBtn = document.getElementById("bootCopy");
+      var reloadBtn = document.getElementById("bootReload");
+
+      function showFatal(payload) {
+        try {
+          pre.textContent = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
+        } catch (e) {
+          pre.textContent = String(payload);
+        }
+        fatal.setAttribute("aria-hidden", "false");
+        fatal.classList.add("boot-fatal--show");
+      }
+
+      window.__BOOT_FATAL__ = showFatal;
+
+      window.addEventListener("error", function (ev) {
+        showFatal({
+          type: "error",
+          message: ev && ev.message ? ev.message : "Erro desconhecido",
+          filename: ev && ev.filename ? ev.filename : null,
+          lineno: ev && ev.lineno ? ev.lineno : null,
+          colno: ev && ev.colno ? ev.colno : null,
+          stack: ev && ev.error && ev.error.stack ? ev.error.stack : null,
+          href: window.location.href,
+          ua: navigator.userAgent
+        });
+      });
+
+      window.addEventListener("unhandledrejection", function (ev) {
+        var reason = ev && ev.reason ? ev.reason : "Promise rejeitada sem reason";
+        showFatal({
+          type: "unhandledrejection",
+          message: reason && reason.message ? reason.message : String(reason),
+          stack: reason && reason.stack ? reason.stack : null,
+          href: window.location.href,
+          ua: navigator.userAgent
+        });
+      });
+
+      copyBtn.addEventListener("click", function () {
+        var txt = pre.textContent || "";
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(txt).catch(function(){});
+        }
+      });
+
+      reloadBtn.addEventListener("click", function () { window.location.reload(); });
+
+      // IMPORT do app (se falhar, mostra overlay)
+      try {
+        var url = "./src/app/bootstrap.js";
+        // Usar import() dentro de <script> normal não funciona, então criamos <script type="module">
+        var s = document.createElement("script");
+        s.type = "module";
+        s.textContent = "import('" + url + "').catch(e => window.__BOOT_FATAL__({type:'module_import', message: e?.message || String(e), stack: e?.stack || null, href: location.href, ua: navigator.userAgent}));";
+        document.body.appendChild(s);
+      } catch (e) {
+        showFatal({ type: "loader", message: e.message, stack: e.stack, href: location.href, ua: navigator.userAgent });
+      }
+    })();
+  </script>
 </body>
 </html>
