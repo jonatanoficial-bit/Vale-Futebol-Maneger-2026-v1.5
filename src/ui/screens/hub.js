@@ -23,9 +23,12 @@ export async function screenHub({ shell, store, navigate }) {
     <div class="card">
       <div class="card__header">
         <div style="display:flex;align-items:center;gap:10px;min-width:0">
-          <div class="logoBox">
-            <img alt="${safeText(club)}" src="assets/logos/${safeText(club)}.png" onerror="this.style.opacity=.2" />
-          </div>
+          <img
+            class="logo"
+            alt="${safeText(club)}"
+            src="assets/logos/${safeText(club)}.png"
+            onerror="this.style.opacity=.2"
+          />
           <div style="min-width:0">
             <div class="card__title">${safeText(club)}</div>
             <div class="card__subtitle">Treinador: ${safeText(coach)}</div>
