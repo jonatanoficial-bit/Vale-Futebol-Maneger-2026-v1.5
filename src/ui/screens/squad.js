@@ -1,139 +1,166 @@
-import { deriveUserSquad, rosterStats } from "../../domain/roster/rosterService.js";
+// /src/ui/screens/squad.js
+
+function safeText(v) {
+  return String(v ?? "").replace(/[<>&"]/g, (c) => ({
+    "<": "&lt;",
+    ">": "&gt;",
+    "&": "&amp;",
+    '"': "&quot;"
+  }[c]));
+}
+
+function getPlayersArray(pack) {
+  const candidates = [
+    pack?.content?.players?.players,
+    pack?.content?.players,
+    pack?.players?.players,
+    pack?.players,
+    pack?.content?.data?.players?.players,
+    pack?.content?.data?.players
+  ];
+  for (const p of candidates) if (Array.isArray(p)) return p;
+  return [];
+}
+
+function playerClubId(player) {
+  return player?.clubId || player?.club || player?.team || null;
+}
+
+function playerName(player) {
+  return player?.name || player?.fullName || "Jogador";
+}
+
+function playerPos(player) {
+  return player?.position || player?.pos || "-";
+}
+
+function playerOvr(player) {
+  return Number(player?.overall ?? player?.ovr ?? 0);
+}
 
 export async function screenSquad({ shell, repos, store, navigate }) {
   const state = store.getState();
-  if (!state.app.selectedPackId) { navigate("#/dataPackSelect"); return { render() {} }; }
-  if (!state.career?.clubId) { navigate("#/hub"); return { render() {} }; }
 
-  const pack = await repos.loadPack(state.app.selectedPackId);
-  const clubId = state.career.clubId;
-
-  const clubs = pack.content.clubs.clubs;
-  const club = clubs.find(c => c.id === clubId);
-
-  const squad = deriveUserSquad({ pack, state: store.getState() });
-  const stats = rosterStats(squad);
-
-  function logoSrc(id) {
-    return repos.resolveLogoSrc(id);
-  }
-
-  function faceSrc(player) {
-    // se você tiver faces no /assets/face/<ID>.png, pode ligar aqui
-    return null;
-  }
+  // Guard rails
+  if (!state?.app?.selectedPackId) { navigate("#/dataPackSelect"); return { render() {} }; }
+  if (!state?.career?.clubId) { navigate("#/clubSelect"); return { render() {} }; }
 
   const el = document.createElement("div");
   el.className = "grid";
+
   el.innerHTML = `
     <div class="card">
       <div class="card__header">
-        <div class="item__left" style="gap:12px">
-          <img class="logo" src="${logoSrc(club?.logoAssetId || clubId)}" alt="logo" onerror="this.style.opacity=.25" />
-          <div>
-            <div class="card__title">Elenco</div>
-            <div class="card__subtitle">${club?.name || clubId} • ${stats.size} jogador(es) • OVR médio ${stats.avg}</div>
-          </div>
+        <div>
+          <div class="card__title">Elenco</div>
+          <div class="card__subtitle" id="subtitle">Carregando jogadores...</div>
         </div>
         <span class="badge">Squad</span>
       </div>
 
       <div class="card__body">
-        <div class="card" style="border-radius:18px">
-          <div class="card__body">
-            <div style="font-weight:900">Pesquisar</div>
-            <div style="height:8px"></div>
-            <input class="input" id="q" placeholder="Nome, posição ou overall (ex: ST, 82)" />
-            <div style="height:10px"></div>
-            <div style="font-weight:900">Ordenação</div>
-            <div style="height:8px"></div>
-            <select class="select" id="sort">
-              <option value="OVR_DESC">Overall (maior)</option>
-              <option value="OVR_ASC">Overall (menor)</option>
-              <option value="POS">Posição</option>
-              <option value="NAME">Nome</option>
-            </select>
-          </div>
+        <div class="grid grid--2" style="margin-bottom:10px">
+          <input id="q" class="input" placeholder="Buscar nome ou posição" />
+          <select id="order" class="select">
+            <option value="ovr">Overall (maior)</option>
+            <option value="name">Nome (A–Z)</option>
+            <option value="pos">Posição</option>
+          </select>
         </div>
 
-        <div style="height:12px"></div>
-        <div class="list" id="list"></div>
+        <div id="list">
+          <div class="muted">Carregando elenco...</div>
+        </div>
+      </div>
 
-        <div style="height:12px"></div>
+      <div class="card__footer">
         <button class="btn" id="back">Voltar</button>
       </div>
     </div>
   `;
 
-  const $q = el.querySelector("#q");
-  const $sort = el.querySelector("#sort");
+  el.querySelector("#back").addEventListener("click", () => navigate("#/hub"));
+  shell.mount(el);
+
   const $list = el.querySelector("#list");
+  const $subtitle = el.querySelector("#subtitle");
+  const $q = el.querySelector("#q");
+  const $order = el.querySelector("#order");
 
-  function applySort(arr, mode) {
-    const a = arr.slice();
-    if (mode === "OVR_ASC") a.sort((x,y)=>(x.overall-y.overall) || x.name.localeCompare(y.name,"pt-BR"));
-    else if (mode === "POS") a.sort((x,y)=>String(x.positions?.[0]||"").localeCompare(String(y.positions?.[0]||""),"pt-BR") || (y.overall-x.overall));
-    else if (mode === "NAME") a.sort((x,y)=>x.name.localeCompare(y.name,"pt-BR"));
-    else a.sort((x,y)=>(y.overall-x.overall) || x.name.localeCompare(y.name,"pt-BR"));
-    return a;
-  }
+  let players = [];
 
-  function filter(arr, query) {
-    const q = String(query || "").trim().toLowerCase();
-    if (!q) return arr;
-    return arr.filter(p => {
-      const name = String(p.name || "").toLowerCase();
-      const pos = String((p.positions && p.positions[0]) || "").toLowerCase();
-      const ovr = String(p.overall || "");
-      return name.includes(q) || pos.includes(q) || ovr === q;
-    });
+  try {
+    const pack = await repos.loadPack(state.app.selectedPackId);
+    const allPlayers = getPlayersArray(pack);
+
+    // Filtra apenas jogadores do clube atual
+    players = allPlayers.filter(p => playerClubId(p) === state.career.clubId);
+
+    $subtitle.textContent = `${players.length} jogador(es)`;
+  } catch (err) {
+    $subtitle.textContent = "Erro ao carregar elenco";
+    $list.innerHTML = `
+      <div class="muted">
+        Falha ao carregar jogadores.<br/>
+        <b>${safeText(err?.message || err)}</b>
+      </div>
+    `;
+    return { render() {} };
   }
 
   function render() {
-    const items = applySort(filter(squad, $q.value), $sort.value);
+    let view = Array.isArray(players) ? [...players] : [];
 
-    $list.innerHTML = "";
-    for (const p of items) {
-      const pos = (p.positions && p.positions[0]) || "-";
-      const item = document.createElement("div");
-      item.className = "item";
-      item.innerHTML = `
-        <div class="item__left" style="gap:12px">
-          <div class="badge" style="min-width:56px;text-align:center">${pos}</div>
-          <div>
-            <div style="font-weight:900">${p.name}</div>
-            <div class="muted" style="font-size:12px">
-              OVR ${p.overall} • ${p.age || "-"} anos • ${p.nationality || "—"} ${p.generated ? "• Gerado" : ""}
-            </div>
-          </div>
-        </div>
-        <span class="badge">${p.overall}</span>
-      `;
-      item.addEventListener("click", () => navigate(`#/player?id=${encodeURIComponent(p.id)}`));
-      $list.appendChild(item);
+    const q = ($q.value || "").toLowerCase();
+    if (q) {
+      view = view.filter(p =>
+        playerName(p).toLowerCase().includes(q) ||
+        playerPos(p).toLowerCase().includes(q)
+      );
     }
 
-    if (items.length === 0) {
+    switch ($order.value) {
+      case "name":
+        view.sort((a, b) => playerName(a).localeCompare(playerName(b), "pt-BR"));
+        break;
+      case "pos":
+        view.sort((a, b) => playerPos(a).localeCompare(playerPos(b), "pt-BR"));
+        break;
+      default:
+        view.sort((a, b) => playerOvr(b) - playerOvr(a));
+    }
+
+    if (!view.length) {
       $list.innerHTML = `
-        <div class="item">
-          <div class="item__left">
-            <div>
-              <div style="font-weight:900">Nenhum jogador encontrado</div>
-              <div class="muted" style="font-size:12px">Ajuste a busca.</div>
+        <div class="card" style="border-radius:18px">
+          <div class="card__body">
+            <div style="font-weight:900">Nenhum jogador encontrado</div>
+            <div class="muted" style="font-size:12px;margin-top:6px">
+              Este clube ainda não possui jogadores no pack atual.
             </div>
           </div>
-          <span class="badge">0</span>
         </div>
       `;
+      return;
     }
+
+    $list.innerHTML = view.map(p => `
+      <div class="card" style="border-radius:18px;margin-bottom:8px">
+        <div class="card__body" style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-weight:900">${safeText(playerName(p))}</div>
+            <div class="muted" style="font-size:12px">
+              ${safeText(playerPos(p))} • OVR ${playerOvr(p)}
+            </div>
+          </div>
+        </div>
+      </div>
+    `).join("");
   }
 
   $q.addEventListener("input", render);
-  $sort.addEventListener("change", render);
-  el.querySelector("#back").addEventListener("click", () => navigate("#/hub"));
+  $order.addEventListener("change", render);
 
-  shell.mount(el);
   render();
-
-  return { render() {} };
+  return { render };
 }
