@@ -1,60 +1,134 @@
-function emptyRow(clubId) {
-  return {
-    clubId,
-    played: 0,
-    wins: 0,
-    draws: 0,
-    losses: 0,
-    gf: 0,
-    ga: 0,
-    gd: 0,
-    points: 0
-  };
+// src/domain/leagueTable.js
+
+/**
+ * Cria uma tabela “vazia” para uma lista de times.
+ * Útil quando você tem a lista de participantes e ainda não simulou jogos.
+ */
+export function makeEmptyTableForTeams(teamIds = []) {
+  const unique = Array.from(new Set(teamIds.filter(Boolean)));
+
+  return unique.map((teamId) => ({
+    teamId,
+    P: 0,  // pontos
+    J: 0,  // jogos
+    V: 0,  // vitórias
+    E: 0,  // empates
+    D: 0,  // derrotas
+    GP: 0, // gols pró
+    GC: 0, // gols contra
+    SG: 0  // saldo
+  }));
 }
 
-export function createTable(clubIds) {
-  const map = new Map();
-  for (const id of clubIds) map.set(id, emptyRow(id));
-  return map;
+/**
+ * Ordena a tabela seguindo critérios comuns:
+ * 1) Pontos, 2) Vitórias, 3) Saldo, 4) Gols Pró, 5) Menos Gols Contra, 6) teamId
+ */
+export function sortTable(rows = []) {
+  return [...rows].sort((a, b) => {
+    const ap = Number(a?.P ?? 0);
+    const bp = Number(b?.P ?? 0);
+    if (bp !== ap) return bp - ap;
+
+    const av = Number(a?.V ?? 0);
+    const bv = Number(b?.V ?? 0);
+    if (bv !== av) return bv - av;
+
+    const asg = Number(a?.SG ?? 0);
+    const bsg = Number(b?.SG ?? 0);
+    if (bsg !== asg) return bsg - asg;
+
+    const agp = Number(a?.GP ?? 0);
+    const bgp = Number(b?.GP ?? 0);
+    if (bgp !== agp) return bgp - agp;
+
+    const agc = Number(a?.GC ?? 0);
+    const bgc = Number(b?.GC ?? 0);
+    if (agc !== bgc) return agc - bgc;
+
+    return String(a?.teamId ?? "").localeCompare(String(b?.teamId ?? ""));
+  });
 }
 
-export function applyResult(tableMap, homeId, awayId, homeGoals, awayGoals) {
-  const h = tableMap.get(homeId) || emptyRow(homeId);
-  const a = tableMap.get(awayId) || emptyRow(awayId);
+/**
+ * Atualiza estatísticas da tabela com base em um placar.
+ * sideA/sideB devem ser objetos que tenham teamId.
+ */
+export function applyMatchResult(tableRows = [], sideA, sideB, goalsA = 0, goalsB = 0) {
+  const rows = tableRows.map((r) => ({ ...r }));
 
-  h.played += 1;
-  a.played += 1;
+  const aId = sideA?.teamId;
+  const bId = sideB?.teamId;
+  if (!aId || !bId) return rows;
 
-  h.gf += homeGoals;
-  h.ga += awayGoals;
-  a.gf += awayGoals;
-  a.ga += homeGoals;
+  const a = rows.find((r) => r.teamId === aId);
+  const b = rows.find((r) => r.teamId === bId);
+  if (!a || !b) return rows;
 
-  if (homeGoals > awayGoals) {
-    h.wins += 1; h.points += 3;
-    a.losses += 1;
-  } else if (homeGoals < awayGoals) {
-    a.wins += 1; a.points += 3;
-    h.losses += 1;
+  const ga = Number(goalsA ?? 0);
+  const gb = Number(goalsB ?? 0);
+
+  a.J += 1;
+  b.J += 1;
+
+  a.GP += ga;
+  a.GC += gb;
+  b.GP += gb;
+  b.GC += ga;
+
+  a.SG = a.GP - a.GC;
+  b.SG = b.GP - b.GC;
+
+  if (ga > gb) {
+    a.V += 1;
+    b.D += 1;
+    a.P += 3;
+  } else if (ga < gb) {
+    b.V += 1;
+    a.D += 1;
+    b.P += 3;
   } else {
-    h.draws += 1; h.points += 1;
-    a.draws += 1; a.points += 1;
+    a.E += 1;
+    b.E += 1;
+    a.P += 1;
+    b.P += 1;
   }
 
-  h.gd = h.gf - h.ga;
-  a.gd = a.gf - a.ga;
-
-  tableMap.set(homeId, h);
-  tableMap.set(awayId, a);
+  return rows;
 }
 
-export function sortedTableRows(tableMap) {
-  const rows = Array.from(tableMap.values());
-  rows.sort((x, y) => {
-    if (y.points !== x.points) return y.points - x.points;
-    if (y.gd !== x.gd) return y.gd - x.gd;
-    if (y.gf !== x.gf) return y.gf - x.gf;
-    return String(x.clubId).localeCompare(String(y.clubId), "pt-BR");
-  });
-  return rows;
+/**
+ * Serializa tabela (para salvar no storage)
+ */
+export function serializeTable(rows = []) {
+  return rows.map((r) => ({
+    teamId: r.teamId,
+    P: Number(r.P ?? 0),
+    J: Number(r.J ?? 0),
+    V: Number(r.V ?? 0),
+    E: Number(r.E ?? 0),
+    D: Number(r.D ?? 0),
+    GP: Number(r.GP ?? 0),
+    GC: Number(r.GC ?? 0),
+    SG: Number(r.SG ?? 0)
+  }));
+}
+
+/**
+ * Reconstrói tabela a partir de dados serializados.
+ * Se vier vazio/undefined, retorna [].
+ */
+export function tableFromSerialized(serialized) {
+  if (!Array.isArray(serialized)) return [];
+  return serialized.map((r) => ({
+    teamId: r.teamId,
+    P: Number(r.P ?? 0),
+    J: Number(r.J ?? 0),
+    V: Number(r.V ?? 0),
+    E: Number(r.E ?? 0),
+    D: Number(r.D ?? 0),
+    GP: Number(r.GP ?? 0),
+    GC: Number(r.GC ?? 0),
+    SG: Number(r.SG ?? 0)
+  }));
 }
