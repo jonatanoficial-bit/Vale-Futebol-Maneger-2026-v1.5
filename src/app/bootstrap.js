@@ -21,8 +21,10 @@ import { screenCompetitions } from "../ui/screens/competitions.js";
 import { screenTransfers } from "../ui/screens/transfers.js";
 import { screenFinance } from "../ui/screens/finance.js";
 import { screenAdmin } from "../ui/screens/admin.js";
+import { screenDiagnostics } from "../ui/screens/diagnostics.js";
 
 import { createRepositories } from "../data/repositories.js";
+import { isDiagnosticsEnabled, runDiagnostics } from "./diagnostics.js";
 
 function esc(s) {
   return String(s ?? "").replace(/[<>&"]/g, (c) => ({
@@ -166,6 +168,7 @@ function migrateState(s) {
     screens.add("transfers", screenTransfers);
     screens.add("finance", screenFinance);
     screens.add("admin", screenAdmin);
+    screens.add("diagnostics", screenDiagnostics);
 
     const router = createRouter({
       onRoute: (route) => screens.show(route.name, route.params),
@@ -205,6 +208,18 @@ function migrateState(s) {
     shell.setFooter({ left: "Offline • GitHub Pages", right: "v1.0.1" });
 
     store.setState({ ...store.getState(), app: { ...store.getState().app, ready: true } });
+
+    // ✅ Diagnóstico NÃO interfere no jogo: só roda se ativado
+    if (isDiagnosticsEnabled()) {
+      try {
+        await runDiagnostics({ logger, screens, repos, store });
+        // dica: abrir #/diagnostics para ver formatado
+        console.warn("[VFM_DIAG] Ativo. Abra #/diagnostics para ver o relatório.");
+      } catch (e) {
+        console.warn("[VFM_DIAG] Falhou ao rodar diagnóstico:", e);
+      }
+    }
+
     router.start({ defaultRoute: "#/splash" });
   } catch (err) {
     showFatalError(err);
