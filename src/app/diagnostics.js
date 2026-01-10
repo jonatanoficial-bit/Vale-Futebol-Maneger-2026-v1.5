@@ -1,143 +1,110 @@
-// /src/app/diagnostics.js
-// Sistema de diagnóstico (só roda quando ativado). Seguro para remover no final.
+// src/app/diagnostics.js
 
-const KEY = "VFM_DIAGNOSTICS";
-const KEY_LAST = "VFM_LAST_DIAG";
+let enabled = false;
 
-export function isDiagnosticsEnabled() {
-  // Ativa via localStorage OU via URL (?diag=1)
-  try {
-    const url = new URL(location.href);
-    const byUrl = url.searchParams.get("diag") === "1";
-    const byLs = localStorage.getItem(KEY) === "1";
-    return byUrl || byLs;
-  } catch {
-    return false;
-  }
-}
+export function enableDiagnostics() {
+  if (enabled) return;
+  enabled = true;
 
-export function enableDiagnosticsPersist() {
-  try {
-    localStorage.setItem(KEY, "1");
-  } catch {}
-}
+  // Captura erros JS
+  window.addEventListener("error", (event) => {
+    tryRenderFatal({
+      type: "error",
+      message: event?.message || "Erro desconhecido",
+      filename: event?.filename,
+      lineno: event?.lineno,
+      colno: event?.colno,
+      stack: event?.error?.stack,
+    });
+  });
 
-export function disableDiagnosticsPersist() {
-  try {
-    localStorage.removeItem(KEY);
-  } catch {}
+  // Captura promise rejeitada
+  window.addEventListener("unhandledrejection", (event) => {
+    const err = event?.reason;
+    tryRenderFatal({
+      type: "unhandledrejection",
+      message: err?.message || String(err || "Promise rejection"),
+      stack: err?.stack,
+    });
+  });
 }
 
 /**
- * ✅ Compatibilidade (corrige o erro do seu console):
- * alguns builds/arquivos podem estar importando o nome errado "disabledDiagnosticsPersist".
- * Exportamos um alias para não quebrar.
+ * Mantido por compatibilidade com versões antigas que importavam isso.
+ * Hoje não precisamos persistir nada, mas o export existe para não quebrar build.
  */
-export const disabledDiagnosticsPersist = disableDiagnosticsPersist;
-
-function safeJson(value) {
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return "[unserializable]";
-  }
+export function disableDiagnosticsPersist() {
+  // no-op
 }
 
-function ok(id, info = "") {
-  return { id, ok: true, info };
+function tryRenderFatal(payload) {
+  // Se você já tem um "fatal overlay" próprio, pode ignorar este render.
+  // Este aqui é só um fallback robusto.
+
+  console.error("FATAL:", payload);
+
+  const fatal = document.querySelector("#fatal");
+  if (fatal) {
+    fatal.hidden = false;
+    fatal.removeAttribute("aria-hidden");
+    fatal.innerHTML = `
+      <div class="card">
+        <h2>Ocorreu um erro</h2>
+        <p>Copie o log abaixo e me envie.</p>
+        <pre style="white-space:pre-wrap">${escapeHtml(JSON.stringify({
+          ...payload,
+          href: location.href,
+          ua: navigator.userAgent
+        }, null, 2))}</pre>
+        <button class="btn btn-primary" id="fatalReload">Recarregar</button>
+      </div>
+    `;
+    fatal.querySelector("#fatalReload")?.addEventListener("click", () => location.reload());
+    return;
+  }
+
+  // Fallback se não existir #fatal
+  const el = document.createElement("div");
+  el.style.cssText = `
+    position:fixed; inset:0; z-index:999999;
+    background:rgba(0,0,0,.75);
+    display:flex; align-items:center; justify-content:center;
+    padding:16px;
+  `;
+  el.innerHTML = `
+    <div style="max-width:900px;width:100%;background:#0b0b0b;border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:14px;color:#fff">
+      <div style="font-weight:800;margin-bottom:6px">Ocorreu um erro</div>
+      <div style="opacity:.85;margin-bottom:10px">Copie o log abaixo e me envie.</div>
+      <pre style="white-space:pre-wrap;font-size:12px;opacity:.95">${escapeHtml(JSON.stringify({
+        ...payload,
+        href: location.href,
+        ua: navigator.userAgent
+      }, null, 2))}</pre>
+      <div style="display:flex;gap:10px;margin-top:10px">
+        <button id="fatalCopy" style="padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:#111;color:#fff;cursor:pointer">Copiar</button>
+        <button id="fatalReload2" style="padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:#111;color:#fff;cursor:pointer">Recarregar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(el);
+
+  el.querySelector("#fatalReload2")?.addEventListener("click", () => location.reload());
+  el.querySelector("#fatalCopy")?.addEventListener("click", async () => {
+    const txt = JSON.stringify({ ...payload, href: location.href, ua: navigator.userAgent }, null, 2);
+    try {
+      await navigator.clipboard.writeText(txt);
+      alert("Copiado. Cole pra mim aqui.");
+    } catch {
+      prompt("Copie o log:", txt);
+    }
+  });
 }
 
-function fail(id, info = "") {
-  return { id, ok: false, info };
-}
-
-async function testDynamicImport(url) {
-  try {
-    await import(url);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export async function runDiagnostics({ logger, screens, repos, store } = {}) {
-  const results = [];
-  const report = {
-    ts: new Date().toISOString(),
-    ua: navigator.userAgent,
-    href: location.href,
-    results
-  };
-
-  // 1) Router básico
-  try {
-    const hasHash = typeof location.hash === "string";
-    results.push(ok("router.hash", `hash=${hasHash ? location.hash : "N/A"}`));
-  } catch (e) {
-    results.push(fail("router.hash", e?.message || String(e)));
-  }
-
-  // 2) LocalStorage
-  try {
-    const k = "__vfm_ls_test__";
-    localStorage.setItem(k, "1");
-    localStorage.removeItem(k);
-    results.push(ok("storage.localStorage", "ok"));
-  } catch (e) {
-    results.push(fail("storage.localStorage", e?.message || String(e)));
-  }
-
-  // 3) Store básico
-  try {
-    const state = store?.getState ? store.getState() : null;
-    results.push(ok("store.getState", state ? "ok" : "store sem estado (pode ser ok)"));
-  } catch (e) {
-    results.push(fail("store.getState", e?.message || String(e)));
-  }
-
-  // 4) Repos (packs)
-  try {
-    const packs = repos?.packs?.list?.() ?? repos?.packs?.getAll?.() ?? null;
-    const isIterable = packs && typeof packs[Symbol.iterator] === "function";
-    results.push(ok("repos.packs.iterable", isIterable ? "iterável" : "NÃO iterável (isso causa 'packs is not iterable')"));
-    if (!isIterable) results[results.length - 1].ok = false;
-  } catch (e) {
-    results.push(fail("repos.packs.iterable", e?.message || String(e)));
-  }
-
-  // 5) Imports críticos (pega erros tipo “Failed to fetch dynamically imported module”)
-  try {
-    const okBootstrap = await testDynamicImport("./src/app/bootstrap.js");
-    results.push(okBootstrap ? ok("import.bootstrap", "ok") : fail("import.bootstrap", "falhou importar ./src/app/bootstrap.js"));
-  } catch (e) {
-    results.push(fail("import.bootstrap", e?.message || String(e)));
-  }
-
-  // 6) Imports utilitários que já deram 404 no seu print (escapeHtml.js)
-  try {
-    const okEscape = await testDynamicImport("./src/ui/util/escapeHtml.js");
-    results.push(okEscape ? ok("import.escapeHtml", "ok") : fail("import.escapeHtml", "404 ou path errado em ./src/ui/util/escapeHtml.js"));
-  } catch (e) {
-    results.push(fail("import.escapeHtml", e?.message || String(e)));
-  }
-
-  // 7) Screens registradas
-  try {
-    const ids = screens?.list?.() ?? [];
-    results.push(ok("screens.list", Array.isArray(ids) ? `count=${ids.length}` : "screens.list não disponível"));
-  } catch (e) {
-    results.push(fail("screens.list", e?.message || String(e)));
-  }
-
-  // salvar o relatório (pra você copiar depois)
-  try {
-    localStorage.setItem(KEY_LAST, JSON.stringify(report, null, 2));
-  } catch {}
-
-  // log amigável
-  try {
-    logger?.info?.("[DIAG]", safeJson(report));
-  } catch {}
-
-  return report;
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
