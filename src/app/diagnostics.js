@@ -1,119 +1,142 @@
-// src/app/diagnostics.js
-// Diagnósticos opcionais (somente quando habilitado via ?diag=1 ou localStorage vfmdiag=1)
-// IMPORTANTE: imports dinâmicos precisam resolver relativo ao document.baseURI, não ao arquivo atual.
+// /src/app/diagnostics.js
+// Sistema de diagnóstico (só roda quando ativado). Seguro para remover no final.
 
-async function tryFetchText(url) {
-  try {
-    const res = await fetch(url, { cache: "no-store" });
-    const ok = res.ok;
-    const text = ok ? await res.text() : "";
-    return { ok, status: res.status, text };
-  } catch (e) {
-    return { ok: false, status: 0, text: String(e?.message || e) };
-  }
-}
-
-async function tryDynamicImport(specifier) {
-  try {
-    // Resolve SEMPRE pelo documento (index.html), não pelo arquivo atual (diagnostics.js)
-    const url = new URL(specifier, document.baseURI).href;
-    await import(url);
-    return { ok: true, url };
-  } catch (e) {
-    return { ok: false, url: new URL(specifier, document.baseURI).href, error: String(e?.message || e) };
-  }
-}
-
-function nowIso() {
-  try {
-    return new Date().toISOString();
-  } catch {
-    return "";
-  }
-}
+const KEY = "VFM_DIAGNOSTICS";
+const KEY_LAST = "VFM_LAST_DIAG";
 
 export function isDiagnosticsEnabled() {
-  const url = new URL(window.location.href);
-  if (url.searchParams.get("diag") === "1") return true;
+  // Ativa via localStorage OU via URL (?diag=1)
   try {
-    return localStorage.getItem("vfmdiag") === "1";
+    const url = new URL(location.href);
+    const byUrl = url.searchParams.get("diag") === "1";
+    const byLs = localStorage.getItem(KEY) === "1";
+    return byUrl || byLs;
   } catch {
     return false;
   }
 }
 
-export async function runDiagnostics() {
-  // Não deixa quebrar o app: se algo der errado, apenas retorna um relatório.
+export function enableDiagnosticsPersist() {
+  try {
+    localStorage.setItem(KEY, "1");
+  } catch {}
+}
+
+export function disableDiagnosticsPersist() {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {}
+}
+
+/**
+ * ✅ Compatibilidade (corrige o erro do seu console):
+ * alguns builds/arquivos podem estar importando o nome errado "disabledDiagnosticsPersist".
+ * Exportamos um alias para não quebrar.
+ */
+export const disabledDiagnosticsPersist = disableDiagnosticsPersist;
+
+function safeJson(value) {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "[unserializable]";
+  }
+}
+
+function ok(id, info = "") {
+  return { id, ok: true, info };
+}
+
+function fail(id, info = "") {
+  return { id, ok: false, info };
+}
+
+async function testDynamicImport(url) {
+  try {
+    await import(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function runDiagnostics({ logger, screens, repos, store } = {}) {
+  const results = [];
   const report = {
-    at: nowIso(),
-    href: window.location.href,
+    ts: new Date().toISOString(),
     ua: navigator.userAgent,
-    checks: [],
+    href: location.href,
+    results
   };
 
-  const moduleChecks = [
-    { name: "bootstrap", path: "./src/app/bootstrap.js", type: "import" },
-    { name: "router", path: "./src/app/router.js", type: "import" },
-    { name: "screenManager", path: "./src/app/screenManager.js", type: "import" },
-
-    { name: "escapeHtml", path: "./src/ui/util/escapeHtml.js", type: "import" },
-    { name: "dataPackSelect", path: "./src/ui/screens/dataPackSelect.js", type: "import" },
-    { name: "saveSlots", path: "./src/ui/screens/saveSlots.js", type: "import" },
-    { name: "clubSelect", path: "./src/ui/screens/clubSelect.js", type: "import" },
-    { name: "hub", path: "./src/ui/screens/hub.js", type: "import" },
-
-    // Se existirem no seu projeto:
-    { name: "squad", path: "./src/ui/screens/squad.js", type: "import" },
-    { name: "player", path: "./src/ui/screens/player.js", type: "import" },
-    { name: "tactics", path: "./src/ui/screens/tactics.js", type: "import" },
-    { name: "training", path: "./src/ui/screens/training.js", type: "import" },
-    { name: "competitions", path: "./src/ui/screens/competitions.js", type: "import" },
-    { name: "finance", path: "./src/ui/screens/finance.js", type: "import" },
-  ];
-
-  for (const chk of moduleChecks) {
-    if (chk.type === "import") {
-      const r = await tryDynamicImport(chk.path);
-      report.checks.push({
-        name: chk.name,
-        kind: "module_import",
-        ok: r.ok,
-        path: chk.path,
-        url: r.url,
-        error: r.ok ? "" : r.error,
-      });
-    }
-  }
-
-  // Checklist de arquivos críticos (fetch simples)
-  const fileChecks = [
-    { name: "index", path: "./index.html" },
-    { name: "styles", path: "./src/ui/styles.css" },
-  ];
-
-  for (const f of fileChecks) {
-    const url = new URL(f.path, document.baseURI).href;
-    const r = await tryFetchText(url);
-    report.checks.push({
-      name: f.name,
-      kind: "fetch",
-      ok: r.ok,
-      status: r.status,
-      url,
-      error: r.ok ? "" : r.text,
-    });
-  }
-
-  // Exibe no console de forma clara (sem interferir no jogo)
+  // 1) Router básico
   try {
-    const failed = report.checks.filter((c) => !c.ok);
-    if (failed.length) {
-      console.groupCollapsed(`VFM Diagnostics: ${failed.length} falha(s)`);
-      console.table(failed);
-      console.groupEnd();
-    } else {
-      console.info("VFM Diagnostics: tudo OK ✅");
-    }
+    const hasHash = typeof location.hash === "string";
+    results.push(ok("router.hash", `hash=${hasHash ? location.hash : "N/A"}`));
+  } catch (e) {
+    results.push(fail("router.hash", e?.message || String(e)));
+  }
+
+  // 2) LocalStorage
+  try {
+    const k = "__vfm_ls_test__";
+    localStorage.setItem(k, "1");
+    localStorage.removeItem(k);
+    results.push(ok("storage.localStorage", "ok"));
+  } catch (e) {
+    results.push(fail("storage.localStorage", e?.message || String(e)));
+  }
+
+  // 3) Store básico
+  try {
+    const state = store?.getState ? store.getState() : null;
+    results.push(ok("store.getState", state ? "ok" : "store sem estado (pode ser ok)"));
+  } catch (e) {
+    results.push(fail("store.getState", e?.message || String(e)));
+  }
+
+  // 4) Repos (packs)
+  try {
+    const packs = repos?.packs?.list?.() ?? repos?.packs?.getAll?.() ?? null;
+    const isIterable = packs && typeof packs[Symbol.iterator] === "function";
+    results.push(ok("repos.packs.iterable", isIterable ? "iterável" : "NÃO iterável (isso causa 'packs is not iterable')"));
+    if (!isIterable) results[results.length - 1].ok = false;
+  } catch (e) {
+    results.push(fail("repos.packs.iterable", e?.message || String(e)));
+  }
+
+  // 5) Imports críticos (pega erros tipo “Failed to fetch dynamically imported module”)
+  try {
+    const okBootstrap = await testDynamicImport("./src/app/bootstrap.js");
+    results.push(okBootstrap ? ok("import.bootstrap", "ok") : fail("import.bootstrap", "falhou importar ./src/app/bootstrap.js"));
+  } catch (e) {
+    results.push(fail("import.bootstrap", e?.message || String(e)));
+  }
+
+  // 6) Imports utilitários que já deram 404 no seu print (escapeHtml.js)
+  try {
+    const okEscape = await testDynamicImport("./src/ui/util/escapeHtml.js");
+    results.push(okEscape ? ok("import.escapeHtml", "ok") : fail("import.escapeHtml", "404 ou path errado em ./src/ui/util/escapeHtml.js"));
+  } catch (e) {
+    results.push(fail("import.escapeHtml", e?.message || String(e)));
+  }
+
+  // 7) Screens registradas
+  try {
+    const ids = screens?.list?.() ?? [];
+    results.push(ok("screens.list", Array.isArray(ids) ? `count=${ids.length}` : "screens.list não disponível"));
+  } catch (e) {
+    results.push(fail("screens.list", e?.message || String(e)));
+  }
+
+  // salvar o relatório (pra você copiar depois)
+  try {
+    localStorage.setItem(KEY_LAST, JSON.stringify(report, null, 2));
+  } catch {}
+
+  // log amigável
+  try {
+    logger?.info?.("[DIAG]", safeJson(report));
   } catch {}
 
   return report;
