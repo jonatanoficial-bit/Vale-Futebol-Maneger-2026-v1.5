@@ -1,44 +1,52 @@
-export function createRouter({ onRoute, logger }) {
-  if (typeof onRoute !== "function") throw new Error("Router requer onRoute(route).");
+// src/app/router.js
+// Router simples por hash (#/rota). Mantém compatibilidade com o bootstrap atual
+// (que usa createRouter) e também expõe navigate() para telas que precisem.
 
-  function parseHash(hash) {
-    const raw = (hash || "").trim();
-    const clean = raw.startsWith("#") ? raw.slice(1) : raw;
+function norm(hash) {
+  const h = (hash ?? "").toString();
+  if (!h) return "#/";
+  if (h.startsWith("#/")) return h;
+  if (h.startsWith("#")) return "#/" + h.slice(1);
+  return "#/" + h;
+}
 
-    // formato: /screen?x=1
-    const [pathPart, queryPart] = clean.split("?");
-    const path = (pathPart || "/").replace(/\/+/g, "/");
+export function getRoute() {
+  return norm(window.location.hash || "#/");
+}
 
-    const seg = path.split("/").filter(Boolean);
-    const name = seg[0] || "splash";
+export function navigate(to) {
+  window.location.hash = norm(to);
+}
 
-    const params = {};
-    if (queryPart) {
-      const sp = new URLSearchParams(queryPart);
-      for (const [k, v] of sp.entries()) params[k] = v;
-    }
-
-    return { name, params };
+export function createRouter(onRoute) {
+  if (typeof onRoute !== "function") {
+    throw new Error("createRouter(onRoute): onRoute precisa ser function");
   }
 
-  function go(hash) {
-    window.location.hash = hash;
-  }
-
-  function handle() {
+  const handler = () => {
     try {
-      const route = parseHash(window.location.hash);
-      onRoute(route);
-    } catch (err) {
-      logger.error("ROUTER_ERROR", err);
+      onRoute(getRoute());
+    } catch (e) {
+      // Não quebra a página silenciosamente: joga no console
+      console.error("[router] onRoute error:", e);
+      throw e;
     }
-  }
+  };
 
-  function start({ defaultRoute }) {
-    window.addEventListener("hashchange", handle);
-    if (!window.location.hash && defaultRoute) window.location.hash = defaultRoute;
-    handle();
-  }
+  window.addEventListener("hashchange", handler);
 
-  return { start, go };
+  return {
+    start() {
+      handler();
+    },
+    stop() {
+      window.removeEventListener("hashchange", handler);
+    },
+    go(to) {
+      navigate(to);
+    },
+    current() {
+      return getRoute();
+    },
+  };
 }
