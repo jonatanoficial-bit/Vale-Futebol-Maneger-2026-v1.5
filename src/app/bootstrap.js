@@ -1,14 +1,16 @@
-import { createAppShell } from "../ui/appShell.js";
+// src/app/bootstrap.js
 import { createRouter } from "./router.js";
 import { createScreenManager } from "./screenManager.js";
 import { createStore } from "./stateStore.js";
-import { getPackRegistrySafe } from "./packRegistry.js";
-import { createRepositories } from "../data/repositories.js";
 import { createLogger } from "./logger.js";
-import { maybeRunSelfTest } from "./selfTest.js";
+
+import { createRepositories } from "../data/repositories.js";
+import { createAppShell } from "../ui/appShell.js";
+import { showFatal } from "../ui/fatalOverlay.js";
 
 // Screens
 import { screenSplash } from "../ui/screens/splash.js";
+import { screenStart } from "../ui/screens/start.js";
 import { screenDataPackSelect } from "../ui/screens/dataPackSelect.js";
 import { screenSaveSlots } from "../ui/screens/saveSlots.js";
 import { screenCareerCreate } from "../ui/screens/careerCreate.js";
@@ -19,95 +21,131 @@ import { screenTactics } from "../ui/screens/tactics.js";
 import { screenTraining } from "../ui/screens/training.js";
 import { screenCompetitions } from "../ui/screens/competitions.js";
 import { screenFinance } from "../ui/screens/finance.js";
+import { screenDiagnostics } from "../ui/screens/diagnostics.js";
 
-function routeToScreen(route) {
-  // route.segments vem do router.js (#/x/y)
-  const first = (route?.segments?.[0] || "splash").trim();
-  return first || "splash";
+function getInitialState() {
+  return {
+    app: {
+      slotId: null,
+      selectedPackId: null,
+      locale: "pt-BR",
+      build: "v1.0.1",
+    },
+    career: {
+      role: "coach",
+      coach: {
+        name: "",
+        country: "BR",
+        avatarId: "default",
+      },
+      clubId: null,
+    },
+    season: {
+      yearLabel: "2025-2026",
+      competitions: [],
+      active: null,
+      lastCloseSummary: null,
+    },
+    finances: {
+      balance: 15000000,
+      wageMonthEstimate: 0,
+      lastMatchIncome: 0,
+      sponsor: {
+        company: "Vale Bank (MVP)",
+        monthly: 1250000,
+        performanceBonus: 75000,
+      },
+      ledger: [],
+    },
+  };
 }
 
-function makeNavigator() {
-  return function navigate(path) {
-    const clean = String(path || "").replace(/^#?\//, "");
-    window.location.hash = `#/${clean}`;
-  };
+function setupGlobalCrashHandler(logger) {
+  window.addEventListener("error", (ev) => {
+    try {
+      const err = ev?.error || ev;
+      logger?.error?.("window.error", err);
+      showFatal({
+        message: err?.message || String(err),
+        stack: err?.stack || "",
+        href: location.href,
+      });
+    } catch {
+      // não deixa outro erro derrubar tudo
+    }
+  });
+
+  window.addEventListener("unhandledrejection", (ev) => {
+    try {
+      const err = ev?.reason || ev;
+      logger?.error?.("unhandledrejection", err);
+      showFatal({
+        message: err?.message || String(err),
+        stack: err?.stack || "",
+        href: location.href,
+      });
+    } catch {
+      // não deixa outro erro derrubar tudo
+    }
+  });
 }
 
 async function main() {
   const logger = createLogger();
+  setupGlobalCrashHandler(logger);
 
-  const root = document.querySelector("#app");
+  const root = document.getElementById("app");
   if (!root) {
-    console.error("Elemento #app não encontrado no index.html");
+    showFatal({
+      message: "Elemento #app não encontrado no index.html",
+      stack: "",
+      href: location.href,
+    });
     return;
   }
 
+  // Monta o “shell” (topbar + container)
   const shell = createAppShell(root);
 
-  // Store (persistente e simples)
-  const store = createStore({
-    initialState: {
-      selectedPackId: null,
-      selectedSaveSlot: null,
-      career: null,
-    },
-    persistKey: "vfm_state_v1",
+  // Store + repos (obrigatórios para as telas)
+  const store = createStore(getInitialState());
+  const repos = createRepositories();
+
+  // Screen manager com ctx completo
+  const screenManager = createScreenManager(shell.main, { store, repos, logger });
+
+  // Registra telas
+  screenManager.setScreens({
+    splash: screenSplash,
+    start: screenStart,
+    dataPackSelect: screenDataPackSelect,
+    saveSlots: screenSaveSlots,
+    careerCreate: screenCareerCreate,
+    clubSelect: screenClubSelect,
+    hub: screenHub,
+    squad: screenSquad,
+    tactics: screenTactics,
+    training: screenTraining,
+    competitions: screenCompetitions,
+    finance: screenFinance,
+    diagnostics: screenDiagnostics,
   });
-
-  // Repos (packs, saves, etc)
-  const repos = createRepositories({
-    packRegistry: getPackRegistrySafe(),
-  });
-
-  // Screen manager
-  const screens = createScreenManager(shell, store, repos);
-
-  // Register screens
-  screens.register("splash", screenSplash);
-  screens.register("dataPackSelect", screenDataPackSelect);
-  screens.register("saveSlots", screenSaveSlots);
-  screens.register("careerCreate", screenCareerCreate);
-  screens.register("clubSelect", screenClubSelect);
-  screens.register("hub", screenHub);
-  screens.register("squad", screenSquad);
-  screens.register("tactics", screenTactics);
-  screens.register("training", screenTraining);
-  screens.register("competitions", screenCompetitions);
-  screens.register("finance", screenFinance);
-
-  const navigate = makeNavigator();
 
   // Router
   const router = createRouter({
-    onRoute: async (route) => {
-      try {
-        const screenName = routeToScreen(route);
-        await screens.show(screenName, { navigate, route });
-      } catch (err) {
-        logger.error(err);
-        shell.showFatal(err);
-      }
+    defaultRoute: "#/splash",
+    onRoute: (route) => {
+      screenManager.show(route.name, route);
     },
   });
 
-  // Erros globais => fatal
-  window.addEventListener("error", (ev) => {
-    logger.error(ev?.error || ev);
-    shell.showFatal(ev?.error || ev);
-  });
-  window.addEventListener("unhandledrejection", (ev) => {
-    logger.error(ev?.reason || ev);
-    shell.showFatal(ev?.reason || ev);
-  });
-
-  // Start router
   router.start();
-
-  // Se já tem hash, o router chama; se não tem, cai na splash.
-  if (!window.location.hash) navigate("splash");
-
-  // Ferramenta opcional de diagnóstico (só roda com selftest=1)
-  await maybeRunSelfTest({ store, repos, screenManager: screens, logger });
 }
 
-main();
+main().catch((err) => {
+  showFatal({
+    message: err?.message || String(err),
+    stack: err?.stack || "",
+    href: location.href,
+  });
+});
