@@ -1,48 +1,77 @@
-// src/ui/screens/dataPackSelect.js
-import { navigate } from "../../app/router.js";
-import { getState } from "../../app/state.js";
+import { escapeHtml } from "../util/escapeHtml.js";
 
-export function screenDataPackSelect() {
-  const el = document.createElement("div");
-  el.className = "screen card";
+/**
+ * Tela: seleção de Pacote de Dados (DLC)
+ * Fluxo:
+ * 1) lista packs do registry (repos.listPacks)
+ * 2) salva packId no store
+ * 3) vai para saveSlots
+ */
+export async function screenDataPackSelect({ shell, store, repos, navigate }) {
+  shell.hideFatal();
+  shell.setTopbar({
+    subtitle: "Carreira • Treinador",
+    rightPill: "AAA",
+  });
 
-  el.innerHTML = `
-    <h2>Escolha o Pacote de Dados</h2>
-    <p>Atualizações (elenco/competições) virão por DLC</p>
-    <div id="packList" class="list"></div>
-    <button class="btn" id="back">Voltar</button>
+  shell.clearMain();
+
+  const main = shell.getMain();
+
+  const wrap = document.createElement("div");
+  wrap.className = "card";
+  wrap.innerHTML = `
+    <div class="card__title">Escolha o Pacote de Dados</div>
+    <div class="card__subtitle">Atualizações (elenco/competições) virão por DLC sem mexer no código.</div>
+    <div style="margin-top:10px; opacity:.9" id="packsCount">Carregando...</div>
+    <div style="margin-top:12px; display:grid; gap:10px" id="packsList"></div>
+    <div style="margin-top:12px">
+      <button class="btn" id="btnBack">Voltar</button>
+    </div>
   `;
 
-  const state = getState();
-  const packList = el.querySelector("#packList");
+  main.appendChild(wrap);
 
-  const packs = Array.isArray(state?.packs) ? state.packs : [];
+  wrap.querySelector("#btnBack").addEventListener("click", () => navigate("splash"));
 
-  if (packs.length === 0) {
-    packList.innerHTML = `
-      <div class="empty">
-        Nenhum pacote disponível.<br>
-        Verifique o carregamento inicial do jogo.
-      </div>
-    `;
-  } else {
-    for (const pack of packs) {
-      const item = document.createElement("div");
-      item.className = "list-item";
-      item.innerHTML = `
-        <strong>${pack.name || "Pacote sem nome"}</strong><br>
-        <small>${pack.id || ""}</small>
-        <button class="btn btn-primary">Selecionar</button>
-      `;
-      item.querySelector("button").onclick = () => {
-        state.activePack = pack.id;
-        navigate("#/saveSlots");
-      };
-      packList.appendChild(item);
-    }
+  let packs = [];
+  try {
+    packs = await repos.listPacks();
+  } catch (e) {
+    shell.showFatal(e);
+    return;
   }
 
-  el.querySelector("#back").onclick = () => history.back();
+  const packsCount = wrap.querySelector("#packsCount");
+  packsCount.textContent = `${packs.length} pack(s)`;
 
-  return el;
+  const list = wrap.querySelector("#packsList");
+  list.innerHTML = "";
+
+  for (const p of packs) {
+    const item = document.createElement("div");
+    item.className = "card card--sub";
+    item.innerHTML = `
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px">
+        <div>
+          <div style="font-weight:700">${escapeHtml(p.title || p.id)}</div>
+          <div style="opacity:.9; margin-top:2px">${escapeHtml(p.description || "")}</div>
+          <div style="opacity:.8; margin-top:6px; font-size:12px">ID: ${escapeHtml(p.id)}</div>
+        </div>
+        <div>
+          <button class="btn btn--primary" data-pack="${escapeHtml(p.id)}">Selecionar</button>
+        </div>
+      </div>
+    `;
+
+    item.querySelector("button[data-pack]").addEventListener("click", () => {
+      store.update((s) => ({
+        ...s,
+        selectedPackId: p.id,
+      }));
+      navigate("saveSlots");
+    });
+
+    list.appendChild(item);
+  }
 }
