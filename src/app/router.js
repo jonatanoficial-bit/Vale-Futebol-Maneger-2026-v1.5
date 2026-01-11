@@ -1,52 +1,35 @@
-// src/app/router.js
-// Router simples por hash (#/rota). Mantém compatibilidade com o bootstrap atual
-// (que usa createRouter) e também expõe navigate() para telas que precisem.
+export function createRouter({ onRoute }) {
+  function parseHash() {
+    const raw = window.location.hash || "#/";
+    const cleaned = raw.startsWith("#") ? raw.slice(1) : raw; // remove '#'
+    const [pathPart, queryPart] = cleaned.split("?");
+    const path = pathPart || "/";
+    const segments = path.split("/").filter(Boolean);
 
-function norm(hash) {
-  const h = (hash ?? "").toString();
-  if (!h) return "#/";
-  if (h.startsWith("#/")) return h;
-  if (h.startsWith("#")) return "#/" + h.slice(1);
-  return "#/" + h;
-}
+    const params = {};
+    if (queryPart) {
+      const usp = new URLSearchParams(queryPart);
+      for (const [k, v] of usp.entries()) params[k] = v;
+    }
 
-export function getRoute() {
-  return norm(window.location.hash || "#/");
-}
-
-export function navigate(to) {
-  window.location.hash = norm(to);
-}
-
-export function createRouter(onRoute) {
-  if (typeof onRoute !== "function") {
-    throw new Error("createRouter(onRoute): onRoute precisa ser function");
+    return { raw, path, segments, params };
   }
 
-  const handler = () => {
-    try {
-      onRoute(getRoute());
-    } catch (e) {
-      // Não quebra a página silenciosamente: joga no console
-      console.error("[router] onRoute error:", e);
-      throw e;
-    }
-  };
+  function handle() {
+    onRoute(parseHash());
+  }
 
-  window.addEventListener("hashchange", handler);
+  window.addEventListener("hashchange", handle);
 
   return {
     start() {
-      handler();
+      handle();
+    },
+    getRoute() {
+      return parseHash();
     },
     stop() {
-      window.removeEventListener("hashchange", handler);
-    },
-    go(to) {
-      navigate(to);
-    },
-    current() {
-      return getRoute();
+      window.removeEventListener("hashchange", handle);
     },
   };
 }
