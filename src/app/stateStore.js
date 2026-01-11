@@ -1,25 +1,38 @@
-export function createStore() {
-  let state = {};
-  const listeners = new Set();
+// src/app/stateStore.js
 
-  function getState() {
-    return state;
-  }
+let state = {};
+const listeners = [];
 
-  function setState(next) {
-    state = next;
-    for (const fn of listeners) fn(state);
-  }
+function notify() {
+  for (const l of listeners) l(state);
+}
 
-  function update(fn) {
-    const next = fn(state);
-    setState(next);
-  }
+export function createStore(initial = {}) {
+  state = structuredClone(initial);
 
-  function subscribe(fn) {
-    listeners.add(fn);
-    return () => listeners.delete(fn);
-  }
+  return {
+    getState() {
+      return state;
+    },
 
-  return { getState, setState, update, subscribe };
+    setState(newState) {
+      state = structuredClone(newState);
+      notify();
+    },
+
+    update(mutator) {
+      const copy = structuredClone(state);
+      const result = mutator(copy);
+      state = result || copy;
+      notify();
+    },
+
+    subscribe(fn) {
+      listeners.push(fn);
+      return () => {
+        const idx = listeners.indexOf(fn);
+        if (idx >= 0) listeners.splice(idx, 1);
+      };
+    },
+  };
 }
