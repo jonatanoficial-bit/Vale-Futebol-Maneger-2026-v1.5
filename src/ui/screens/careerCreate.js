@@ -1,16 +1,39 @@
+// src/ui/screens/careerCreate.js
+const FALLBACK_NATIONS = [
+  { id: "BRA", name: "Brasil" },
+  { id: "ARG", name: "Argentina" },
+  { id: "URU", name: "Uruguai" },
+  { id: "CHI", name: "Chile" },
+  { id: "COL", name: "Colômbia" },
+  { id: "PAR", name: "Paraguai" },
+  { id: "PER", name: "Peru" },
+  { id: "ECU", name: "Equador" },
+  { id: "BOL", name: "Bolívia" },
+  { id: "VEN", name: "Venezuela" },
+];
+
 export async function screenCareerCreate({ shell, repos, store, navigate }) {
   const state = store.getState();
-  if (!state.app.selectedPackId) {
+  if (!state?.app?.selectedPackId) {
     navigate("#/dataPackSelect");
     return { render() {} };
   }
-  if (!state.career.slot) {
+  if (!state?.career?.slot) {
     navigate("#/saveSlots");
     return { render() {} };
   }
 
   const pack = await repos.loadPack(state.app.selectedPackId);
-  const nations = pack.content.nations.nations;
+
+  const packName =
+    pack?.manifest?.name ||
+    pack?.name ||
+    pack?.id ||
+    "Pack";
+
+  const nations =
+    (pack?.content?.nations && Array.isArray(pack.content.nations.nations) && pack.content.nations.nations) ||
+    FALLBACK_NATIONS;
 
   const el = document.createElement("div");
   el.className = "card";
@@ -20,7 +43,7 @@ export async function screenCareerCreate({ shell, repos, store, navigate }) {
         <div class="card__title">Criar Carreira</div>
         <div class="card__subtitle">Treinador • Slot ${state.career.slot}</div>
       </div>
-      <span class="badge">${pack.manifest.name}</span>
+      <span class="badge">${packName}</span>
     </div>
     <div class="card__body">
       <div class="grid grid--2">
@@ -70,24 +93,26 @@ export async function screenCareerCreate({ shell, repos, store, navigate }) {
     opt.textContent = n.name;
     nationSelect.appendChild(opt);
   }
-  nationSelect.value = "BRA";
+  nationSelect.value = nations.find((n) => n.id === "BRA") ? "BRA" : nations[0]?.id;
 
   el.querySelector("#back").addEventListener("click", () => navigate("#/saveSlots"));
+
   el.querySelector("#continue").addEventListener("click", () => {
     const coachName = el.querySelector("#coachName").value.trim();
     if (!coachName) {
       alert("Informe o nome do treinador.");
       return;
     }
-    const coach = {
-      name: coachName,
-      nationalityId: nationSelect.value,
-      avatarId: el.querySelector("#avatar").value
-    };
 
-    store.update(s => ({
+    const nation = el.querySelector("#nation").value;
+    const avatarId = el.querySelector("#avatar").value;
+
+    store.update((s) => ({
       ...s,
-      career: { ...s.career, coach }
+      career: {
+        ...(s.career || {}),
+        coach: { name: coachName, nationId: nation, avatarId },
+      },
     }));
 
     navigate("#/clubSelect");
