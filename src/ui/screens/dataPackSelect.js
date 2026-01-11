@@ -1,99 +1,85 @@
 // src/ui/screens/dataPackSelect.js
 import { escapeHtml } from "../util/escapeHtml.js";
 
-export async function screenDataPackSelect(ctx) {
-  const { el, navigate, store, repos } = ctx;
-
-  // Guard-rails para não dar “packs is not iterable”
-  if (!store || !repos) {
-    el.innerHTML = `
-      <div class="card">
-        <h2>Erro</h2>
-        <p>Store/Repos não inicializados. Verifique src/app/bootstrap.js.</p>
-        <button class="btn btn-primary" id="goStart">Voltar</button>
-      </div>
-    `;
-    el.querySelector("#goStart")?.addEventListener("click", () => navigate("#/start"));
-    return;
-  }
+export async function screenDataPackSelect({ shell, store, repos, navigate }) {
+  const el = document.createElement("div");
+  el.className = "grid";
 
   el.innerHTML = `
     <div class="card">
-      <h2>Escolha o Pacote de Dados</h2>
-      <p>Atualizações (elenco/competições) virão por DLC sem mexer no código.</p>
-      <div id="packsList" class="list"></div>
-      <div class="row" style="margin-top:12px; gap:12px;">
-        <button class="btn" id="backBtn">Voltar</button>
+      <div class="card__header">
+        <div>
+          <div class="card__title">Escolha o Pacote de Dados</div>
+          <div class="card__subtitle">Atualizações via DLC sem mexer no código</div>
+        </div>
+        <span class="badge" id="count">...</span>
+      </div>
+
+      <div class="card__body">
+        <div id="list">
+          <div class="muted">Carregando packs...</div>
+        </div>
+      </div>
+
+      <div class="card__footer">
+        <button class="btn" id="back">Voltar</button>
       </div>
     </div>
   `;
 
-  el.querySelector("#backBtn")?.addEventListener("click", () => navigate("#/start"));
+  el.querySelector("#back").addEventListener("click", () => navigate("#/splash"));
+  shell.mount(el);
 
-  const packsListEl = el.querySelector("#packsList");
+  const $list = el.querySelector("#list");
+  const $count = el.querySelector("#count");
 
-  let packs = [];
-  try {
-    packs = await repos.listPacks();
-    if (!Array.isArray(packs)) packs = [];
-  } catch (e) {
-    packsListEl.innerHTML = `
-      <div class="muted">
-        Não foi possível carregar packs. Verifique <code>/packs/index.json</code>.
-      </div>
-    `;
-    throw e;
-  }
+  const packs = await repos.listPacks();
+  const arr = Array.isArray(packs) ? packs : [];
 
-  if (packs.length === 0) {
-    packsListEl.innerHTML = `
-      <div class="muted">
-        Nenhum pack encontrado. Confirme se existe <code>packs/index.json</code> no deploy.
-      </div>
-    `;
-    return;
-  }
+  $count.textContent = `${arr.length} pack(s)`;
 
-  // Render cards
-  packsListEl.innerHTML = packs
-    .map((p) => {
-      const title = escapeHtml(p?.title || "Pack");
-      const subtitle = escapeHtml(p?.subtitle || "");
-      const id = escapeHtml(p?.id || "");
-      const note = escapeHtml(p?.note || "");
-      return `
-        <div class="card" style="margin-top:12px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
-            <div>
-              <div style="font-weight:700; font-size:18px;">${title}</div>
-              <div class="muted" style="margin-top:2px;">${subtitle}</div>
-              <div class="muted" style="margin-top:6px;">ID: ${id}</div>
-              <div class="muted" style="margin-top:6px;">${note || "&nbsp;"}</div>
-            </div>
-            <div>
-              <button class="btn btn-primary" data-pack="${id}">Selecionar</button>
-            </div>
+  if (!arr.length) {
+    $list.innerHTML = `
+      <div class="card" style="border-radius:18px">
+        <div class="card__body">
+          <div style="font-weight:900">Nenhum pack encontrado</div>
+          <div class="muted" style="font-size:12px;margin-top:6px">
+            Verifique se <code>packs/index.json</code> existe no deploy.
           </div>
         </div>
-      `;
-    })
-    .join("");
+      </div>
+    `;
+    return { render() {} };
+  }
 
-  // Clique selecionar
-  packsListEl.querySelectorAll("button[data-pack]").forEach((btn) => {
+  $list.innerHTML = arr.map((p) => {
+    const id = escapeHtml(p.id);
+    const title = escapeHtml(p.title || p.id);
+    const desc = escapeHtml(p.description || "");
+    return `
+      <div class="card" style="border-radius:18px;margin-bottom:10px">
+        <div class="card__body" style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+          <div style="min-width:0">
+            <div style="font-weight:900">${title}</div>
+            <div class="muted" style="font-size:12px;margin-top:4px">${desc}</div>
+            <div class="muted" style="font-size:12px;margin-top:6px">ID: ${id}</div>
+          </div>
+          <button class="btn btn--primary" data-pack="${id}" style="width:auto">Selecionar</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  $list.querySelectorAll("button[data-pack]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const packId = btn.getAttribute("data-pack");
-
-      store.update((st) => ({
-        ...st,
-        app: {
-          ...(st.app || {}),
-          selectedPackId: packId,
-        },
+      store.update((s) => ({
+        ...s,
+        app: { ...(s.app || {}), selectedPackId: packId },
       }));
-
-      // Próximo passo natural do fluxo: escolher slot
       navigate("#/saveSlots");
     });
   });
+
+  return { render() {} };
 }
