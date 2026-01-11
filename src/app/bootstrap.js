@@ -1,55 +1,50 @@
 // src/app/bootstrap.js
 import { createRouter } from "./router.js";
-import { createScreenManager } from "./screenManager.js";
+import { registerScreens } from "./screenManager.js";
 import { createStore } from "./stateStore.js";
-import { createLogger } from "./logger.js";
+import { logger } from "./logger.js";
 
 import { createRepositories } from "../data/repositories.js";
 import { createAppShell } from "../ui/appShell.js";
-import { showFatal } from "../ui/fatalOverlay.js";
 
-// Screens
+// Screens (as que realmente existem no zip)
 import { screenSplash } from "../ui/screens/splash.js";
-import { screenStart } from "../ui/screens/start.js";
 import { screenDataPackSelect } from "../ui/screens/dataPackSelect.js";
 import { screenSaveSlots } from "../ui/screens/saveSlots.js";
 import { screenCareerCreate } from "../ui/screens/careerCreate.js";
 import { screenClubSelect } from "../ui/screens/clubSelect.js";
+import { screenTutorial } from "../ui/screens/tutorial.js";
 import { screenHub } from "../ui/screens/hub.js";
 import { screenSquad } from "../ui/screens/squad.js";
 import { screenTactics } from "../ui/screens/tactics.js";
 import { screenTraining } from "../ui/screens/training.js";
+import { screenCalendar } from "../ui/screens/calendar.js";
 import { screenCompetitions } from "../ui/screens/competitions.js";
 import { screenFinance } from "../ui/screens/finance.js";
-import { screenDiagnostics } from "../ui/screens/diagnostics.js";
+import { screenAdmin } from "../ui/screens/admin.js";
+import { screenTransfers } from "../ui/screens/transfers.js";
+import { screenPlayer } from "../ui/screens/player.js";
 
-function getInitialState() {
+function initialState() {
   return {
     app: {
-      slotId: null,
       selectedPackId: null,
+      slotId: null,
       locale: "pt-BR",
-      build: "v1.0.1",
+      build: "v1.5",
     },
     career: {
-      role: "coach",
-      coach: {
-        name: "",
-        country: "BR",
-        avatarId: "default",
-      },
+      slot: null,
+      coach: null, // será criado na CareerCreate
       clubId: null,
     },
     season: {
       yearLabel: "2025-2026",
       competitions: [],
       active: null,
-      lastCloseSummary: null,
     },
     finances: {
       balance: 15000000,
-      wageMonthEstimate: 0,
-      lastMatchIncome: 0,
       sponsor: {
         company: "Vale Bank (MVP)",
         monthly: 1250000,
@@ -60,92 +55,90 @@ function getInitialState() {
   };
 }
 
-function setupGlobalCrashHandler(logger) {
-  window.addEventListener("error", (ev) => {
-    try {
-      const err = ev?.error || ev;
-      logger?.error?.("window.error", err);
-      showFatal({
-        message: err?.message || String(err),
-        stack: err?.stack || "",
-        href: location.href,
-      });
-    } catch {
-      // não deixa outro erro derrubar tudo
-    }
-  });
+function routeToScreenName(route) {
+  const first = route?.segments?.[0] || "";
+  const name = String(first).trim();
 
-  window.addEventListener("unhandledrejection", (ev) => {
-    try {
-      const err = ev?.reason || ev;
-      logger?.error?.("unhandledrejection", err);
-      showFatal({
-        message: err?.message || String(err),
-        stack: err?.stack || "",
-        href: location.href,
-      });
-    } catch {
-      // não deixa outro erro derrubar tudo
-    }
-  });
+  // aliases de segurança (hub tem botão “menu”, versões antigas usavam “start”)
+  if (!name || name === "") return "splash";
+  if (name === "menu") return "splash";
+  if (name === "start") return "splash";
+
+  return name;
 }
 
 async function main() {
-  const logger = createLogger();
-  setupGlobalCrashHandler(logger);
-
   const root = document.getElementById("app");
   if (!root) {
-    showFatal({
-      message: "Elemento #app não encontrado no index.html",
-      stack: "",
-      href: location.href,
-    });
+    document.body.innerHTML = `<pre style="color:white;padding:16px">ERRO: #app não encontrado</pre>`;
     return;
   }
 
-  // Monta o “shell” (topbar + container)
   const shell = createAppShell(root);
+  const store = createStore();
+  store.setState(initialState());
 
-  // Store + repos (obrigatórios para as telas)
-  const store = createStore(getInitialState());
-  const repos = createRepositories();
+  const repos = createRepositories({ logger });
 
-  // Screen manager com ctx completo
-  const screenManager = createScreenManager(shell.main, { store, repos, logger });
+  // registra telas no registry compatível com seu screenManager.js
+  const screens = registerScreens(shell, store, repos, logger);
 
-  // Registra telas
-  screenManager.setScreens({
-    splash: screenSplash,
-    start: screenStart,
-    dataPackSelect: screenDataPackSelect,
-    saveSlots: screenSaveSlots,
-    careerCreate: screenCareerCreate,
-    clubSelect: screenClubSelect,
-    hub: screenHub,
-    squad: screenSquad,
-    tactics: screenTactics,
-    training: screenTraining,
-    competitions: screenCompetitions,
-    finance: screenFinance,
-    diagnostics: screenDiagnostics,
-  });
+  screens.add("splash", screenSplash);
+  screens.add("dataPackSelect", screenDataPackSelect);
+  screens.add("saveSlots", screenSaveSlots);
+  screens.add("careerCreate", screenCareerCreate);
+  screens.add("clubSelect", screenClubSelect);
+  screens.add("tutorial", screenTutorial);
+  screens.add("hub", screenHub);
 
-  // Router
+  screens.add("squad", screenSquad);
+  screens.add("player", screenPlayer);
+  screens.add("tactics", screenTactics);
+  screens.add("training", screenTraining);
+
+  screens.add("calendar", screenCalendar);
+  screens.add("competitions", screenCompetitions);
+  screens.add("finance", screenFinance);
+
+  screens.add("admin", screenAdmin);
+  screens.add("transfers", screenTransfers);
+
+  // rota “menu”/“start” apontam para splash sem quebrar
+  screens.add("menu", screenSplash);
+  screens.add("start", screenSplash);
+
+  // Router: o seu router só chama onRoute(parseHash())
   const router = createRouter({
-    defaultRoute: "#/splash",
     onRoute: (route) => {
-      screenManager.show(route.name, route);
+      const screenName = routeToScreenName(route);
+      screens.show(screenName, route);
     },
   });
+
+  // Se não tiver hash, entra na splash
+  if (!window.location.hash) {
+    window.location.hash = "#/splash";
+  }
 
   router.start();
 }
 
+// fatal seguro (se algo estourar)
 main().catch((err) => {
-  showFatal({
-    message: err?.message || String(err),
-    stack: err?.stack || "",
-    href: location.href,
-  });
+  console.error(err);
+  const fatal = document.querySelector("#fatal");
+  if (fatal) {
+    fatal.classList.add("fatal--show");
+    fatal.setAttribute("aria-hidden", "false");
+    const pre = document.querySelector("#fatalPre");
+    if (pre) {
+      pre.textContent = JSON.stringify(
+        { message: err?.message || String(err), stack: err?.stack || null, href: location.href },
+        null,
+        2
+      );
+    }
+  } else {
+    document.body.innerHTML = `<pre style="color:white;padding:16px">${String(err?.stack || err)}</pre>`;
+  }
 });
