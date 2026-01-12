@@ -1,6 +1,6 @@
-// Compatibility layer
-// -------------------
-// Some older modules imported "./store.js" instead of "./state.js".
-// Export the same singleton store so those imports keep working.
+// src/app/store.js
+// Compatibilidade: algumas versões antigas importavam "store.js".
+// Hoje o store está centralizado em "stateStore.js".
 
-export * from "./state.js";
+export { createStore } from "./stateStore.js";
+export { STORAGE_KEYS } from "./stateStore.js";
