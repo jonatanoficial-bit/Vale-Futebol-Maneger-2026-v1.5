@@ -1,75 +1,171 @@
-// src/ui/fatalOverlay.js
-// Instala um "overlay" de erro fatal SEM interferir no jogo.
-// Ele só aparece se ocorrer erro não tratado.
-// Pode ser removido facilmente no final (apagar este arquivo e o import).
+// /src/ui/fatalOverlay.js
+// Overlay de erro fatal (fallback). Não depende de framework.
+// Objetivo: nunca deixar o app "morrer" por falta de UI de erro.
+// Se o appShell já criou #fatal/#fatalPre, usa eles. Senão, cria um overlay próprio.
 
-export function installFatalOverlay(shell, opts = {}) {
-  const {
-    showConsole = true,
-    allowReload = true,
-  } = opts;
+function safeStringify(obj) {
+  try {
+    return JSON.stringify(obj, null, 2);
+  } catch (e) {
+    return String(obj);
+  }
+}
 
-  let installed = true;
+function ensureFallbackOverlay() {
+  let overlay = document.getElementById("fatalOverlayFallback");
+  if (overlay) return overlay;
 
-  function toText(errLike) {
+  overlay = document.createElement("div");
+  overlay.id = "fatalOverlayFallback";
+  overlay.setAttribute("aria-hidden", "true");
+  overlay.style.position = "fixed";
+  overlay.style.inset = "0";
+  overlay.style.zIndex = "999999";
+  overlay.style.display = "none";
+  overlay.style.alignItems = "center";
+  overlay.style.justifyContent = "center";
+  overlay.style.background = "rgba(0,0,0,0.55)";
+  overlay.style.backdropFilter = "blur(6px)";
+
+  const card = document.createElement("div");
+  card.style.width = "min(720px, 92vw)";
+  card.style.maxHeight = "80vh";
+  card.style.overflow = "auto";
+  card.style.borderRadius = "18px";
+  card.style.padding = "18px";
+  card.style.boxShadow = "0 10px 35px rgba(0,0,0,0.45)";
+  card.style.background = "rgba(18,18,20,0.92)";
+  card.style.border = "1px solid rgba(255,255,255,0.12)";
+  card.style.color = "#fff";
+  card.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+
+  const title = document.createElement("div");
+  title.textContent = "Ocorreu um erro";
+  title.style.fontSize = "20px";
+  title.style.fontWeight = "800";
+  title.style.marginBottom = "6px";
+
+  const desc = document.createElement("div");
+  desc.textContent = "Copie o log abaixo e me envie.";
+  desc.style.opacity = "0.9";
+  desc.style.marginBottom = "10px";
+
+  const pre = document.createElement("pre");
+  pre.id = "fatalOverlayFallbackPre";
+  pre.style.whiteSpace = "pre-wrap";
+  pre.style.wordBreak = "break-word";
+  pre.style.fontSize = "12px";
+  pre.style.lineHeight = "1.35";
+  pre.style.padding = "12px";
+  pre.style.borderRadius = "12px";
+  pre.style.background = "rgba(0,0,0,0.35)";
+  pre.style.border = "1px solid rgba(255,255,255,0.12)";
+  pre.style.margin = "0 0 12px 0";
+
+  const actions = document.createElement("div");
+  actions.style.display = "flex";
+  actions.style.gap = "10px";
+  actions.style.flexWrap = "wrap";
+  actions.style.justifyContent = "flex-end";
+
+  const btnCopy = document.createElement("button");
+  btnCopy.textContent = "Copiar log";
+  btnCopy.style.padding = "10px 14px";
+  btnCopy.style.borderRadius = "12px";
+  btnCopy.style.border = "1px solid rgba(255,255,255,0.16)";
+  btnCopy.style.background = "rgba(255,255,255,0.08)";
+  btnCopy.style.color = "#fff";
+  btnCopy.style.cursor = "pointer";
+
+  const btnReload = document.createElement("button");
+  btnReload.textContent = "Recarregar";
+  btnReload.style.padding = "10px 14px";
+  btnReload.style.borderRadius = "12px";
+  btnReload.style.border = "1px solid rgba(255,255,255,0.16)";
+  btnReload.style.background = "linear-gradient(90deg, rgba(255,59,59,0.9), rgba(255,190,90,0.9))";
+  btnReload.style.color = "#121214";
+  btnReload.style.fontWeight = "800";
+  btnReload.style.cursor = "pointer";
+
+  btnReload.addEventListener("click", () => window.location.reload());
+  btnCopy.addEventListener("click", async () => {
+    const text = pre.textContent || "";
     try {
-      if (!errLike) return "Erro desconhecido";
-      if (typeof errLike === "string") return errLike;
-      if (errLike instanceof Error) return errLike.stack || errLike.message || String(errLike);
-      if (typeof errLike === "object") return JSON.stringify(errLike, null, 2);
-      return String(errLike);
+      await navigator.clipboard.writeText(text);
+      btnCopy.textContent = "Copiado!";
+      setTimeout(() => (btnCopy.textContent = "Copiar log"), 1200);
     } catch {
-      return "Erro (falha ao serializar detalhes)";
+      // fallback: seleciona texto
+      const range = document.createRange();
+      range.selectNodeContents(pre);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      btnCopy.textContent = "Selecionei o log";
+      setTimeout(() => (btnCopy.textContent = "Copiar log"), 1200);
     }
-  }
+  });
 
-  function showFatal(title, details) {
-    if (!installed) return;
-    try {
-      if (shell && typeof shell.showFatal === "function") {
-        shell.showFatal({
-          title: title || "Ocorreu um erro",
-          details: details || "",
-          showConsole,
-          allowReload,
-        });
-        return;
-      }
-    } catch {
-      // se o shell falhar, cai pro fallback abaixo
-    }
+  actions.appendChild(btnCopy);
+  actions.appendChild(btnReload);
 
-    // Fallback (muito simples)
-    const pre = document.createElement("pre");
-    pre.style.cssText = `
-      position:fixed; inset:0; z-index:999999;
-      margin:0; padding:16px; overflow:auto;
-      background:rgba(0,0,0,.9); color:#fff;
-      font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      white-space:pre-wrap;
-    `;
-    pre.textContent = `${title || "Ocorreu um erro"}\n\n${details || ""}`;
-    document.body.appendChild(pre);
-  }
+  card.appendChild(title);
+  card.appendChild(desc);
+  card.appendChild(pre);
+  card.appendChild(actions);
 
-  function onError(event) {
-    const msg = event?.message || "Erro não tratado";
-    const file = event?.filename ? `\nArquivo: ${event.filename}:${event.lineno || 0}:${event.colno || 0}` : "";
-    const err = event?.error ? `\n\n${toText(event.error)}` : "";
-    showFatal(msg, `${msg}${file}${err}`);
-  }
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
 
-  function onRejection(event) {
-    const reason = event?.reason;
-    showFatal("Promise rejeitada (unhandledrejection)", toText(reason));
-  }
+  return overlay;
+}
 
-  window.addEventListener("error", onError);
-  window.addEventListener("unhandledrejection", onRejection);
+function showViaAppShell(err) {
+  const fatal = document.getElementById("fatal");
+  const fatalPre = document.getElementById("fatalPre");
 
-  return function uninstall() {
-    installed = false;
-    window.removeEventListener("error", onError);
-    window.removeEventListener("unhandledrejection", onRejection);
+  if (!fatal || !fatalPre) return false;
+
+  const payload = {
+    message: err?.message || String(err),
+    stack: err?.stack || null,
+    href: window.location.href,
+    time: new Date().toISOString()
   };
+
+  fatalPre.textContent = safeStringify(payload);
+  fatal.setAttribute("aria-hidden", "false");
+  fatal.classList.add("fatal--show");
+  return true;
+}
+
+function showViaFallback(err) {
+  const overlay = ensureFallbackOverlay();
+  const pre = document.getElementById("fatalOverlayFallbackPre");
+
+  const payload = {
+    message: err?.message || String(err),
+    stack: err?.stack || null,
+    href: window.location.href,
+    time: new Date().toISOString()
+  };
+
+  if (pre) pre.textContent = safeStringify(payload);
+
+  overlay.style.display = "flex";
+  overlay.setAttribute("aria-hidden", "false");
+}
+
+export function showFatal(err) {
+  // Sempre loga no console também:
+  try {
+    console.error("[FATAL]", err);
+  } catch {}
+
+  // 1) tenta usar o overlay do appShell
+  const ok = showViaAppShell(err);
+  if (ok) return;
+
+  // 2) fallback próprio (caso appShell não tenha montado ainda)
+  showViaFallback(err);
 }
