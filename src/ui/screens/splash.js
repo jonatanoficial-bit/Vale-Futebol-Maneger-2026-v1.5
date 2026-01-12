@@ -1,40 +1,63 @@
-// src/ui/screens/splash.js
+export function screenSplash(ctx) {
+  const { store, navigate } = ctx;
 
-export function screenSplash({ root }) {
-  root.innerHTML = `
-    <div class="screen screen-splash">
-      <div class="card">
-        <h1>Modo Carreira</h1>
-        <p>
-          Construa sua história como Treinador.
-          Atualizações via Pacotes de Dados (DLC) sem mexer no código.
-        </p>
+  const isGithubPages =
+    typeof window !== "undefined" &&
+    /github\.io$/i.test(window.location.hostname || "");
 
-        <button id="btnStart" class="btn primary">Iniciar</button>
-        <button id="btnAdmin" class="btn">Admin</button>
-      </div>
+  return {
+    title: "Vale Futebol Manager",
 
-      <div class="error-box hidden" id="errorBox">
-        <p>Ocorreu um erro</p>
-        <button id="btnReload" class="btn danger">Recarregar</button>
-      </div>
-    </div>
-  `;
+    template() {
+      // IMPORTANT:
+      // Use <a href="#/..."> as a fallback so navigation still works
+      // even if some runtime error prevents JS handlers from attaching.
+      return `
+        <section class="screen">
+          <div class="card">
+            <h1 class="title">Modo Carreira</h1>
+            <p class="muted">
+              Construa sua história como Treinador. Atualizações via Pacotes de Dados (DLC) sem mexer no código.
+            </p>
 
-  // 🔗 NAVEGAÇÃO CORRETA VIA HASH (router)
-  const btnStart = root.querySelector("#btnStart");
-  const btnAdmin = root.querySelector("#btnAdmin");
-  const btnReload = root.querySelector("#btnReload");
+            <div class="stack">
+              <a class="btn btn--primary" id="btnStart" href="#/dataPackSelect">Iniciar</a>
+              <a class="btn" id="btnAdmin" href="#/diagnostics">Admin</a>
+            </div>
 
-  btnStart.onclick = () => {
-    location.hash = "#/saveSlots";
-  };
+            <div class="footnote">
+              Offline • ${isGithubPages ? "GitHub Pages" : "Web"} • v1.5
+            </div>
+          </div>
+        </section>
+      `;
+    },
 
-  btnAdmin.onclick = () => {
-    location.hash = "#/admin";
-  };
+    onMount(el) {
+      const btnStart = el.querySelector("#btnStart");
+      const btnAdmin = el.querySelector("#btnAdmin");
 
-  btnReload.onclick = () => {
-    location.reload();
+      btnStart?.addEventListener("click", (ev) => {
+        // Se o JS estiver ok, fazemos o fluxo inteligente:
+        // - Se já tem DLC selecionado, vai direto pro start
+        // - Se não, força escolher pacote de dados
+        ev.preventDefault();
+
+        const st = store?.getState?.();
+        const selected = st?.dlc?.selectedPackId;
+
+        if (selected) {
+          navigate("#/start");
+          return;
+        }
+
+        navigate("#/dataPackSelect");
+      });
+
+      btnAdmin?.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        navigate("#/diagnostics");
+      });
+    },
   };
 }
